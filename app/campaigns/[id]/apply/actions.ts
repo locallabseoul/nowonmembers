@@ -1,17 +1,11 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth/guards";
 
 export async function applyCampaign(formData: FormData) {
   const campaignId = String(formData.get("campaign_id") ?? "");
-  const supabase = await createSupabaseServerClient();
-  const { data: authData } = await supabase.auth.getUser();
-  const user = authData.user;
-
-  if (!user) {
-    redirect(`/auth?next=${encodeURIComponent(`/campaigns/${campaignId}/apply`)}&error=${encodeURIComponent("로그인이 필요합니다")}`);
-  }
+  const { supabase, user } = await requireRole("creator", `/campaigns/${campaignId}/apply`);
 
   const { data: creator, error: creatorError } = await supabase
     .from("creator_profiles")

@@ -1,4 +1,5 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { requireRole } from "@/lib/auth/guards";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getPublicCampaign } from "@/lib/supabase/queries";
 import { applyCampaign } from "./actions";
@@ -6,6 +7,13 @@ import { applyCampaign } from "./actions";
 export default async function CampaignApplyPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
   const { error } = await searchParams;
+  const { supabase, user } = await requireRole("creator", `/campaigns/${id}/apply`);
+  const { data: creator } = await supabase.from("creator_profiles").select("id").eq("user_id", user.id).maybeSingle();
+
+  if (!creator) {
+    redirect(`/creator/profile?error=${encodeURIComponent("캠페인 신청 전 크리에이터 프로필을 완성해주세요.")}`);
+  }
+
   const [campaign, defaults] = await Promise.all([getPublicCampaign(id), getCreatorApplicationDefaults()]);
   if (!campaign) notFound();
 

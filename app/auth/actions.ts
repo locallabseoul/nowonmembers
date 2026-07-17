@@ -2,10 +2,19 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getAccountPath } from "@/lib/auth/guards";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function profilePathForRole(role: "business" | "creator") {
   return role === "business" ? "/business/dashboard" : "/creator/profile";
+}
+
+function getSafeNext(next: string | null) {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) {
+    return null;
+  }
+
+  return next;
 }
 
 function getConfiguredCallbackUrl(role: "business" | "creator") {
@@ -19,19 +28,30 @@ function getConfiguredCallbackUrl(role: "business" | "creator") {
 export async function signIn(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
-  const next = String(formData.get("next") ?? "/creator/dashboard");
+  const next = getSafeNext(String(formData.get("next") ?? ""));
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-  if (error) redirect(`/auth?mode=signin&error=${encodeURIComponent(error.message)}`);
-  redirect(next);
+  if (error) {
+    const nextParam = next ? `&next=${encodeURIComponent(next)}` : "";
+    redirect(`/auth?mode=signin&error=${encodeURIComponent(error.message)}${nextParam}`);
+  }
+
+  if (next) redirect(next);
+
+  const { data: profile } = data.user
+    ? await supabase.from("profiles").select("role").eq("id", data.user.id).maybeSingle()
+    : { data: null };
+
+  redirect(getAccountPath(profile?.role));
 }
 
 export async function signUp(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
-  const role = String(formData.get("role") ?? "creator") as "business" | "creator";
+  const rawRole = String(formData.get("role") ?? "creator");
+  const role: "business" | "creator" = rawRole === "business" ? "business" : "creator";
   const nickname = String(formData.get("nickname") ?? "");
   const headerStore = await headers();
   const origin = headerStore.get("origin");

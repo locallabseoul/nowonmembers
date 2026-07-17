@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { Clock, FileCheck2, Send, Trophy } from "lucide-react";
 import { Badge, StatCard } from "@/app/components/ui";
+import { requireRole } from "@/lib/auth/guards";
 import { getCreatorDashboard } from "@/lib/supabase/queries";
 
 export default async function CreatorDashboardPage() {
+  await requireRole("creator", "/creator/dashboard");
   const { creator, applications, collaborations, submissions } = await getCreatorDashboard();
 
   if (!creator) {

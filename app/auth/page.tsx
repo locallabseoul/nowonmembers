@@ -1,8 +1,20 @@
-import Link from "next/link";
+import { RoleAwareActionLink } from "@/app/components/role-aware-action-link";
+import { getCurrentSessionProfile } from "@/lib/auth/guards";
 import { signIn, signUp } from "./actions";
 
-export default async function AuthPage({ searchParams }: { searchParams: Promise<{ error?: string; message?: string }> }) {
-  const { error, message } = await searchParams;
+function getSafeNext(next?: string) {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) {
+    return "";
+  }
+
+  return next;
+}
+
+export default async function AuthPage({ searchParams }: { searchParams: Promise<{ error?: string; message?: string; next?: string }> }) {
+  const { error, message, next } = await searchParams;
+  const safeNext = getSafeNext(next);
+  const { profile } = await getCurrentSessionProfile();
+  const role = profile?.role;
 
   return (
     <main className="mx-auto grid max-w-5xl gap-6 px-4 py-14 sm:px-6 lg:grid-cols-2 lg:px-8">
@@ -12,7 +24,7 @@ export default async function AuthPage({ searchParams }: { searchParams: Promise
         {error ? <p className="mt-4 rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
         {message ? <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{message}</p> : null}
         <form action={signIn} className="mt-6 space-y-4">
-          <input type="hidden" name="next" value="/creator/dashboard" />
+          <input type="hidden" name="next" value={safeNext} />
           <label className="block">
             <span className="mb-2 block text-sm font-black text-charcoal">이메일</span>
             <input name="email" type="email" required className="w-full rounded-lg border border-line px-4 py-3 text-sm focus-ring" placeholder="you@example.com" />
@@ -24,8 +36,24 @@ export default async function AuthPage({ searchParams }: { searchParams: Promise
           <button className="w-full rounded-lg bg-primary px-5 py-3 font-black text-white hover:bg-primaryHover">로그인</button>
         </form>
         <div className="mt-5 grid gap-2 text-sm">
-          <Link href="/creator/profile" className="font-bold text-primary">크리에이터 프로필 만들기</Link>
-          <Link href="/business/campaigns/new" className="font-bold text-primary">가게 캠페인 시작하기</Link>
+          <RoleAwareActionLink
+            href="/creator/profile"
+            unauthenticatedHref="/auth?next=/creator/profile"
+            currentRole={role}
+            requiredRole="creator"
+            className="font-bold text-primary"
+          >
+            크리에이터 프로필 만들기
+          </RoleAwareActionLink>
+          <RoleAwareActionLink
+            href="/business/campaigns/new"
+            unauthenticatedHref="/auth?next=/business/campaigns/new"
+            currentRole={role}
+            requiredRole="business"
+            className="font-bold text-primary"
+          >
+            가게 캠페인 시작하기
+          </RoleAwareActionLink>
         </div>
       </div>
       <div className="rounded-lg border border-line bg-white p-6 shadow-sm">

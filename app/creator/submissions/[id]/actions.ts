@@ -1,15 +1,11 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth/guards";
 
 export async function submitContent(formData: FormData) {
   const collaborationId = String(formData.get("collaboration_id") ?? "");
-  const supabase = await createSupabaseServerClient();
-  const { data: authData } = await supabase.auth.getUser();
-  const user = authData.user;
-
-  if (!user) redirect(`/auth?error=${encodeURIComponent("로그인이 필요합니다")}`);
+  const { supabase } = await requireRole("creator", `/creator/submissions/${collaborationId}`);
 
   const { data: collaboration } = await supabase
     .from("collaborations")

@@ -3,8 +3,8 @@ import Link from "next/link";
 import { Menu, Plus, UserRound } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import { HeaderNav } from "@/app/components/header-nav";
-import { getCurrentSessionProfile } from "@/lib/auth/guards";
-import type { UserRole } from "@/lib/types";
+import { RoleAwareActionLink } from "@/app/components/role-aware-action-link";
+import { getAccountPath, getCurrentSessionProfile } from "@/lib/auth/guards";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -22,12 +22,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </body>
     </html>
   );
-}
-
-function getAccountPath(role?: UserRole | string | null) {
-  if (role === "business") return "/business/dashboard";
-  if (role === "admin") return "/admin";
-  return "/creator/dashboard";
 }
 
 async function Header() {
@@ -62,9 +56,15 @@ async function Header() {
             </>
           ) : (
             <>
-              <Link href="/business/campaigns/new" className="hidden items-center gap-2 rounded-full bg-charcoal px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-slate-800 md:inline-flex">
+              <RoleAwareActionLink
+                href="/business/campaigns/new"
+                unauthenticatedHref="/auth?next=/business/campaigns/new"
+                currentRole={role}
+                requiredRole="business"
+                className="hidden items-center gap-2 rounded-full bg-charcoal px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-slate-800 md:inline-flex"
+              >
                 <Plus size={13} /> 캠페인 만들기
-              </Link>
+              </RoleAwareActionLink>
               <Link href="/auth" className="flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-primary hover:text-primary">
                 <UserRound size={15} />
                 <span className="hidden sm:inline">로그인</span>
@@ -80,7 +80,10 @@ async function Header() {
   );
 }
 
-function Footer() {
+async function Footer() {
+  const { profile } = await getCurrentSessionProfile();
+  const role = profile?.role;
+
   return (
     <footer className="bg-charcoal pb-8 pt-14 text-white">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -93,7 +96,7 @@ function Footer() {
             <div className="text-xs font-medium text-gray-500">A service by <span className="font-bold text-primary">Local Lab Community</span></div>
           </div>
           <div className="grid grid-cols-2 gap-8 md:grid-cols-3 lg:gap-16">
-            <FooterColumn title="서비스" links={[["/campaigns", "캠페인 목록"], ["/stories", "완료 콘텐츠"], ["/business/campaigns/new", "캠페인 만들기"]]} />
+            <FooterColumn role={role} title="서비스" links={[["/campaigns", "캠페인 목록"], ["/stories", "완료 콘텐츠"], ["/business/campaigns/new", "캠페인 만들기"]]} />
             <FooterColumn title="마이페이지" links={[["/creator/dashboard", "크리에이터 마이페이지"], ["/business/dashboard", "운영자 마이페이지"], ["/auth", "콘텐츠 제출"]]} />
             <FooterColumn title="정보" links={[["/auth", "이용약관"], ["/auth", "개인정보처리방침"], ["/auth", "고객센터"]]} />
           </div>
@@ -107,14 +110,26 @@ function Footer() {
   );
 }
 
-function FooterColumn({ title, links }: { title: string; links: [string, string][] }) {
+function FooterColumn({ title, links, role }: { title: string; links: [string, string][]; role?: string | null }) {
   return (
     <div>
       <h4 className="mb-4 text-sm font-black uppercase tracking-wide text-white">{title}</h4>
       <ul className="space-y-2.5">
         {links.map(([href, label]) => (
           <li key={label}>
-            <Link href={href} className="text-sm text-gray-400 transition-colors hover:text-white">{label}</Link>
+            {href === "/business/campaigns/new" ? (
+              <RoleAwareActionLink
+                href={href}
+                unauthenticatedHref="/auth?next=/business/campaigns/new"
+                currentRole={role}
+                requiredRole="business"
+                className="text-sm text-gray-400 transition-colors hover:text-white"
+              >
+                {label}
+              </RoleAwareActionLink>
+            ) : (
+              <Link href={href} className="text-sm text-gray-400 transition-colors hover:text-white">{label}</Link>
+            )}
           </li>
         ))}
       </ul>

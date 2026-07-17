@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Check, CheckCircle2, Clapperboard, Compass, Gift, Instagram, Landmark, MapPin, Megaphone, MousePointerClick, PenTool, Plus, Store, Users, UserPlus } from "lucide-react";
 import { HomeHeroCarousel } from "@/app/components/home-hero-carousel";
+import { RoleAwareActionLink } from "@/app/components/role-aware-action-link";
+import { getCurrentSessionProfile } from "@/lib/auth/guards";
 import { getBusiness, stories } from "@/lib/data";
 import { getPublicCampaigns, getPublicStories } from "@/lib/supabase/queries";
 import type { Campaign, LocalStory } from "@/lib/types";
@@ -262,7 +264,8 @@ function CampaignMakersSection() {
 }
 
 export default async function HomePage() {
-  const [campaigns, remoteStories] = await Promise.all([getPublicCampaigns(), getPublicStories()]);
+  const [campaigns, remoteStories, session] = await Promise.all([getPublicCampaigns(), getPublicStories(), getCurrentSessionProfile()]);
+  const role = session.profile?.role;
   const featuredCampaigns = campaigns.slice(0, 3);
   const contentStories = (remoteStories.length ? remoteStories : stories).slice(0, 4);
 
@@ -291,10 +294,16 @@ export default async function HomePage() {
                   <Compass size={18} />
                   캠페인 둘러보기
                 </Link>
-                <Link href="/business/campaigns/new" className="flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-8 py-4 text-base font-bold text-charcoal transition-all hover:border-primary hover:text-primary">
+                <RoleAwareActionLink
+                  href="/business/campaigns/new"
+                  unauthenticatedHref="/auth?next=/business/campaigns/new"
+                  currentRole={role}
+                  requiredRole="business"
+                  className="flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-8 py-4 text-base font-bold text-charcoal transition-all hover:border-primary hover:text-primary"
+                >
                   <Plus size={16} />
                   캠페인 만들기
-                </Link>
+                </RoleAwareActionLink>
               </div>
               <div className="mt-10 flex justify-center lg:justify-start">
                 <dl className="grid w-full max-w-[360px] grid-cols-3 divide-x divide-slate-200 sm:max-w-[420px]">
@@ -403,9 +412,15 @@ export default async function HomePage() {
                 <p className="mb-6 text-sm leading-relaxed text-slate-500">가까운 가게를 직접 체험하고 나만의 콘텐츠를 만들어보세요. 지역 소상공인과 연결되어 특별한 경험을 쌓을 수 있습니다.</p>
                 <FeatureList items={["블로그, 인스타그램 캠페인에 자유롭게 지원", "내 활동 이력과 포트폴리오 관리", "지역 가게와 직접 연결되는 경험"]} />
                 <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                  <Link href="/creator/profile" className="inline-flex items-center justify-center gap-2 rounded-full bg-charcoal px-7 py-3.5 text-sm font-bold text-white shadow-md transition-all hover:bg-slate-800">
+                  <RoleAwareActionLink
+                    href="/creator/profile"
+                    unauthenticatedHref="/auth?next=/creator/profile"
+                    currentRole={role}
+                    requiredRole="creator"
+                    className="inline-flex items-center justify-center gap-2 rounded-full bg-charcoal px-7 py-3.5 text-sm font-bold text-white shadow-md transition-all hover:bg-slate-800"
+                  >
                     <UserPlus size={16} /> 크리에이터 등록하기
-                  </Link>
+                  </RoleAwareActionLink>
                   <Link href="/campaigns" className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-7 py-3.5 text-sm font-bold text-charcoal transition-all hover:border-primary hover:text-primary">
                     <Compass size={16} /> 캠페인 둘러보기
                   </Link>
@@ -422,9 +437,15 @@ export default async function HomePage() {
                 <h3 className="mb-3 text-2xl font-black text-white">함께할 크리에이터가 필요하다면<br /><span className="text-primary">캠페인</span>으로 시작하세요</h3>
                 <p className="mb-6 text-sm leading-relaxed text-slate-400">노원 지역의 열정적인 크리에이터들이 가게를 직접 체험하고 생생한 콘텐츠를 만들어 드립니다.</p>
                 <FeatureList dark items={["간편한 캠페인 생성", "지원자 목록 확인 및 직접 선정", "완성된 콘텐츠 아카이브 관리"]} />
-                <Link href="/business/campaigns/new" className="mt-7 inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3.5 text-sm font-bold text-white shadow-md shadow-primary/30 transition-all hover:bg-primaryHover">
+                <RoleAwareActionLink
+                  href="/business/campaigns/new"
+                  unauthenticatedHref="/auth?next=/business/campaigns/new"
+                  currentRole={role}
+                  requiredRole="business"
+                  className="mt-7 inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3.5 text-sm font-bold text-white shadow-md shadow-primary/30 transition-all hover:bg-primaryHover"
+                >
                   <Plus size={16} /> 캠페인 만들기
-                </Link>
+                </RoleAwareActionLink>
               </div>
             </div>
           </div>

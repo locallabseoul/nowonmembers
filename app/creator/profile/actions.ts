@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth/guards";
 
 function splitList(value: FormDataEntryValue | null) {
   return String(value ?? "")
@@ -11,24 +11,16 @@ function splitList(value: FormDataEntryValue | null) {
 }
 
 export async function saveCreatorProfile(formData: FormData) {
-  const supabase = await createSupabaseServerClient();
-  const { data: authData } = await supabase.auth.getUser();
-  const user = authData.user;
-
-  if (!user) redirect(`/auth?error=${encodeURIComponent("로그인이 필요합니다")}`);
+  const { supabase, user } = await requireRole("creator", "/creator/profile");
 
   const nickname = String(formData.get("nickname") ?? "");
   const channelUrl = String(formData.get("channel_url") ?? "");
   const portfolioUrl = String(formData.get("portfolio_url") ?? "");
 
-  const { error: profileError } = await supabase.from("profiles").upsert({
-    id: user.id,
+  const { error: profileError } = await supabase.from("profiles").update({
     email: user.email,
-    role: "creator",
-    nickname,
-    verification_status: "pending",
-    status: "active"
-  });
+    nickname
+  }).eq("id", user.id);
 
   if (profileError) redirect(`/creator/profile?error=${encodeURIComponent(profileError.message)}`);
 

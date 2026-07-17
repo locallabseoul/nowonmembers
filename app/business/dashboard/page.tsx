@@ -2,27 +2,13 @@ import Link from "next/link";
 import { Eye, FileCheck2, Plus, Users } from "lucide-react";
 import { Badge, StatCard } from "@/app/components/ui";
 import { getBusinessDashboard } from "@/lib/supabase/queries";
-import { getCurrentSessionProfile } from "@/lib/auth/guards";
+import { requireRole } from "@/lib/auth/guards";
 import { approveRecommendedApplication, saveBusinessProfile } from "./actions";
 
 export default async function BusinessDashboardPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
-  const { user } = await getCurrentSessionProfile();
+  await requireRole("business", "/business/dashboard");
   const { business, campaigns, recommendedApplications } = await getBusinessDashboard();
-
-  if (!user) {
-    return (
-      <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-        <section className="rounded-lg border border-line bg-white p-6 shadow-sm">
-          <h1 className="text-3xl font-black text-charcoal">가게 로그인이 필요합니다</h1>
-          <p className="mt-2 text-gray-500">가게 프로필과 캠페인 생성은 로그인 후 사용할 수 있습니다.</p>
-          <Link href="/auth?next=/business/dashboard" className="mt-6 inline-flex rounded-lg bg-primary px-5 py-3 font-black text-white hover:bg-primaryHover">
-            로그인하기
-          </Link>
-        </section>
-      </main>
-    );
-  }
 
   if (!business) {
     return (

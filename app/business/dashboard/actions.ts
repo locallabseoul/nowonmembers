@@ -2,8 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { requireUser } from "@/lib/auth/guards";
+import { requireRole } from "@/lib/auth/guards";
 
 function splitList(value: FormDataEntryValue | null) {
   return String(value ?? "")
@@ -13,20 +12,12 @@ function splitList(value: FormDataEntryValue | null) {
 }
 
 export async function saveBusinessProfile(formData: FormData) {
-  const supabase = await createSupabaseServerClient();
-  const { data: authData } = await supabase.auth.getUser();
-  const user = authData.user;
+  const { supabase, user } = await requireRole("business", "/business/dashboard");
 
-  if (!user) redirect(`/auth?error=${encodeURIComponent("로그인이 필요합니다")}`);
-
-  const { error: profileError } = await supabase.from("profiles").upsert({
-    id: user.id,
+  const { error: profileError } = await supabase.from("profiles").update({
     email: user.email,
-    role: "business",
-    nickname: String(formData.get("business_name") ?? ""),
-    verification_status: "pending",
-    status: "active"
-  });
+    nickname: String(formData.get("business_name") ?? "")
+  }).eq("id", user.id);
 
   if (profileError) redirect(`/business/dashboard?error=${encodeURIComponent(profileError.message)}`);
 
@@ -54,7 +45,7 @@ export async function saveBusinessProfile(formData: FormData) {
 
 export async function approveRecommendedApplication(formData: FormData) {
   const applicationId = String(formData.get("application_id") ?? "");
-  const { supabase, user } = await requireUser("/business/dashboard");
+  const { supabase, user } = await requireRole("business", "/business/dashboard");
 
   const { data: application, error: applicationError } = await supabase
     .from("campaign_applications")
