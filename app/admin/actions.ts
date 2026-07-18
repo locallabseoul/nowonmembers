@@ -58,49 +58,63 @@ export async function requestCampaignRevision(formData: FormData) {
 export async function recommendApplication(formData: FormData) {
   const supabase = await requireAdmin();
   const id = String(formData.get("application_id") ?? "");
-  const { error } = await supabase.from("campaign_applications").update({
-    status: "recommended",
-    admin_memo: String(formData.get("admin_memo") ?? "운영자 추천")
-  }).eq("id", id);
-  if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
-  revalidatePath("/admin");
-}
-
-export async function selectApplication(formData: FormData) {
-  const supabase = await requireAdmin();
-  const applicationId = String(formData.get("application_id") ?? "");
 
   const { data: application, error: applicationError } = await supabase
     .from("campaign_applications")
-    .select("id,campaign_id,creator_id,campaigns(submission_due)")
-    .eq("id", applicationId)
+    .select("id,status,campaigns(status)")
+    .eq("id", id)
     .maybeSingle();
 
   if (applicationError || !application) {
-    redirect(`/admin?error=${encodeURIComponent(applicationError?.message ?? "지원서를 찾을 수 없습니다.")}`);
+    redirect(`/admin?error=${encodeURIComponent(applicationError?.message ?? "추천할 지원서를 찾을 수 없습니다.")}`);
+  }
+
+  if (application.status !== "submitted") {
+    redirect(`/admin?error=${encodeURIComponent("신규 제출 상태의 지원서만 추천할 수 있습니다.")}`);
   }
 
   const campaign = Array.isArray(application.campaigns) ? application.campaigns[0] : application.campaigns;
+  if (!campaign || !["recruiting", "selecting"].includes(campaign.status)) {
+    redirect(`/admin?error=${encodeURIComponent("모집중 또는 선정중 캠페인의 지원서만 추천할 수 있습니다.")}`);
+  }
 
-  const { error: collaborationError } = await supabase.from("collaborations").insert({
-    campaign_id: application.campaign_id,
-    creator_id: application.creator_id,
-    application_id: application.id,
-    submission_due: campaign?.submission_due ?? null,
-    status: "selected"
-  });
+  const { error } = await supabase.from("campaign_applications").update({
+    status: "recommended",
+    admin_memo: String(formData.get("admin_memo") ?? "운영자 추천")
+  }).eq("id", id).eq("status", "submitted");
 
-  if (collaborationError) redirect(`/admin?error=${encodeURIComponent(collaborationError.message)}`);
-
-  const { error: updateError } = await supabase
-    .from("campaign_applications")
-    .update({ status: "selected" })
-    .eq("id", applicationId);
-
-  if (updateError) redirect(`/admin?error=${encodeURIComponent(updateError.message)}`);
-
-  await supabase.from("campaigns").update({ status: "in_progress" }).eq("id", application.campaign_id);
+  if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
   revalidatePath("/admin");
+  revalidatePath("/business/dashboard");
+}
+
+export async function unrecommendApplication(formData: FormData) {
+  const supabase = await requireAdmin();
+  const id = String(formData.get("application_id") ?? "");
+
+  const { data: application, error: applicationError } = await supabase
+    .from("campaign_applications")
+    .select("id,status")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (applicationError || !application) {
+    redirect(`/admin?error=${encodeURIComponent(applicationError?.message ?? "추천 해제할 지원서를 찾을 수 없습니다.")}`);
+  }
+
+  if (application.status !== "recommended") {
+    redirect(`/admin?error=${encodeURIComponent("추천 상태의 지원서만 추천 해제할 수 있습니다.")}`);
+  }
+
+  const { error } = await supabase
+    .from("campaign_applications")
+    .update({ status: "submitted", admin_memo: null })
+    .eq("id", id)
+    .eq("status", "recommended");
+
+  if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/admin");
+  revalidatePath("/business/dashboard");
 }
 
 export async function approveSubmission(formData: FormData) {

@@ -43,6 +43,87 @@ type StoryRow = {
   published_at: string | null;
 };
 
+type CountRelation = { count: number }[] | null | undefined;
+
+type Relation<T> = T | T[] | null | undefined;
+
+type CreatorChannelRow = {
+  platform: string | null;
+  channel_name: string | null;
+  follower_count: number | null;
+};
+
+type ApplicantCreatorRow = {
+  id: string;
+  profiles?: Relation<{ nickname: string | null; email: string | null }>;
+  creator_channels?: CreatorChannelRow[] | null;
+  portfolios?: CountRelation;
+};
+
+type ApplicationCampaignRow = {
+  id: string;
+  title: string | null;
+  status: Campaign["status"];
+  recruit_count: number;
+  campaign_applications?: CountRelation;
+  collaborations?: CountRelation;
+};
+
+type DashboardApplicationRow = {
+  id: string;
+  campaign_id: string;
+  creator_id: string;
+  message: string | null;
+  available_dates: string | null;
+  proposed_content_type: string | null;
+  status: string;
+  admin_memo: string | null;
+  applied_at: string | null;
+  campaigns?: Relation<ApplicationCampaignRow>;
+  creator_profiles?: Relation<ApplicantCreatorRow>;
+  collaborations?: CountRelation;
+};
+
+type ApplicationSummaryRow = {
+  id: string;
+  campaign_id: string;
+  status: string;
+};
+
+type CollaborationSummaryRow = {
+  id: string;
+  campaign_id: string;
+  status: string;
+};
+
+type CampaignApplicationStats = {
+  applicationCount: number;
+  recommendedCount: number;
+  selectedCount: number;
+};
+
+export type DashboardCampaign = Campaign & CampaignApplicationStats;
+
+export type DashboardApplication = {
+  id: string;
+  campaignId: string;
+  campaignTitle: string;
+  campaignStatus: Campaign["status"];
+  recruitCount: number;
+  applicationCount: number;
+  selectedCount: number;
+  creatorNickname: string;
+  creatorChannelSummary: string;
+  portfolioCount: number;
+  message: string;
+  availableDates: string;
+  proposedContentType: string;
+  status: string;
+  adminMemo: string;
+  appliedAt: string;
+  hasCollaboration: boolean;
+};
+
 export type BusinessDashboardData = {
   business: {
     id: string;
@@ -51,15 +132,12 @@ export type BusinessDashboardData = {
     shortIntro: string;
     verificationStatus: string;
     isPublic: boolean;
+    coverImage: string;
   } | null;
-  campaigns: Campaign[];
-  recommendedApplications: {
-    id: string;
-    message: string;
-    proposedContentType: string;
-    adminMemo: string;
-    status: string;
-  }[];
+  campaigns: DashboardCampaign[];
+  selectedCampaign: DashboardCampaign | null;
+  selectedCampaignApplications: DashboardApplication[];
+  recommendedApplications: DashboardApplication[];
 };
 
 export type AdminDashboardData = {
@@ -70,15 +148,10 @@ export type AdminDashboardData = {
     approvedSubmissions: number;
     totalSubmissions: number;
   };
-  campaigns: Campaign[];
-  applications: {
-    id: string;
-    campaignTitle: string;
-    message: string;
-    proposedContentType: string;
-    status: string;
-    adminMemo: string;
-  }[];
+  campaigns: DashboardCampaign[];
+  selectedCampaign: DashboardCampaign | null;
+  selectedCampaignApplications: DashboardApplication[];
+  applications: DashboardApplication[];
   submissions: {
     id: string;
     contentUrl: string;
@@ -125,6 +198,119 @@ export type CollaborationSubmissionDetail = {
 function asStringArray(value: unknown) {
   return Array.isArray(value) ? value.map(String) : [];
 }
+
+function asRelation<T>(value: Relation<T>) {
+  return Array.isArray(value) ? value[0] : value ?? null;
+}
+
+function relationCount(value: CountRelation) {
+  return value?.[0]?.count ?? 0;
+}
+
+function formatCreatorChannelSummary(channels?: CreatorChannelRow[] | null) {
+  if (!channels?.length) return "등록 채널 없음";
+
+  const sortedChannels = [...channels].sort((a, b) => (b.follower_count ?? 0) - (a.follower_count ?? 0));
+  const primary = sortedChannels[0];
+  const platform = primary.platform || "채널";
+  const channelName = primary.channel_name ? ` ${primary.channel_name}` : "";
+  const followers = primary.follower_count ? ` · ${primary.follower_count.toLocaleString("ko-KR")}명` : "";
+  const extra = sortedChannels.length > 1 ? ` 외 ${sortedChannels.length - 1}개` : "";
+
+  return `${platform}${channelName}${followers}${extra}`;
+}
+
+function mapDashboardApplication(row: DashboardApplicationRow): DashboardApplication {
+  const campaign = asRelation(row.campaigns);
+  const creator = asRelation(row.creator_profiles);
+  const profile = asRelation(creator?.profiles);
+
+  return {
+    id: row.id,
+    campaignId: row.campaign_id,
+    campaignTitle: campaign?.title ?? "캠페인",
+    campaignStatus: campaign?.status ?? "draft",
+    recruitCount: campaign?.recruit_count ?? 0,
+    applicationCount: relationCount(campaign?.campaign_applications),
+    selectedCount: relationCount(campaign?.collaborations),
+    creatorNickname: profile?.nickname || profile?.email?.split("@")[0] || "크리에이터",
+    creatorChannelSummary: formatCreatorChannelSummary(creator?.creator_channels),
+    portfolioCount: relationCount(creator?.portfolios),
+    message: row.message ?? "",
+    availableDates: row.available_dates ?? "",
+    proposedContentType: row.proposed_content_type ?? "",
+    status: row.status,
+    adminMemo: row.admin_memo ?? "",
+    appliedAt: row.applied_at ?? "",
+    hasCollaboration: relationCount(row.collaborations) > 0
+  };
+}
+
+function buildCampaignApplicationStats(applications: ApplicationSummaryRow[], collaborations: CollaborationSummaryRow[]) {
+  const stats = new Map<string, CampaignApplicationStats>();
+
+  applications.forEach((application) => {
+    if (application.status === "cancelled") return;
+
+    const current = stats.get(application.campaign_id) ?? { applicationCount: 0, recommendedCount: 0, selectedCount: 0 };
+    current.applicationCount += 1;
+    if (application.status === "recommended") current.recommendedCount += 1;
+    stats.set(application.campaign_id, current);
+  });
+
+  collaborations.forEach((collaboration) => {
+    if (collaboration.status === "cancelled") return;
+
+    const current = stats.get(collaboration.campaign_id) ?? { applicationCount: 0, recommendedCount: 0, selectedCount: 0 };
+    current.selectedCount += 1;
+    stats.set(collaboration.campaign_id, current);
+  });
+
+  return stats;
+}
+
+function mapDashboardCampaign(row: CampaignRow, stats?: CampaignApplicationStats): DashboardCampaign {
+  const campaign = mapCampaign(row);
+
+  return {
+    ...campaign,
+    applicationCount: stats?.applicationCount ?? campaign.appliedCount,
+    recommendedCount: stats?.recommendedCount ?? 0,
+    selectedCount: stats?.selectedCount ?? 0
+  };
+}
+
+function resolveSelectedCampaign(campaigns: DashboardCampaign[], selectedCampaignId?: string) {
+  if (!selectedCampaignId) return null;
+  return campaigns.find((campaign) => campaign.id === selectedCampaignId) ?? null;
+}
+
+const dashboardApplicationSelect = `
+  id,
+  campaign_id,
+  creator_id,
+  message,
+  available_dates,
+  proposed_content_type,
+  status,
+  admin_memo,
+  applied_at,
+  collaborations(count),
+  creator_profiles(
+    id,
+    profiles(nickname,email),
+    creator_channels(platform,channel_name,follower_count),
+    portfolios(count)
+  ),
+  campaigns(
+    id,
+    title,
+    status,
+    recruit_count,
+    campaign_applications(count),
+    collaborations(count)
+  )
+`;
 
 function mapCampaign(row: CampaignRow): Campaign {
   return {
@@ -229,24 +415,24 @@ export function getDisplayCreator(id: string) {
   return getFallbackCreator(id) ?? { nickname: "노원 크리에이터" };
 }
 
-export async function getBusinessDashboard(): Promise<BusinessDashboardData> {
+export async function getBusinessDashboard(selectedCampaignId?: string): Promise<BusinessDashboardData> {
   const supabase = await createSupabaseServerClient();
   await syncExpiredCampaigns(supabase);
   const { data: authData } = await supabase.auth.getUser();
   const user = authData.user;
 
   if (!user) {
-    return { business: null, campaigns: [], recommendedApplications: [] };
+    return { business: null, campaigns: [], selectedCampaign: null, selectedCampaignApplications: [], recommendedApplications: [] };
   }
 
   const { data: business } = await supabase
     .from("business_profiles")
-    .select("id,business_name,category,short_intro,verification_status,is_public")
+    .select("id,business_name,category,short_intro,verification_status,is_public,cover_image_url")
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (!business) {
-    return { business: null, campaigns: [], recommendedApplications: [] };
+    return { business: null, campaigns: [], selectedCampaign: null, selectedCampaignApplications: [], recommendedApplications: [] };
   }
 
   const { data: campaignRows } = await supabase
@@ -255,14 +441,28 @@ export async function getBusinessDashboard(): Promise<BusinessDashboardData> {
     .eq("business_id", business.id)
     .order("created_at", { ascending: false });
 
-  const campaignIds = (campaignRows ?? []).map((campaign) => campaign.id);
-  const { data: applicationRows } = campaignIds.length
+  const campaignIds = ((campaignRows ?? []) as CampaignRow[]).map((campaign) => campaign.id);
+  const [applicationSummaryRows, collaborationSummaryRows] = campaignIds.length
+    ? await Promise.all([
+      supabase.from("campaign_applications").select("id,campaign_id,status").in("campaign_id", campaignIds),
+      supabase.from("collaborations").select("id,campaign_id,status").in("campaign_id", campaignIds)
+    ])
+    : [{ data: [] }, { data: [] }];
+  const stats = buildCampaignApplicationStats(
+    (applicationSummaryRows.data ?? []) as ApplicationSummaryRow[],
+    (collaborationSummaryRows.data ?? []) as CollaborationSummaryRow[]
+  );
+  const campaigns = ((campaignRows ?? []) as CampaignRow[]).map((campaign) => mapDashboardCampaign(campaign, stats.get(campaign.id)));
+  const selectedCampaign = resolveSelectedCampaign(campaigns, selectedCampaignId);
+  const { data: selectedApplicationRows } = selectedCampaign
     ? await supabase
       .from("campaign_applications")
-      .select("id,message,proposed_content_type,status,admin_memo")
-      .in("campaign_id", campaignIds)
-      .eq("status", "recommended")
+      .select(dashboardApplicationSelect)
+      .eq("campaign_id", selectedCampaign.id)
+      .in("status", ["submitted", "recommended", "selected", "rejected"])
+      .order("applied_at", { ascending: false })
     : { data: [] };
+  const selectedCampaignApplications = ((selectedApplicationRows ?? []) as DashboardApplicationRow[]).map(mapDashboardApplication);
 
   return {
     business: {
@@ -271,20 +471,17 @@ export async function getBusinessDashboard(): Promise<BusinessDashboardData> {
       category: business.category,
       shortIntro: business.short_intro ?? "",
       verificationStatus: business.verification_status,
-      isPublic: business.is_public
+      isPublic: business.is_public,
+      coverImage: business.cover_image_url ?? ""
     },
-    campaigns: ((campaignRows ?? []) as CampaignRow[]).map(mapCampaign),
-    recommendedApplications: (applicationRows ?? []).map((application) => ({
-      id: application.id,
-      message: application.message ?? "",
-      proposedContentType: application.proposed_content_type ?? "",
-      adminMemo: application.admin_memo ?? "",
-      status: application.status
-    }))
+    campaigns,
+    selectedCampaign,
+    selectedCampaignApplications,
+    recommendedApplications: selectedCampaignApplications.filter((application) => application.status === "recommended")
   };
 }
 
-export async function getAdminDashboard(): Promise<AdminDashboardData> {
+export async function getAdminDashboard(selectedCampaignId?: string): Promise<AdminDashboardData> {
   const supabase = await createSupabaseServerClient();
   await syncExpiredCampaigns(supabase);
   const { data: authData } = await supabase.auth.getUser();
@@ -294,6 +491,8 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     return {
       stats: { businesses: 0, verifiedCreators: 0, recruitingCampaigns: 0, approvedSubmissions: 0, totalSubmissions: 0 },
       campaigns: [],
+      selectedCampaign: null,
+      selectedCampaignApplications: [],
       applications: [],
       submissions: [],
       isAdmin: false
@@ -306,6 +505,8 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     return {
       stats: { businesses: 0, verifiedCreators: 0, recruitingCampaigns: 0, approvedSubmissions: 0, totalSubmissions: 0 },
       campaigns: [],
+      selectedCampaign: null,
+      selectedCampaignApplications: [],
       applications: [],
       submissions: [],
       isAdmin: false
@@ -319,7 +520,8 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     approvedSubmissionCount,
     totalSubmissionCount,
     campaignRows,
-    applicationRows,
+    applicationSummaryRows,
+    collaborationSummaryRows,
     submissionRows
   ] = await Promise.all([
     supabase.from("business_profiles").select("id", { count: "exact", head: true }),
@@ -330,19 +532,31 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     supabase
       .from("campaigns")
       .select("*, business_profiles(business_name), campaign_applications(count)")
-      .in("status", ["in_review", "revision_requested", "recruiting", "selecting"])
+      .in("status", ["draft", "in_review", "revision_requested", "approved", "scheduled", "recruiting", "selecting", "in_progress", "submission_review", "completed", "cancelled", "failed"])
       .order("created_at", { ascending: false }),
-    supabase
-      .from("campaign_applications")
-      .select("id,message,proposed_content_type,status,admin_memo,campaigns(title)")
-      .in("status", ["submitted", "recommended", "selected"])
-      .order("applied_at", { ascending: false }),
+    supabase.from("campaign_applications").select("id,campaign_id,status"),
+    supabase.from("collaborations").select("id,campaign_id,status"),
     supabase
       .from("content_submissions")
       .select("id,content_url,review_status,platform")
       .order("created_at", { ascending: false })
       .limit(10)
   ]);
+  const statsByCampaign = buildCampaignApplicationStats(
+    (applicationSummaryRows.data ?? []) as ApplicationSummaryRow[],
+    (collaborationSummaryRows.data ?? []) as CollaborationSummaryRow[]
+  );
+  const campaigns = ((campaignRows.data ?? []) as CampaignRow[]).map((campaign) => mapDashboardCampaign(campaign, statsByCampaign.get(campaign.id)));
+  const selectedCampaign = resolveSelectedCampaign(campaigns, selectedCampaignId);
+  const { data: selectedApplicationRows } = selectedCampaign
+    ? await supabase
+      .from("campaign_applications")
+      .select(dashboardApplicationSelect)
+      .eq("campaign_id", selectedCampaign.id)
+      .in("status", ["submitted", "recommended", "selected", "rejected"])
+      .order("applied_at", { ascending: false })
+    : { data: [] };
+  const selectedCampaignApplications = ((selectedApplicationRows ?? []) as DashboardApplicationRow[]).map(mapDashboardApplication);
 
   return {
     stats: {
@@ -352,18 +566,10 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
       approvedSubmissions: approvedSubmissionCount.count ?? 0,
       totalSubmissions: totalSubmissionCount.count ?? 0
     },
-    campaigns: ((campaignRows.data ?? []) as CampaignRow[]).map(mapCampaign),
-    applications: (applicationRows.data ?? []).map((application) => {
-      const campaign = Array.isArray(application.campaigns) ? application.campaigns[0] : application.campaigns;
-      return {
-        id: application.id,
-        campaignTitle: campaign?.title ?? "캠페인",
-        message: application.message ?? "",
-        proposedContentType: application.proposed_content_type ?? "",
-        status: application.status,
-        adminMemo: application.admin_memo ?? ""
-      };
-    }),
+    campaigns,
+    selectedCampaign,
+    selectedCampaignApplications,
+    applications: selectedCampaignApplications,
     submissions: (submissionRows.data ?? []).map((submission) => ({
       id: submission.id,
       contentUrl: submission.content_url,

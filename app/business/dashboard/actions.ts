@@ -45,57 +45,16 @@ export async function saveBusinessProfile(formData: FormData) {
 
 export async function approveRecommendedApplication(formData: FormData) {
   const applicationId = String(formData.get("application_id") ?? "");
-  const { supabase, user } = await requireRole("business", "/business/dashboard");
+  const { supabase } = await requireRole("business", "/business/dashboard");
 
-  const { data: application, error: applicationError } = await supabase
-    .from("campaign_applications")
-    .select(`
-      id,
-      campaign_id,
-      creator_id,
-      status,
-      campaigns(
-        submission_due,
-        business_profiles(user_id)
-      )
-    `)
-    .eq("id", applicationId)
-    .eq("status", "recommended")
-    .maybeSingle();
-
-  if (applicationError || !application) {
-    redirect(`/business/dashboard?error=${encodeURIComponent(applicationError?.message ?? "추천 지원서를 찾을 수 없습니다.")}`);
-  }
-
-  const campaign = Array.isArray(application.campaigns) ? application.campaigns[0] : application.campaigns;
-  const businessProfile = Array.isArray(campaign?.business_profiles) ? campaign?.business_profiles[0] : campaign?.business_profiles;
-
-  if (businessProfile?.user_id !== user.id) {
-    redirect(`/business/dashboard?error=${encodeURIComponent("해당 캠페인의 가게 계정만 선정할 수 있습니다.")}`);
-  }
-
-  const { error: collaborationError } = await supabase.from("collaborations").insert({
-    campaign_id: application.campaign_id,
-    creator_id: application.creator_id,
-    application_id: application.id,
-    submission_due: campaign?.submission_due ?? null,
-    status: "selected"
+  const { error } = await supabase.rpc("select_campaign_application", {
+    target_application_id: applicationId
   });
 
-  if (collaborationError) {
-    redirect(`/business/dashboard?error=${encodeURIComponent(collaborationError.message)}`);
-  }
-
-  const { error: updateError } = await supabase
-    .from("campaign_applications")
-    .update({ status: "selected" })
-    .eq("id", application.id);
-
-  if (updateError) {
-    redirect(`/business/dashboard?error=${encodeURIComponent(updateError.message)}`);
-  }
-
-  await supabase.from("campaigns").update({ status: "in_progress" }).eq("id", application.campaign_id);
+  if (error) redirect(`/business/dashboard?error=${encodeURIComponent(error.message)}`);
   revalidatePath("/business/dashboard");
+  revalidatePath("/admin");
+  revalidatePath("/creator/dashboard");
+  revalidatePath("/campaigns");
   redirect("/business/dashboard");
 }
