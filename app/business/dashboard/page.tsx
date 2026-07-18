@@ -5,6 +5,7 @@ import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-l
 import { getBusinessDashboard, type BusinessDashboardData, type DashboardApplication, type DashboardCampaign } from "@/lib/supabase/queries";
 import { requireRole } from "@/lib/auth/guards";
 import { approveRecommendedApplication, saveBusinessProfile } from "./actions";
+import { BusinessProfileWizard } from "./business-profile-wizard";
 
 const applicationStatusTabs = [
   ["", "전체"],
@@ -392,7 +393,7 @@ function OperatorSidebar({ business }: { business: NonNullable<BusinessDashboard
         </div>
         <h2 className="text-lg font-bold text-charcoal">{business.businessName}</h2>
         <p className="mb-4 mt-1 text-sm text-gray-500">사업자 회원</p>
-        <Link href="/business/dashboard" className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100">
+        <Link href="/business/dashboard?profile=edit" className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100">
           프로필 수정
         </Link>
       </section>
@@ -492,8 +493,8 @@ function Pagination({
   );
 }
 
-export default async function BusinessDashboardPage({ searchParams }: { searchParams: Promise<{ error?: string; campaign?: string; appStatus?: string; status?: string; sort?: string; q?: string; page?: string }> }) {
-  const { error, campaign, appStatus, status, sort, q, page } = await searchParams;
+export default async function BusinessDashboardPage({ searchParams }: { searchParams: Promise<{ error?: string; campaign?: string; appStatus?: string; status?: string; sort?: string; q?: string; page?: string; next?: string; profile?: string }> }) {
+  const { error, campaign, appStatus, status, sort, q, page, next, profile } = await searchParams;
   const statusFilter = normalizeApplicationStatusFilter(appStatus);
   const campaignFilter = normalizeCampaignListFilter(status);
   const sortOrder = normalizeCampaignSort(sort);
@@ -514,29 +515,21 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
 
   if (!business) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-        <h1 className="text-3xl font-black text-charcoal">가게 프로필 등록</h1>
-        <p className="mt-2 text-gray-500">캠페인 생성 전 운영자 검수를 위한 가게 정보를 먼저 등록해주세요.</p>
-        {error ? <p className="mt-4 rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
-        <form action={saveBusinessProfile} className="mt-8 grid gap-6 rounded-lg border border-line bg-white p-6 shadow-sm">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field name="business_name" label="가게명" placeholder="카페 오디너리" required />
-            <Field name="category" label="업종" placeholder="카페·베이커리" required />
-            <Field name="district" label="활동 지역" placeholder="공릉동" />
-            <Field name="contact" label="연락처" placeholder="02-000-0000" />
-            <Field name="business_hours" label="영업시간" placeholder="매일 10:00-21:00" />
-            <Field name="website_url" label="웹사이트" placeholder="https://..." />
+      <main className="bg-[#F8F9FA]">
+        <BusinessProfileWizard action={saveBusinessProfile} error={error} next={next} />
+      </main>
+    );
+  }
+
+  if (profile === "edit") {
+    return (
+      <main className="bg-[#F8F9FA]">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 md:py-10 lg:flex-row lg:px-8">
+          <OperatorSidebar business={business} />
+          <div className="min-w-0 flex-grow">
+            <BusinessProfileWizard action={saveBusinessProfile} error={error} next={next} mode="edit" initialBusiness={business} />
           </div>
-          <Field name="address" label="주소" placeholder="서울 노원구 ..." />
-          <Field name="short_intro" label="한 줄 소개" placeholder="공릉동 골목의 계절 디저트와 스페셜티 커피" />
-          <label>
-            <span className="mb-2 block text-sm font-black text-charcoal">가게 소개</span>
-            <textarea name="description" className="min-h-28 w-full rounded-lg border border-line px-4 py-3 text-sm focus-ring" placeholder="가게의 이야기와 협업하고 싶은 콘텐츠 방향을 적어주세요." />
-          </label>
-          <Field name="social_urls" label="SNS URL" placeholder="https://instagram.com/... , https://blog.naver.com/..." />
-          <Field name="cover_image_url" label="대표 이미지 URL" placeholder="선택 입력" />
-          <button className="rounded-lg bg-primary px-5 py-3 font-black text-white hover:bg-primaryHover">가게 프로필 저장</button>
-        </form>
+        </div>
       </main>
     );
   }
@@ -644,14 +637,5 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
 
       {selectedCampaign ? <ApplicantModal campaign={selectedCampaign} applications={filteredApplications} statusFilter={statusFilter} /> : null}
     </main>
-  );
-}
-
-function Field({ name, label, placeholder, required = false }: { name: string; label: string; placeholder: string; required?: boolean }) {
-  return (
-    <label>
-      <span className="mb-2 block text-sm font-black text-charcoal">{label}</span>
-      <input name={name} required={required} className="w-full rounded-lg border border-line px-4 py-3 text-sm focus-ring" placeholder={placeholder} />
-    </label>
   );
 }

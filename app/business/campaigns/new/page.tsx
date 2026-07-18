@@ -14,7 +14,7 @@ export default async function NewCampaignPage({ searchParams }: { searchParams: 
     .maybeSingle();
 
   if (!business) {
-    redirect(`/business/dashboard?error=${encodeURIComponent("캠페인 생성 전 가게 프로필을 먼저 등록해주세요.")}`);
+    redirect(`/business/dashboard?next=${encodeURIComponent("/business/campaigns/new")}&error=${encodeURIComponent("캠페인 생성 전 가게 프로필을 먼저 등록해주세요.")}`);
   }
 
   return <CampaignCreateWizard action={createCampaign} error={error} />;

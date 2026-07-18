@@ -1,8 +1,13 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/guards";
+
+const BUSINESS_IMAGE_BUCKET = "business-images";
+const MAX_BUSINESS_IMAGE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_BUSINESS_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function splitList(value: FormDataEntryValue | null) {
   return String(value ?? "")
@@ -11,36 +16,189 @@ function splitList(value: FormDataEntryValue | null) {
     .filter(Boolean);
 }
 
+function getSafeNext(value: FormDataEntryValue | null) {
+  const next = String(value ?? "");
+  return next.startsWith("/") && !next.startsWith("//") ? next : "";
+}
+
+function getDashboardRedirect(formData: FormData, error?: string) {
+  const params = new URLSearchParams();
+  const next = getSafeNext(formData.get("next"));
+
+  if (String(formData.get("profile_mode") ?? "") === "edit") params.set("profile", "edit");
+  if (next) params.set("next", next);
+  if (error) params.set("error", error);
+
+  const query = params.toString();
+  return query ? `/business/dashboard?${query}` : "/business/dashboard";
+}
+
+function redirectWithError(formData: FormData, message: string): never {
+  redirect(getDashboardRedirect(formData, message));
+}
+
+function requiredText(formData: FormData, name: string, label: string) {
+  const value = String(formData.get(name) ?? "").trim();
+  if (!value) redirectWithError(formData, `${label}을(를) 입력해주세요.`);
+
+  return value;
+}
+
+function nullableText(formData: FormData, name: string) {
+  const value = String(formData.get(name) ?? "").trim();
+  return value || null;
+}
+
+function normalizeUrl(value: string, label: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("unsupported protocol");
+    }
+
+    return trimmed;
+  } catch {
+    throw new Error(`${label}은(는) http:// 또는 https://로 시작하는 올바른 URL이어야 합니다.`);
+  }
+}
+
+function getImageFile(formData: FormData, fieldName: string) {
+  const value = formData.get(fieldName);
+  return value instanceof File && value.size > 0 ? value : null;
+}
+
+function validateImageFile(file: File) {
+  if (!ALLOWED_BUSINESS_IMAGE_TYPES.has(file.type)) {
+    return "대표 이미지는 JPG, PNG, WEBP 형식만 업로드할 수 있습니다.";
+  }
+
+  if (file.size > MAX_BUSINESS_IMAGE_BYTES) {
+    return "대표 이미지는 10MB 이하 파일만 업로드할 수 있습니다.";
+  }
+
+  return null;
+}
+
+function imageExtension(file: File) {
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/webp") return "webp";
+  return "jpg";
+}
+
+async function uploadBusinessImage({
+  supabase,
+  userId,
+  file
+}: {
+  supabase: Awaited<ReturnType<typeof requireRole>>["supabase"];
+  userId: string;
+  file: File;
+}) {
+  const path = `${userId}/business/${Date.now()}-${randomUUID()}.${imageExtension(file)}`;
+  const { error } = await supabase.storage.from(BUSINESS_IMAGE_BUCKET).upload(path, file, {
+    cacheControl: "31536000",
+    contentType: file.type,
+    upsert: false
+  });
+
+  if (error) throw new Error(error.message);
+
+  const { data } = supabase.storage.from(BUSINESS_IMAGE_BUCKET).getPublicUrl(path);
+  return { path, publicUrl: data.publicUrl };
+}
+
 export async function saveBusinessProfile(formData: FormData) {
   const { supabase, user } = await requireRole("business", "/business/dashboard");
+  const businessName = requiredText(formData, "business_name", "가게명");
+  const category = requiredText(formData, "category", "업종");
+  const shortIntro = requiredText(formData, "short_intro", "한 줄 소개");
+  const address = requiredText(formData, "address", "주소");
+  const district = requiredText(formData, "district", "활동 지역");
+  const contact = requiredText(formData, "contact", "연락처");
+  const businessHoursSummary = requiredText(formData, "business_hours_summary", "영업시간");
+  const businessHoursPreset = String(formData.get("business_hours_preset") ?? "").trim();
+  const businessHoursNote = String(formData.get("business_hours_note") ?? "").trim();
+  const websiteUrlRaw = String(formData.get("website_url") ?? "").trim();
+  const socialUrlValues = splitList(formData.get("social_urls"));
+  let websiteUrl: string | null = null;
+  let socialUrls: string[] = [];
 
-  const { error: profileError } = await supabase.from("profiles").update({
-    email: user.email,
-    nickname: String(formData.get("business_name") ?? "")
-  }).eq("id", user.id);
+  try {
+    websiteUrl = normalizeUrl(websiteUrlRaw, "웹사이트");
+    socialUrls = socialUrlValues.map((url) => normalizeUrl(url, "SNS URL")).filter((url): url is string => Boolean(url));
+  } catch (urlError) {
+    const message = urlError instanceof Error ? urlError.message : "URL 형식을 확인해주세요.";
+    redirectWithError(formData, message);
+  }
 
-  if (profileError) redirect(`/business/dashboard?error=${encodeURIComponent(profileError.message)}`);
+  const coverImage = getImageFile(formData, "cover_image");
+  if (coverImage) {
+    const imageValidationError = validateImageFile(coverImage);
+    if (imageValidationError) redirectWithError(formData, imageValidationError);
+  }
 
-  const businessHours = String(formData.get("business_hours") ?? "");
+  const { data: existingBusiness, error: existingBusinessError } = await supabase
+    .from("business_profiles")
+    .select("id,cover_image_url")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (existingBusinessError) redirectWithError(formData, existingBusinessError.message);
+  if (!coverImage && !existingBusiness?.cover_image_url) redirectWithError(formData, "대표 이미지를 등록해주세요.");
+
+  const uploadedPaths: string[] = [];
+  let coverImageUrl = existingBusiness?.cover_image_url ?? "";
+
+  if (coverImage) {
+    try {
+      const uploadedImage = await uploadBusinessImage({ supabase, userId: user.id, file: coverImage });
+      uploadedPaths.push(uploadedImage.path);
+      coverImageUrl = uploadedImage.publicUrl;
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : "이미지 업로드 중 오류가 발생했습니다.";
+      redirectWithError(formData, message);
+    }
+  }
+
   const { error } = await supabase.from("business_profiles").upsert({
     user_id: user.id,
-    business_name: String(formData.get("business_name") ?? ""),
-    category: String(formData.get("category") ?? ""),
-    short_intro: String(formData.get("short_intro") ?? ""),
-    description: String(formData.get("description") ?? ""),
-    address: String(formData.get("address") ?? ""),
-    district: String(formData.get("district") ?? ""),
-    contact: String(formData.get("contact") ?? ""),
-    business_hours: businessHours ? { default: businessHours } : {},
-    website_url: String(formData.get("website_url") ?? "") || null,
-    social_urls: splitList(formData.get("social_urls")),
-    cover_image_url: String(formData.get("cover_image_url") ?? "") || null,
+    business_name: businessName,
+    category,
+    short_intro: shortIntro,
+    description: nullableText(formData, "description"),
+    address,
+    district,
+    contact,
+    business_hours: {
+      summary: businessHoursSummary,
+      preset: businessHoursPreset || "custom",
+      note: businessHoursNote
+    },
+    website_url: websiteUrl,
+    social_urls: socialUrls,
+    cover_image_url: coverImageUrl,
     verification_status: "pending",
     is_public: false
   }, { onConflict: "user_id" });
 
-  if (error) redirect(`/business/dashboard?error=${encodeURIComponent(error.message)}`);
-  redirect("/business/dashboard");
+  if (error) {
+    if (uploadedPaths.length) await supabase.storage.from(BUSINESS_IMAGE_BUCKET).remove(uploadedPaths);
+    redirectWithError(formData, error.message);
+  }
+
+  const { error: profileError } = await supabase.from("profiles").update({
+    email: user.email,
+    nickname: businessName
+  }).eq("id", user.id);
+
+  if (profileError) redirectWithError(formData, profileError.message);
+
+  revalidatePath("/business/dashboard");
+  const next = getSafeNext(formData.get("next"));
+  redirect(next || "/business/dashboard");
 }
 
 export async function approveRecommendedApplication(formData: FormData) {

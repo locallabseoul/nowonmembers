@@ -97,6 +97,16 @@ type CollaborationSummaryRow = {
   status: string;
 };
 
+type BusinessHoursValue =
+  | string
+  | {
+    default?: unknown;
+    summary?: unknown;
+    preset?: unknown;
+    note?: unknown;
+  }
+  | null;
+
 type CampaignApplicationStats = {
   applicationCount: number;
   recommendedCount: number;
@@ -131,6 +141,15 @@ export type BusinessDashboardData = {
     businessName: string;
     category: string;
     shortIntro: string;
+    description: string;
+    address: string;
+    district: string;
+    contact: string;
+    businessHours: string;
+    businessHoursPreset: string;
+    businessHoursNote: string;
+    websiteUrl: string;
+    socialUrls: string[];
     verificationStatus: string;
     isPublic: boolean;
     coverImage: string;
@@ -206,6 +225,14 @@ function asRelation<T>(value: Relation<T>) {
 
 function relationCount(value: CountRelation) {
   return value?.[0]?.count ?? 0;
+}
+
+function getBusinessHoursText(value: BusinessHoursValue, key: "summary" | "preset" | "note") {
+  if (!value) return "";
+  if (typeof value === "string") return key === "summary" ? value : "";
+
+  const nextValue = key === "summary" ? value.summary ?? value.default : value[key];
+  return typeof nextValue === "string" ? nextValue : "";
 }
 
 function formatCreatorChannelSummary(channels?: CreatorChannelRow[] | null) {
@@ -429,7 +456,7 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
 
   const { data: business } = await supabase
     .from("business_profiles")
-    .select("id,business_name,category,short_intro,verification_status,is_public,cover_image_url")
+    .select("id,business_name,category,short_intro,description,address,district,contact,business_hours,website_url,social_urls,verification_status,is_public,cover_image_url")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -472,6 +499,15 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
       businessName: business.business_name,
       category: business.category,
       shortIntro: business.short_intro ?? "",
+      description: business.description ?? "",
+      address: business.address ?? "",
+      district: business.district ?? "",
+      contact: business.contact ?? "",
+      businessHours: getBusinessHoursText(business.business_hours as BusinessHoursValue, "summary"),
+      businessHoursPreset: getBusinessHoursText(business.business_hours as BusinessHoursValue, "preset"),
+      businessHoursNote: getBusinessHoursText(business.business_hours as BusinessHoursValue, "note"),
+      websiteUrl: business.website_url ?? "",
+      socialUrls: Array.isArray(business.social_urls) ? business.social_urls.filter(Boolean) : [],
       verificationStatus: business.verification_status,
       isPublic: business.is_public,
       coverImage: business.cover_image_url ?? ""
