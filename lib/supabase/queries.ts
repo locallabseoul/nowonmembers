@@ -1,4 +1,4 @@
-import { campaigns as fallbackCampaigns, stories as fallbackStories, getBusiness as getFallbackBusiness, getCampaign as getFallbackCampaign, getCreator as getFallbackCreator } from "@/lib/data";
+import { stories as fallbackStories, getBusiness as getFallbackBusiness, getCreator as getFallbackCreator } from "@/lib/data";
 import type { Campaign, LocalStory } from "@/lib/types";
 import { createSupabaseServerClient } from "./server";
 
@@ -171,27 +171,33 @@ function mapStory(row: StoryRow): LocalStory {
   };
 }
 
+async function syncExpiredCampaigns(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
+  await supabase.rpc("sync_expired_campaigns");
+}
+
 export async function getPublicCampaigns(): Promise<Campaign[]> {
   const supabase = await createSupabaseServerClient();
+  await syncExpiredCampaigns(supabase);
   const { data, error } = await supabase
     .from("campaigns")
     .select("*, business_profiles(business_name), campaign_applications(count)")
-    .in("status", ["recruiting", "selecting", "completed"])
+    .in("status", ["recruiting", "selecting", "in_progress", "submission_review", "completed", "cancelled", "failed"])
     .order("recruit_end", { ascending: true });
 
-  if (error || !data?.length) return fallbackCampaigns;
+  if (error || !data?.length) return [];
   return (data as CampaignRow[]).map(mapCampaign);
 }
 
 export async function getPublicCampaign(id: string): Promise<Campaign | undefined> {
   const supabase = await createSupabaseServerClient();
+  await syncExpiredCampaigns(supabase);
   const { data, error } = await supabase
     .from("campaigns")
     .select("*, business_profiles(business_name), campaign_applications(count)")
     .eq("id", id)
     .maybeSingle();
 
-  if (error || !data) return getFallbackCampaign(id);
+  if (error || !data) return undefined;
   return mapCampaign(data as CampaignRow);
 }
 
@@ -225,6 +231,7 @@ export function getDisplayCreator(id: string) {
 
 export async function getBusinessDashboard(): Promise<BusinessDashboardData> {
   const supabase = await createSupabaseServerClient();
+  await syncExpiredCampaigns(supabase);
   const { data: authData } = await supabase.auth.getUser();
   const user = authData.user;
 
@@ -279,6 +286,7 @@ export async function getBusinessDashboard(): Promise<BusinessDashboardData> {
 
 export async function getAdminDashboard(): Promise<AdminDashboardData> {
   const supabase = await createSupabaseServerClient();
+  await syncExpiredCampaigns(supabase);
   const { data: authData } = await supabase.auth.getUser();
   const user = authData.user;
 

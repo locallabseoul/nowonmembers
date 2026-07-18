@@ -3,6 +3,7 @@ import { Check, CheckCircle2, Clapperboard, Compass, Gift, Instagram, Landmark, 
 import { HomeHeroCarousel } from "@/app/components/home-hero-carousel";
 import { RoleAwareActionLink } from "@/app/components/role-aware-action-link";
 import { getCurrentSessionProfile } from "@/lib/auth/guards";
+import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import { getBusiness, stories } from "@/lib/data";
 import { getPublicCampaigns, getPublicStories } from "@/lib/supabase/queries";
 import type { Campaign, LocalStory } from "@/lib/types";
@@ -13,16 +14,11 @@ function campaignChannel(campaign: Campaign) {
   return { icon: <span className="font-black text-[#03C75A]">B</span>, label: "블로그" };
 }
 
-function statusLabel(campaign: Campaign) {
-  if (campaign.status === "selecting") return "선정중";
-  if (campaign.status === "completed") return "완료";
-  return campaign.appliedCount >= campaign.recruitCount ? "마감임박" : "모집중";
-}
-
 function CampaignCard({ campaign }: { campaign: Campaign }) {
   const business = getBusiness(campaign.businessId);
   const channel = campaignChannel(campaign);
-  const status = statusLabel(campaign);
+  const lifecycle = getCampaignLifecycle(campaign);
+  const deadline = getCampaignDeadlineLabel(campaign);
   const progress = Math.min(100, Math.round((campaign.appliedCount / Math.max(campaign.recruitCount, 1)) * 100));
 
   return (
@@ -35,9 +31,9 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
             {channel.icon}
             {channel.label}
           </span>
-          <span className="rounded-lg bg-primary px-2.5 py-1 text-xs font-black text-white shadow-sm">{status}</span>
+          <span className="rounded-lg bg-primary px-2.5 py-1 text-xs font-black text-white shadow-sm">{lifecycle.label}</span>
         </div>
-        <span className="absolute right-4 top-4 rounded-full bg-charcoal/80 px-3 py-1 text-xs font-black text-white backdrop-blur-sm">D-4</span>
+        <span className="absolute right-4 top-4 rounded-full bg-charcoal/80 px-3 py-1 text-xs font-black text-white backdrop-blur-sm">{deadline}</span>
       </div>
       <div className="p-6">
         <div className="mb-2 flex items-center gap-1.5 text-xs text-slate-400">
@@ -266,7 +262,7 @@ function CampaignMakersSection() {
 export default async function HomePage() {
   const [campaigns, remoteStories, session] = await Promise.all([getPublicCampaigns(), getPublicStories(), getCurrentSessionProfile()]);
   const role = session.profile?.role;
-  const featuredCampaigns = campaigns.slice(0, 3);
+  const featuredCampaigns = campaigns.filter((campaign) => getCampaignLifecycle(campaign).canApply).slice(0, 3);
   const contentStories = (remoteStories.length ? remoteStories : stories).slice(0, 4);
 
   return (
@@ -346,9 +342,16 @@ export default async function HomePage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {featuredCampaigns.map((campaign) => <CampaignCard key={campaign.id} campaign={campaign} />)}
-          </div>
+          {featuredCampaigns.length ? (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {featuredCampaigns.map((campaign) => <CampaignCard key={campaign.id} campaign={campaign} />)}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-10 text-center">
+              <h3 className="text-xl font-black text-charcoal">현재 모집중인 캠페인이 없습니다</h3>
+              <p className="mt-2 text-sm text-slate-500">운영자 승인 후 모집이 시작된 캠페인이 이곳에 표시됩니다.</p>
+            </div>
+          )}
         </div>
       </section>
 

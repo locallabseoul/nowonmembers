@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Eye, FileCheck2, Plus, Users } from "lucide-react";
 import { Badge, StatCard } from "@/app/components/ui";
+import { getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import { getBusinessDashboard } from "@/lib/supabase/queries";
 import { requireRole } from "@/lib/auth/guards";
 import { approveRecommendedApplication, saveBusinessProfile } from "./actions";
@@ -61,30 +62,56 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
       <section className="overflow-hidden rounded-lg border border-line bg-white shadow-sm">
         <div className="border-b border-line p-5">
           <h2 className="text-xl font-black text-charcoal">캠페인 관리</h2>
+          <p className="mt-1 text-sm text-gray-500">검수, 모집, 선정, 진행 상태와 공개 목록 노출 여부를 확인하세요.</p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
+          <table className="w-full min-w-[920px] text-left text-sm">
             <thead className="bg-gray-50 text-xs font-black uppercase text-gray-500">
               <tr>
                 <th className="px-5 py-4">캠페인</th>
-                <th className="px-5 py-4">상태</th>
+                <th className="px-5 py-4">상태와 공개 여부</th>
                 <th className="px-5 py-4">지원자</th>
                 <th className="px-5 py-4">마감</th>
                 <th className="px-5 py-4">관리</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {campaigns.map((campaign) => (
-                <tr key={campaign.id}>
-                  <td className="px-5 py-4 font-black text-charcoal">{campaign.title}</td>
-                  <td className="px-5 py-4"><Badge tone={campaign.status === "recruiting" ? "red" : "amber"}>{campaign.status}</Badge></td>
-                  <td className="px-5 py-4">{campaign.appliedCount}명</td>
-                  <td className="px-5 py-4">{campaign.recruitEnd}</td>
-                  <td className="px-5 py-4">
-                    <Link href={`/campaigns/${campaign.id}`} className="font-black text-primary">상세 보기</Link>
-                  </td>
+              {campaigns.map((campaign) => {
+                const lifecycle = getCampaignLifecycle(campaign);
+                const hasPublicDetail = campaign.status === "recruiting";
+
+                return (
+                  <tr key={campaign.id}>
+                    <td className="px-5 py-4">
+                      <p className="font-black text-charcoal">{campaign.title}</p>
+                      <p className="mt-1 text-xs text-gray-500">{campaign.category} · {campaign.region}</p>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <Badge tone={lifecycle.badgeTone}>{lifecycle.label}</Badge>
+                          <span className="text-xs font-bold text-gray-500">{lifecycle.visibilityLabel}</span>
+                        </div>
+                        <p className="max-w-sm text-xs leading-5 text-gray-500">{lifecycle.description}</p>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">{campaign.appliedCount}명 / {campaign.recruitCount}명</td>
+                    <td className="px-5 py-4">{campaign.recruitEnd || "미정"}</td>
+                    <td className="px-5 py-4">
+                      {hasPublicDetail ? (
+                        <Link href={`/campaigns/${campaign.id}`} className="font-black text-primary">공개 상세 보기</Link>
+                      ) : (
+                        <span className="text-xs font-bold text-gray-400">{lifecycle.actionLabel}</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {campaigns.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-500">아직 생성한 캠페인이 없습니다.</td>
                 </tr>
-              ))}
+              ) : null}
             </tbody>
           </table>
         </div>

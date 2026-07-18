@@ -1,21 +1,49 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Gift, MapPin, Search, Video } from "lucide-react";
 import { getBusiness } from "@/lib/data";
+import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import { getPublicCampaigns } from "@/lib/supabase/queries";
 import type { Campaign } from "@/lib/types";
 
-function statusLabel(campaign: Campaign) {
-  if (campaign.status === "selecting") return "선정중";
-  if (campaign.status === "in_progress" || campaign.status === "submission_review") return "진행중";
-  if (campaign.status === "completed") return "완료";
-  if (campaign.status === "cancelled" || campaign.status === "failed") return "마감됨";
-  return campaign.appliedCount >= campaign.recruitCount ? "마감임박" : "모집중";
+type CampaignFilter = {
+  status?: string;
+  type?: string;
+  sort?: string;
+  q?: string;
+};
+
+function campaignStatusGroup(campaign: Campaign) {
+  if (campaign.status === "recruiting") return "recruiting";
+  if (campaign.status === "selecting") return "selecting";
+  if (campaign.status === "in_progress" || campaign.status === "submission_review") return "in_progress";
+  return "closed";
 }
 
-function deadlineLabel(campaign: Campaign) {
-  if (campaign.status === "selecting" || campaign.status === "completed") return "마감됨";
-  if (campaign.appliedCount >= campaign.recruitCount) return "오늘마감";
-  return "D-3";
+function campaignTypeGroup(campaign: Campaign) {
+  if (campaign.campaignType === "shortform") return "shortform";
+  if (campaign.campaignType === "interview") return "interview";
+  return "visit";
+}
+
+function filterCampaigns(campaigns: Campaign[], filter: CampaignFilter) {
+  const query = filter.q?.trim().toLowerCase();
+
+  return campaigns
+    .filter((campaign) => {
+      if (filter.status && campaignStatusGroup(campaign) !== filter.status) return false;
+      if (filter.type && campaignTypeGroup(campaign) !== filter.type) return false;
+      if (!query) return true;
+
+      return [campaign.title, campaign.region, campaign.category, campaign.businessName ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    })
+    .sort((a, b) => {
+      if (filter.sort === "newest") return b.id.localeCompare(a.id);
+      if (filter.sort === "popular") return b.appliedCount - a.appliedCount;
+      return (a.recruitEnd || "9999-12-31").localeCompare(b.recruitEnd || "9999-12-31");
+    });
 }
 
 function channelLabel(campaign: Campaign) {
@@ -27,10 +55,8 @@ function channelLabel(campaign: Campaign) {
 function CampaignListCard({ campaign }: { campaign: Campaign }) {
   const business = getBusiness(campaign.businessId);
   const channel = channelLabel(campaign);
-  const status = statusLabel(campaign);
-  const deadline = deadlineLabel(campaign);
-  const isClosed = status === "선정중" || status === "완료" || status === "마감됨";
-  const isActive = status === "진행중";
+  const lifecycle = getCampaignLifecycle(campaign);
+  const deadline = getCampaignDeadlineLabel(campaign);
 
   return (
     <Link
@@ -45,16 +71,14 @@ function CampaignListCard({ campaign }: { campaign: Campaign }) {
             {channel.icon}
             {channel.label}
           </span>
-          <span className={`rounded-md px-2.5 py-1 text-xs font-black text-white shadow-sm ${isActive ? "bg-blue-500" : isClosed ? "bg-gray-600" : "bg-primary"}`}>
-            {status}
+          <span className="rounded-md bg-primary px-2.5 py-1 text-xs font-black text-white shadow-sm">
+            {lifecycle.label}
           </span>
         </div>
 
-        {isActive ? null : (
-          <div className={`absolute right-4 top-4 rounded-full px-3 py-1 text-xs font-black ${isClosed ? "bg-gray-200 text-gray-600" : "bg-charcoal/80 text-white backdrop-blur-sm"}`}>
-            {deadline}
-          </div>
-        )}
+        <div className="absolute right-4 top-4 rounded-full bg-charcoal/80 px-3 py-1 text-xs font-black text-white backdrop-blur-sm">
+          {deadline}
+        </div>
       </div>
 
       <div className="p-6">
@@ -74,8 +98,8 @@ function CampaignListCard({ campaign }: { campaign: Campaign }) {
             </div>
             <span className="truncate font-black text-charcoal">{campaign.benefitValue}</span>
           </div>
-          <div className={`shrink-0 text-sm font-bold ${campaign.appliedCount >= campaign.recruitCount ? "text-primary" : "text-gray-500"}`}>
-            {isClosed ? `${campaign.appliedCount}명 모집 완료` : `${campaign.appliedCount}명 / ${campaign.recruitCount}명 신청`}
+          <div className="shrink-0 text-sm font-bold text-gray-500">
+            {campaign.appliedCount}명 / {campaign.recruitCount}명 신청
           </div>
         </div>
       </div>
@@ -83,8 +107,9 @@ function CampaignListCard({ campaign }: { campaign: Campaign }) {
   );
 }
 
-export default async function CampaignListPage() {
-  const campaigns = await getPublicCampaigns();
+export default async function CampaignListPage({ searchParams }: { searchParams: Promise<{ error?: string; status?: string; type?: string; sort?: string; q?: string }> }) {
+  const { error, status, type, sort, q } = await searchParams;
+  const campaigns = filterCampaigns(await getPublicCampaigns(), { status, type, sort, q });
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -93,56 +118,65 @@ export default async function CampaignListPage() {
           <h1 className="mb-2 text-3xl font-black text-charcoal">캠페인 목록</h1>
           <p className="text-gray-500">노원 지역의 다양한 체험 캠페인을 찾아보세요.</p>
         </div>
+        {error ? <p className="rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
 
-        <div className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:flex-row">
+        <form className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:flex-row">
           <label className="relative flex-grow md:max-w-md">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
+              name="q"
+              defaultValue={q ?? ""}
               className="w-full rounded-lg border border-gray-300 py-2.5 pl-11 pr-4 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20"
               placeholder="캠페인 이름, 지역, 매장명 검색"
             />
           </label>
 
           <div className="flex flex-wrap items-center gap-3">
-            <select className="min-w-[120px] rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-600 outline-none focus:border-primary">
-              <option>콘텐츠 유형</option>
-              <option>블로그</option>
-              <option>인스타그램</option>
-              <option>릴스/쇼츠</option>
+            <select name="type" defaultValue={type ?? ""} className="min-w-[120px] rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-600 outline-none focus:border-primary">
+              <option value="">콘텐츠 유형</option>
+              <option value="visit">블로그</option>
+              <option value="interview">인스타그램</option>
+              <option value="shortform">릴스/쇼츠</option>
             </select>
-            <select className="min-w-[120px] rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-600 outline-none focus:border-primary">
-              <option>진행 상태</option>
-              <option>모집중</option>
-              <option>선정중</option>
-              <option>진행중</option>
-              <option>마감됨</option>
+            <select name="status" defaultValue={status ?? ""} className="min-w-[120px] rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-600 outline-none focus:border-primary">
+              <option value="">진행 상태</option>
+              <option value="recruiting">모집중</option>
+              <option value="selecting">선정중</option>
+              <option value="in_progress">진행중</option>
+              <option value="closed">마감됨</option>
             </select>
-            <select className="min-w-[120px] rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-600 outline-none focus:border-primary">
-              <option>최신등록순</option>
-              <option>마감임박순</option>
-              <option>인기순</option>
+            <select name="sort" defaultValue={sort ?? "deadline"} className="min-w-[120px] rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-600 outline-none focus:border-primary">
+              <option value="deadline">마감임박순</option>
+              <option value="popular">인기순</option>
+              <option value="newest">최신등록순</option>
             </select>
+            <button className="rounded-lg bg-charcoal px-4 py-2.5 text-sm font-black text-white hover:bg-slate-800">필터 적용</button>
           </div>
-        </div>
+        </form>
       </div>
 
-      <div className="mb-12 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {campaigns.map((campaign) => <CampaignListCard key={campaign.id} campaign={campaign} />)}
-      </div>
+      {campaigns.length ? (
+        <>
+          <div className="mb-12 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {campaigns.map((campaign) => <CampaignListCard key={campaign.id} campaign={campaign} />)}
+          </div>
 
-      <div className="flex items-center justify-center gap-2">
-        <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-primary" aria-label="이전 페이지">
-          <ChevronLeft size={16} />
-        </button>
-        <button className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary font-black text-white shadow-sm">1</button>
-        <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 font-bold text-gray-600 transition-colors hover:bg-gray-50 hover:text-primary">2</button>
-        <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 font-bold text-gray-600 transition-colors hover:bg-gray-50 hover:text-primary">3</button>
-        <span className="mx-1 text-gray-400">...</span>
-        <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 font-bold text-gray-600 transition-colors hover:bg-gray-50 hover:text-primary">8</button>
-        <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-primary" aria-label="다음 페이지">
-          <ChevronRight size={16} />
-        </button>
-      </div>
+          <div className="flex items-center justify-center gap-2">
+            <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-primary" aria-label="이전 페이지">
+              <ChevronLeft size={16} />
+            </button>
+            <button className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary font-black text-white shadow-sm">1</button>
+            <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-primary" aria-label="다음 페이지">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </>
+      ) : (
+        <section className="rounded-[20px] border border-gray-100 bg-white p-10 text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+          <h2 className="text-xl font-black text-charcoal">조건에 맞는 캠페인이 없습니다</h2>
+          <p className="mt-2 text-sm text-gray-500">필터를 조정하거나 새로 승인된 캠페인을 기다려주세요.</p>
+        </section>
+      )}
     </main>
   );
 }

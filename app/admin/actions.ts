@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
+import { getKoreaTodayString } from "@/lib/campaign-lifecycle";
 
 async function requireAdmin() {
   const { supabase } = await requireRole("admin", "/admin");
@@ -12,10 +13,35 @@ async function requireAdmin() {
 export async function approveCampaign(formData: FormData) {
   const supabase = await requireAdmin();
   const id = String(formData.get("campaign_id") ?? "");
-  const { error } = await supabase.from("campaigns").update({ status: "recruiting" }).eq("id", id);
+
+  const { data: campaign, error: campaignError } = await supabase
+    .from("campaigns")
+    .select("id,status,recruit_start,recruit_end")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (campaignError || !campaign) {
+    redirect(`/admin?error=${encodeURIComponent(campaignError?.message ?? "승인할 캠페인을 찾을 수 없습니다.")}`);
+  }
+
+  if (!["in_review", "revision_requested"].includes(campaign.status)) {
+    redirect(`/admin?error=${encodeURIComponent("검수 대기 또는 수정 요청 상태의 캠페인만 승인할 수 있습니다.")}`);
+  }
+
+  const today = getKoreaTodayString();
+  if (campaign.recruit_end && campaign.recruit_end < today) {
+    redirect(`/admin?error=${encodeURIComponent("모집 마감일이 지난 캠페인은 승인할 수 없습니다.")}`);
+  }
+
+  const { error } = await supabase
+    .from("campaigns")
+    .update({ status: "recruiting", recruit_start: campaign.recruit_start ?? today })
+    .eq("id", id);
+
   if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
   revalidatePath("/admin");
   revalidatePath("/campaigns");
+  revalidatePath(`/campaigns/${id}`);
 }
 
 export async function requestCampaignRevision(formData: FormData) {

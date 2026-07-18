@@ -11,6 +11,7 @@ type RoleAwareActionLinkProps = {
   currentRole?: UserRole | string | null;
   requiredRole: "business" | "creator";
   unauthenticatedHref?: string;
+  roleMismatchMessage?: string;
 };
 
 const warningMessages = {
@@ -24,7 +25,8 @@ export function RoleAwareActionLink({
   children,
   currentRole,
   requiredRole,
-  unauthenticatedHref
+  unauthenticatedHref,
+  roleMismatchMessage
 }: RoleAwareActionLinkProps) {
   const targetHref = currentRole ? href : unauthenticatedHref ?? href;
 
@@ -32,7 +34,7 @@ export function RoleAwareActionLink({
     if (!currentRole || currentRole === requiredRole) return;
 
     event.preventDefault();
-    window.alert(warningMessages[requiredRole]);
+    window.alert(roleMismatchMessage ?? warningMessages[requiredRole]);
   }
 
   return (

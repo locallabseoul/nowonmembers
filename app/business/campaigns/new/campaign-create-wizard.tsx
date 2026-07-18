@@ -186,7 +186,7 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
                 <div>
                   <FieldLabel>캠페인 일정 설정 <Required /></FieldLabel>
                   <div className="grid gap-4 sm:grid-cols-3">
-                    <TextField name="recruit_end" label="모집 마감일" type="date" />
+                    <TextField name="recruit_end" label="모집 마감일" type="date" requiredMark />
                     <TextField name="selection_date" label="크리에이터 선정 발표일" type="date" />
                     <TextField name="submission_due" label="콘텐츠 등록 마감일" type="date" />
                   </div>
@@ -484,6 +484,7 @@ function TextField({
         <input
           name={name}
           type={type}
+          required={requiredMark}
           className={`w-full rounded-xl border border-slate-200 px-4 py-3.5 text-sm text-charcoal outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary ${icon ? "pl-10" : ""} ${suffix ? "pr-12" : ""}`}
           placeholder={placeholder}
         />
@@ -514,6 +515,7 @@ function TextArea({
       <span className="mb-2 block text-sm font-black text-charcoal">{label} {requiredMark ? <Required /> : null}</span>
       <textarea
         name={name}
+        required={requiredMark}
         rows={rows}
         className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3.5 text-sm text-charcoal outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary"
         placeholder={placeholder}

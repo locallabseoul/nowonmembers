@@ -1,4 +1,5 @@
 import { Badge, StatCard } from "@/app/components/ui";
+import { getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import { getAdminDashboard } from "@/lib/supabase/queries";
 import { CheckCircle2, ClipboardCheck, FileWarning, Send, Users } from "lucide-react";
 import { approveCampaign, approveSubmission, publishLocalStory, recommendApplication, requestCampaignRevision, requestSubmissionRevision, selectApplication } from "./actions";
@@ -34,26 +35,36 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <h2 className="text-xl font-black text-charcoal">캠페인 검수 큐</h2>
           </div>
           <div className="divide-y divide-line">
-            {campaigns.map((campaign) => (
-              <div key={campaign.id} className="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center">
-                <div>
-                  <div className="mb-2 flex gap-2"><Badge tone={campaign.status === "recruiting" ? "red" : "amber"}>{campaign.status}</Badge><Badge>{campaign.campaignType}</Badge></div>
-                  <h3 className="font-black text-charcoal">{campaign.title}</h3>
-                  <p className="mt-2 text-sm text-gray-500">모집 {campaign.recruitStart} - {campaign.recruitEnd} · 지원 {campaign.appliedCount}명</p>
+            {campaigns.map((campaign) => {
+              const lifecycle = getCampaignLifecycle(campaign);
+              const canReview = campaign.status === "in_review" || campaign.status === "revision_requested";
+
+              return (
+                <div key={campaign.id} className="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center">
+                  <div>
+                    <div className="mb-2 flex gap-2"><Badge tone={lifecycle.badgeTone}>{lifecycle.label}</Badge><Badge>{campaign.campaignType}</Badge></div>
+                    <h3 className="font-black text-charcoal">{campaign.title}</h3>
+                    <p className="mt-2 text-sm text-gray-500">모집 {campaign.recruitStart || "승인 시 시작"} - {campaign.recruitEnd || "미정"} · 지원 {campaign.appliedCount}명</p>
+                    <p className="mt-1 text-xs text-gray-400">{lifecycle.description}</p>
+                  </div>
+                  {canReview ? (
+                    <div className="flex flex-wrap gap-2">
+                      <form action={requestCampaignRevision} className="flex gap-2">
+                        <input type="hidden" name="campaign_id" value={campaign.id} />
+                        <input type="hidden" name="admin_memo" value="운영자 수정 요청" />
+                        <button className="rounded-lg border border-line px-4 py-2 text-sm font-black text-charcoal">수정 요청</button>
+                      </form>
+                      <form action={approveCampaign}>
+                        <input type="hidden" name="campaign_id" value={campaign.id} />
+                        <button className="rounded-lg bg-primary px-4 py-2 text-sm font-black text-white">승인</button>
+                      </form>
+                    </div>
+                  ) : (
+                    <span className="text-xs font-bold text-gray-400">{lifecycle.visibilityLabel}</span>
+                  )}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <form action={requestCampaignRevision} className="flex gap-2">
-                    <input type="hidden" name="campaign_id" value={campaign.id} />
-                    <input type="hidden" name="admin_memo" value="운영자 수정 요청" />
-                    <button className="rounded-lg border border-line px-4 py-2 text-sm font-black text-charcoal">수정 요청</button>
-                  </form>
-                  <form action={approveCampaign}>
-                    <input type="hidden" name="campaign_id" value={campaign.id} />
-                    <button className="rounded-lg bg-primary px-4 py-2 text-sm font-black text-white">승인</button>
-                  </form>
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {campaigns.length === 0 ? <p className="p-5 text-sm text-gray-500">검수할 캠페인이 없습니다.</p> : null}
           </div>
         </section>

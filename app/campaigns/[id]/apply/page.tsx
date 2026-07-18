@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
+import { getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getPublicCampaign } from "@/lib/supabase/queries";
 import { applyCampaign } from "./actions";
@@ -16,6 +17,11 @@ export default async function CampaignApplyPage({ params, searchParams }: { para
 
   const [campaign, defaults] = await Promise.all([getPublicCampaign(id), getCreatorApplicationDefaults()]);
   if (!campaign) notFound();
+  const lifecycle = getCampaignLifecycle(campaign);
+
+  if (!lifecycle.canApply) {
+    redirect(`/campaigns/${id}?error=${encodeURIComponent(lifecycle.actionLabel)}`);
+  }
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">

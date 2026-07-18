@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Check, ChevronRight, Gift, Heart, ListChecks, MapPin, MessageCircle, Store } from "lucide-react";
+import { RoleAwareActionLink } from "@/app/components/role-aware-action-link";
+import { getCurrentSessionProfile } from "@/lib/auth/guards";
+import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import { getDisplayBusiness, getPublicCampaign } from "@/lib/supabase/queries";
 import type { Campaign } from "@/lib/types";
 
@@ -13,18 +16,6 @@ function formatShortDate(value: string) {
 
 function formatDateRange(start: string, end: string) {
   return `${formatShortDate(start)} ~ ${formatShortDate(end)}`;
-}
-
-function statusLabel(campaign: Campaign) {
-  if (campaign.status === "selecting") return "선정중";
-  if (campaign.status === "completed") return "완료";
-  if (campaign.status === "cancelled" || campaign.status === "failed") return "마감됨";
-  return "모집중";
-}
-
-function deadlineLabel(campaign: Campaign) {
-  if (campaign.status === "selecting" || campaign.status === "completed") return "마감됨";
-  return "D-3";
 }
 
 function channelLabel(campaign: Campaign) {
@@ -42,10 +33,16 @@ function keywordTags(campaign: Campaign, businessName: string) {
   ];
 }
 
-export default async function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CampaignDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
+  const { error } = await searchParams;
   const campaign = await getPublicCampaign(id);
   if (!campaign) notFound();
+  const { profile } = await getCurrentSessionProfile();
+  const currentRole = profile?.role;
+  const lifecycle = getCampaignLifecycle(campaign);
+  const applyHref = `/campaigns/${campaign.id}/apply`;
+  const applyAlertMessage = "캠페인 신청은 크리에이터 계정으로만 이용할 수 있습니다.";
   const business = getDisplayBusiness(campaign.businessId);
   const businessName = campaign.businessName ?? business.businessName;
   const businessDetails = {
@@ -78,6 +75,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             </li>
           </ol>
         </nav>
+        {error ? <p className="mb-6 rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
 
         <div className="flex flex-col gap-8 lg:flex-row">
           <section className="flex flex-col gap-8 lg:w-2/3">
@@ -85,7 +83,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
               <div className="relative h-[300px] w-full sm:h-[400px]">
                 <img src={campaign.coverImage} alt="" className="h-full w-full object-cover" />
                 <div className="absolute right-4 top-4 rounded-full bg-charcoal/80 px-3 py-1.5 text-sm font-black text-white backdrop-blur-sm">
-                  {deadlineLabel(campaign)}
+                  {getCampaignDeadlineLabel(campaign)}
                 </div>
               </div>
 
@@ -96,7 +94,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
                     {channelLabel(campaign)}
                   </span>
                   <span className="rounded-md bg-primary/10 px-3 py-1 text-sm font-black text-primary shadow-sm">
-                    {statusLabel(campaign)}
+                    {lifecycle.label}
                   </span>
                   <span className="flex items-center gap-1.5 rounded-md bg-gray-100 px-3 py-1 text-sm font-bold text-gray-600 shadow-sm">
                     <MapPin size={14} />
@@ -239,13 +237,23 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
                 </div>
 
                 <div className="mt-8 hidden lg:block">
-                  <Link
-                    href={`/campaigns/${campaign.id}/apply`}
-                    className="inline-flex w-full justify-center rounded-xl bg-primary py-4 text-lg font-black text-white shadow-[0_4px_14px_0_rgba(34,197,94,0.35)] transition-all hover:-translate-y-0.5 hover:bg-primaryHover hover:shadow-[0_6px_20px_rgba(34,197,94,0.22)]"
-                  >
-                    캠페인 신청하기
-                  </Link>
-                  <p className="mt-3 text-center text-xs text-gray-400">신청 전 제공 내역과 미션을 꼭 확인해주세요.</p>
+                  {lifecycle.canApply ? (
+                    <RoleAwareActionLink
+                      href={applyHref}
+                      unauthenticatedHref={`/auth?next=${applyHref}`}
+                      currentRole={currentRole}
+                      requiredRole="creator"
+                      roleMismatchMessage={applyAlertMessage}
+                      className="inline-flex w-full justify-center rounded-xl bg-primary py-4 text-lg font-black text-white shadow-[0_4px_14px_0_rgba(34,197,94,0.35)] transition-all hover:-translate-y-0.5 hover:bg-primaryHover hover:shadow-[0_6px_20px_rgba(34,197,94,0.22)]"
+                    >
+                      {lifecycle.actionLabel}
+                    </RoleAwareActionLink>
+                  ) : (
+                    <button disabled className="w-full cursor-not-allowed rounded-xl bg-gray-200 py-4 text-lg font-black text-gray-500">
+                      신청 불가
+                    </button>
+                  )}
+                  <p className="mt-3 text-center text-xs text-gray-400">{lifecycle.canApply ? "신청 전 제공 내역과 미션을 꼭 확인해주세요." : lifecycle.actionLabel}</p>
                 </div>
               </div>
 
@@ -272,9 +280,22 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
           <button className="flex h-14 w-14 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-400 transition-colors hover:border-primary hover:text-primary" aria-label="관심 캠페인">
             <Heart size={22} />
           </button>
-          <Link href={`/campaigns/${campaign.id}/apply`} className="flex h-14 flex-grow items-center justify-center rounded-xl bg-primary text-lg font-black text-white shadow-sm transition-colors hover:bg-primaryHover">
-            캠페인 신청하기
-          </Link>
+          {lifecycle.canApply ? (
+            <RoleAwareActionLink
+              href={applyHref}
+              unauthenticatedHref={`/auth?next=${applyHref}`}
+              currentRole={currentRole}
+              requiredRole="creator"
+              roleMismatchMessage={applyAlertMessage}
+              className="flex h-14 flex-grow items-center justify-center rounded-xl bg-primary text-lg font-black text-white shadow-sm transition-colors hover:bg-primaryHover"
+            >
+              {lifecycle.actionLabel}
+            </RoleAwareActionLink>
+          ) : (
+            <button disabled className="flex h-14 flex-grow cursor-not-allowed items-center justify-center rounded-xl bg-gray-200 text-lg font-black text-gray-500">
+              신청 불가
+            </button>
+          )}
         </div>
       </div>
     </>
