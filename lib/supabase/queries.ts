@@ -24,6 +24,7 @@ type CampaignRow = {
   usage_rights: string | null;
   status: Campaign["status"];
   cover_image_url: string | null;
+  reference_image_urls: string[] | null;
   beginner_friendly: boolean;
   operator_recommended: boolean;
   business_profiles?: { business_name: string | null } | null;
@@ -337,6 +338,7 @@ function mapCampaign(row: CampaignRow): Campaign {
     usageRights: row.usage_rights ?? "",
     status: row.status,
     coverImage: row.cover_image_url ?? "https://storage.googleapis.com/uxpilot-auth.appspot.com/default-placeholder.png",
+    referenceImages: Array.isArray(row.reference_image_urls) ? row.reference_image_urls.filter(Boolean) : [],
     beginnerFriendly: row.beginner_friendly,
     operatorRecommended: row.operator_recommended
   };

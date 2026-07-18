@@ -56,6 +56,8 @@ export default async function CampaignDetailPage({ params, searchParams }: { par
   const requirements = campaign.contentRequirements.length
     ? campaign.contentRequirements
     : ["제공 사실 표시", "대표 메뉴 또는 공간 사진 3장 이상", "방문 일정 준수"];
+  const referenceImages = campaign.referenceImages.filter(Boolean);
+  const noticeSectionNumber = referenceImages.length ? 4 : 3;
 
   return (
     <>
@@ -151,8 +153,21 @@ export default async function CampaignDetailPage({ params, searchParams }: { par
                   </ul>
                 </div>
 
+                {referenceImages.length ? (
+                  <div className="border-b border-gray-100 pb-6">
+                    <h3 className="mb-3 font-black text-charcoal">3. 참고 사진</h3>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {referenceImages.map((imageUrl) => (
+                        <div key={imageUrl} className="aspect-[4/3] overflow-hidden rounded-xl border border-gray-100 bg-gray-100">
+                          <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 <div>
-                  <h3 className="mb-3 font-black text-charcoal">3. 유의사항</h3>
+                  <h3 className="mb-3 font-black text-charcoal">{noticeSectionNumber}. 유의사항</h3>
                   <ul className="list-inside list-disc space-y-2 text-sm text-gray-500">
                     <li>제공 사실 표시는 필수입니다.</li>
                     <li>사전 예약 후 방문해주시고, 일정 변경은 운영자와 미리 조율해주세요.</li>

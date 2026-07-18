@@ -83,6 +83,7 @@ export const campaigns: Campaign[] = [
     usageRights: "가게 SNS 리그램과 노원멤버스 로컬 스토리 소개에 활용",
     status: "recruiting",
     coverImage: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=1400&q=80",
+    referenceImages: [],
     beginnerFriendly: true,
     operatorRecommended: true
   },
@@ -109,6 +110,7 @@ export const campaigns: Campaign[] = [
     usageRights: "가게 채널 게시 전 별도 동의 필요, 노원멤버스 아카이브 썸네일 사용 가능",
     status: "recruiting",
     coverImage: "https://images.unsplash.com/photo-1512428813834-c702c7702b78?auto=format&fit=crop&w=1400&q=80",
+    referenceImages: [],
     beginnerFriendly: false,
     operatorRecommended: false
   },
@@ -135,6 +137,7 @@ export const campaigns: Campaign[] = [
     usageRights: "노원멤버스 로컬 스토리 본문 발행 및 가게 소개 페이지 연결",
     status: "selecting",
     coverImage: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1400&q=80",
+    referenceImages: [],
     beginnerFriendly: false,
     operatorRecommended: true
   }

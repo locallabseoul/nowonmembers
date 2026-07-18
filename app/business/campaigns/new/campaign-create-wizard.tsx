@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -75,6 +75,17 @@ const contentTypeOptions = [
   }
 ];
 
+const benefitTypeOptions = [
+  "방문 체험 제공",
+  "제품 제공",
+  "서비스 제공",
+  "쿠폰·이용권 제공",
+  "활동비 지급",
+  "방문 체험 + 활동비",
+  "제품 제공 + 활동비",
+  "기타 협의"
+];
+
 const missionOptions = [
   "사진 최소 15장 이상 포함",
   "동영상 15초 이상 최소 1개 포함",
@@ -82,11 +93,448 @@ const missionOptions = [
   "공식 인스타그램 계정 태그"
 ];
 
+const campaignImageAccept = "image/jpeg,image/png,image/webp";
+const maxImageSizeBytes = 10 * 1024 * 1024;
+const maxReferenceImageCount = 6;
+const fallbackPreviewImage = "https://storage.googleapis.com/uxpilot-auth.appspot.com/gen_abe3604481_9dd7ad35470b2f2a.png";
+
+type ImagePreview = {
+  id: string;
+  file: File;
+  url: string;
+  name: string;
+};
+
+type CampaignDraft = {
+  category: string;
+  title: string;
+  operatorName: string;
+  region: string;
+  campaignType: string;
+  recruitCount: string;
+  recruitEnd: string;
+  selectionDate: string;
+  submissionDue: string;
+  benefitType: string;
+  benefitValue: string;
+  fee: string;
+  usageRights: string;
+  description: string;
+  missionOptions: string[];
+  contentRequirements: string;
+};
+
+function getKoreaDateInputValue(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
+function addDaysToDateInput(value: string, days: number) {
+  const date = new Date(`${value}T00:00:00+09:00`);
+  date.setDate(date.getDate() + days);
+
+  return getKoreaDateInputValue(date);
+}
+
+function getDefaultCampaignSchedule() {
+  const today = getKoreaDateInputValue();
+  const recruitEnd = addDaysToDateInput(today, 7);
+  const selectionDate = addDaysToDateInput(recruitEnd, 2);
+  const submissionDue = addDaysToDateInput(selectionDate, 14);
+
+  return { today, recruitEnd, selectionDate, submissionDue };
+}
+
+function normalizeKeywordTag(value: string) {
+  const keyword = normalizeKeywordText(value);
+  return keyword ? `#${keyword}` : "";
+}
+
+function normalizeKeywordText(value: string) {
+  return value.trim().replace(/^#+/, "").replace(/\s+/g, "");
+}
+
+function getFormValue(formData: FormData, name: string, fallback = "") {
+  return String(formData.get(name) ?? fallback).trim();
+}
+
+function createInitialCampaignDraft(defaultSchedule: ReturnType<typeof getDefaultCampaignSchedule>): CampaignDraft {
+  return {
+    category: categoryOptions[0]?.value ?? "",
+    title: "",
+    operatorName: "",
+    region: "",
+    campaignType: contentTypeOptions[0]?.value ?? "",
+    recruitCount: "",
+    recruitEnd: defaultSchedule.recruitEnd,
+    selectionDate: defaultSchedule.selectionDate,
+    submissionDue: defaultSchedule.submissionDue,
+    benefitType: benefitTypeOptions[0] ?? "",
+    benefitValue: "",
+    fee: "",
+    usageRights: "",
+    description: "",
+    missionOptions: missionOptions.slice(0, 2),
+    contentRequirements: ""
+  };
+}
+
+function createCampaignDraftFromForm(form: HTMLFormElement, defaultSchedule: ReturnType<typeof getDefaultCampaignSchedule>): CampaignDraft {
+  const formData = new FormData(form);
+
+  return {
+    category: getFormValue(formData, "category", categoryOptions[0]?.value),
+    title: getFormValue(formData, "title"),
+    operatorName: getFormValue(formData, "operator_name"),
+    region: getFormValue(formData, "region"),
+    campaignType: getFormValue(formData, "campaign_type", contentTypeOptions[0]?.value),
+    recruitCount: getFormValue(formData, "recruit_count"),
+    recruitEnd: getFormValue(formData, "recruit_end", defaultSchedule.recruitEnd),
+    selectionDate: getFormValue(formData, "selection_date", defaultSchedule.selectionDate),
+    submissionDue: getFormValue(formData, "submission_due", defaultSchedule.submissionDue),
+    benefitType: getFormValue(formData, "benefit_type", benefitTypeOptions[0]),
+    benefitValue: getFormValue(formData, "benefit_value"),
+    fee: getFormValue(formData, "fee"),
+    usageRights: getFormValue(formData, "usage_rights"),
+    description: getFormValue(formData, "description"),
+    missionOptions: formData.getAll("mission_options").map((value) => String(value)),
+    contentRequirements: getFormValue(formData, "content_requirements")
+  };
+}
+
+function contentTypeLabel(value: string) {
+  return contentTypeOptions.find((option) => option.value === value)?.label ?? "채널 미선택";
+}
+
+function formatReviewDate(value: string) {
+  if (!value) return "입력 전";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+
+  return `${year}.${month}.${day}`;
+}
+
+function dDayLabel(value: string) {
+  if (!value) return "D-?";
+  const today = new Date(`${getKoreaDateInputValue()}T00:00:00+09:00`).getTime();
+  const target = new Date(`${value}T00:00:00+09:00`).getTime();
+  if (Number.isNaN(target)) return "D-?";
+
+  const dayDiff = Math.ceil((target - today) / 86_400_000);
+  if (dayDiff < 0) return "마감";
+  if (dayDiff === 0) return "D-day";
+  return `D-${dayDiff}`;
+}
+
+function displayOrPending(value: string, fallback = "입력 전") {
+  return value.trim() || fallback;
+}
+
 export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProps) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const keywordInputRef = useRef<HTMLInputElement>(null);
+  const keywordHiddenInputRef = useRef<HTMLInputElement>(null);
+  const keywordComposingRef = useRef(false);
+  const keywordTagsRef = useRef<string[]>([]);
+  const referenceImagesInputRef = useRef<HTMLInputElement>(null);
+  const previewUrlsRef = useRef<string[]>([]);
+  const [defaultSchedule] = useState(getDefaultCampaignSchedule);
   const [step, setStep] = useState(0);
+  const [validationMessage, setValidationMessage] = useState("");
+  const [keywordTags, setKeywordTags] = useState<string[]>([]);
+  const [campaignDraft, setCampaignDraft] = useState(() => createInitialCampaignDraft(defaultSchedule));
+  const [coverImagePreview, setCoverImagePreview] = useState<ImagePreview | null>(null);
+  const [referenceImagePreviews, setReferenceImagePreviews] = useState<ImagePreview[]>([]);
   const progress = ((step + 1) / steps.length) * 100;
   const isLastStep = step === steps.length - 1;
   const current = steps[step];
+  const requiredMessage = "현재 단계의 필수 입력 항목을 모두 작성해주세요.";
+  const keywordRequiredMessage = "필수 삽입 키워드를 하나 이상 추가해주세요.";
+  const reviewTitle = displayOrPending(campaignDraft.title, "캠페인 제목 미입력");
+  const reviewChannel = contentTypeLabel(campaignDraft.campaignType);
+  const reviewRecruitCount = campaignDraft.recruitCount ? `총 ${campaignDraft.recruitCount}명` : "입력 전";
+  const reviewRecruitPeriod = `운영자 승인일 ~ ${formatReviewDate(campaignDraft.recruitEnd)}`;
+  const reviewBenefit = [campaignDraft.benefitType, campaignDraft.benefitValue].filter(Boolean).join(" / ") || "입력 전";
+  const reviewFee = campaignDraft.fee ? `활동비 ${campaignDraft.fee}` : "활동비 없음";
+  const reviewMissions = campaignDraft.missionOptions.length ? campaignDraft.missionOptions.join(", ") : "선택 없음";
+  const cardRegion = displayOrPending(campaignDraft.region, "지역 미입력");
+  const cardBenefit = campaignDraft.benefitValue ? `제공: ${campaignDraft.benefitValue}` : "제공 내역 미입력";
+
+  useEffect(() => {
+    return () => {
+      previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
+
+  function refreshCampaignDraft() {
+    if (!formRef.current) return;
+    setCampaignDraft(createCampaignDraftFromForm(formRef.current, defaultSchedule));
+  }
+
+  function handleFormDraftChange() {
+    refreshCampaignDraft();
+  }
+
+  function getStepControls(stepIndex: number) {
+    const panel = formRef.current?.querySelector<HTMLElement>(`[data-step-panel="${stepIndex}"]`);
+    if (!panel) return [];
+
+    return Array.from(panel.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select")).filter((control) => !control.disabled);
+  }
+
+  function validateStep(stepIndex: number, report = true) {
+    const invalidControl = getStepControls(stepIndex).find((control) => !control.checkValidity());
+
+    if (invalidControl) {
+      if (report) {
+        setValidationMessage(requiredMessage);
+        invalidControl.focus();
+        invalidControl.reportValidity();
+      }
+
+      return false;
+    }
+
+    if (stepIndex === 2 && keywordTagsRef.current.length === 0 && !normalizeKeywordTag(getKeywordInputValue())) {
+      if (report) {
+        setValidationMessage(keywordRequiredMessage);
+        keywordInputRef.current?.focus();
+      }
+
+      return false;
+    }
+
+    if (report) setValidationMessage("");
+    return true;
+  }
+
+  function handleNextStep() {
+    if (step === 2) commitKeywordInput();
+    refreshCampaignDraft();
+    if (!validateStep(step)) return;
+    setStep((currentStep) => Math.min(currentStep + 1, steps.length - 1));
+  }
+
+  function handlePreviousStep() {
+    setValidationMessage("");
+    if (step === 0) {
+      history.back();
+      return;
+    }
+
+    setStep((currentStep) => currentStep - 1);
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    commitKeywordInput();
+    refreshCampaignDraft();
+    const firstInvalidStep = steps.findIndex((_, stepIndex) => !validateStep(stepIndex, false));
+    if (firstInvalidStep === -1) {
+      setValidationMessage("");
+      return;
+    }
+
+    event.preventDefault();
+    setStep(firstInvalidStep);
+    setValidationMessage(requiredMessage);
+    window.requestAnimationFrame(() => validateStep(firstInvalidStep));
+  }
+
+  function getImageValidationMessage(file: File) {
+    if (!file.type.startsWith("image/") || !campaignImageAccept.split(",").includes(file.type)) {
+      return "이미지는 JPG, PNG, WEBP 형식만 등록할 수 있습니다.";
+    }
+
+    if (file.size > maxImageSizeBytes) {
+      return "이미지는 10MB 이하 파일만 등록할 수 있습니다.";
+    }
+
+    return "";
+  }
+
+  function createImagePreview(file: File): ImagePreview {
+    const url = URL.createObjectURL(file);
+    previewUrlsRef.current.push(url);
+
+    return {
+      id: `${file.name}-${file.lastModified}-${url}`,
+      file,
+      url,
+      name: file.name
+    };
+  }
+
+  function revokeImagePreview(preview: ImagePreview) {
+    URL.revokeObjectURL(preview.url);
+    previewUrlsRef.current = previewUrlsRef.current.filter((url) => url !== preview.url);
+  }
+
+  function syncReferenceImageInput(previews: ImagePreview[]) {
+    if (!referenceImagesInputRef.current) return;
+
+    const dataTransfer = new DataTransfer();
+    previews.forEach((preview) => dataTransfer.items.add(preview.file));
+    referenceImagesInputRef.current.files = dataTransfer.files;
+  }
+
+  function handleCoverImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    if (!file) {
+      if (coverImagePreview) revokeImagePreview(coverImagePreview);
+      setCoverImagePreview(null);
+      return;
+    }
+
+    const imageError = getImageValidationMessage(file);
+    if (imageError) {
+      event.currentTarget.value = "";
+      setValidationMessage(imageError);
+      return;
+    }
+
+    const nextPreview = createImagePreview(file);
+    if (coverImagePreview) revokeImagePreview(coverImagePreview);
+    setCoverImagePreview(nextPreview);
+    setValidationMessage("");
+  }
+
+  function handleReferenceImagesChange(event: ChangeEvent<HTMLInputElement>) {
+    const selectedFiles = Array.from(event.currentTarget.files ?? []);
+    if (!selectedFiles.length) return;
+
+    const validFiles: File[] = [];
+    const invalidFile = selectedFiles.find((file) => {
+      const imageError = getImageValidationMessage(file);
+      if (!imageError) {
+        validFiles.push(file);
+        return false;
+      }
+
+      setValidationMessage(imageError);
+      return true;
+    });
+
+    if (invalidFile || !validFiles.length) {
+      event.currentTarget.value = "";
+      syncReferenceImageInput(referenceImagePreviews);
+      return;
+    }
+
+    const remainingSlots = maxReferenceImageCount - referenceImagePreviews.length;
+    const nextFiles = validFiles.slice(0, Math.max(remainingSlots, 0));
+    const nextPreviews = [...referenceImagePreviews, ...nextFiles.map(createImagePreview)];
+
+    if (validFiles.length > remainingSlots) {
+      setValidationMessage(`참고 사진은 최대 ${maxReferenceImageCount}장까지 등록할 수 있습니다.`);
+    } else {
+      setValidationMessage("");
+    }
+
+    syncReferenceImageInput(nextPreviews);
+    setReferenceImagePreviews(nextPreviews);
+  }
+
+  function removeReferenceImage(id: string) {
+    setReferenceImagePreviews((currentPreviews) => {
+      const targetPreview = currentPreviews.find((preview) => preview.id === id);
+      if (targetPreview) revokeImagePreview(targetPreview);
+
+      const nextPreviews = currentPreviews.filter((preview) => preview.id !== id);
+      syncReferenceImageInput(nextPreviews);
+      return nextPreviews;
+    });
+  }
+
+  function getKeywordInputValue() {
+    return keywordInputRef.current?.value ?? "";
+  }
+
+  function setKeywordInputValue(value: string) {
+    if (keywordInputRef.current) keywordInputRef.current.value = value;
+  }
+
+  function setKeywordTagValues(tags: string[]) {
+    keywordTagsRef.current = tags;
+    setKeywordTags(tags);
+    if (keywordHiddenInputRef.current) keywordHiddenInputRef.current.value = tags.join(",");
+  }
+
+  function addKeywordTags(value: string) {
+    const tags = value.split(",").map(normalizeKeywordTag).filter(Boolean);
+    if (!tags.length) return false;
+
+    const seen = new Set(keywordTagsRef.current.map((tag) => tag.toLocaleLowerCase("ko-KR")));
+    const nextTags = [...keywordTagsRef.current];
+
+    tags.forEach((tag) => {
+      const key = tag.toLocaleLowerCase("ko-KR");
+      if (seen.has(key)) return;
+      seen.add(key);
+      nextTags.push(tag);
+    });
+
+    setKeywordTagValues(nextTags);
+
+    return true;
+  }
+
+  function clearKeywordInput() {
+    setKeywordInputValue("");
+  }
+
+  function commitKeywordInput(value = getKeywordInputValue()) {
+    if (!value.trim()) return false;
+    const committed = addKeywordTags(value);
+    if (committed) clearKeywordInput();
+
+    return committed;
+  }
+
+  function handleKeywordInputValue(value: string) {
+    if (!value.includes(",")) return;
+
+    const parts = value.split(",");
+    const pendingValue = parts.pop() ?? "";
+    addKeywordTags(parts.join(","));
+    setKeywordInputValue(pendingValue);
+  }
+
+  function handleKeywordChange(event: ChangeEvent<HTMLInputElement>) {
+    if (keywordComposingRef.current) return;
+    handleKeywordInputValue(event.currentTarget.value);
+  }
+
+  function handleKeywordKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    const isCommitKey = event.key === "Tab" || event.key === "Enter" || event.key === ",";
+    if (!isCommitKey) return;
+
+    const isComposing = keywordComposingRef.current || event.nativeEvent.isComposing || event.key === "Process" || event.keyCode === 229;
+    if (isComposing) return;
+
+    if (!normalizeKeywordTag(event.currentTarget.value)) return;
+
+    event.preventDefault();
+    commitKeywordInput(event.currentTarget.value);
+  }
+
+  function handleKeywordCompositionStart() {
+    keywordComposingRef.current = true;
+  }
+
+  function handleKeywordCompositionEnd() {
+    keywordComposingRef.current = false;
+  }
+
+  function removeKeywordTag(tag: string) {
+    setKeywordTagValues(keywordTagsRef.current.filter((currentTag) => currentTag !== tag));
+  }
 
   return (
     <main className="min-h-screen bg-surface">
@@ -105,10 +553,11 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
           <h1 className="mb-2 text-2xl font-black text-charcoal sm:text-3xl">{current.title}</h1>
           <p className="text-slate-500">{current.description}</p>
           {error ? <p className="mt-4 rounded-xl bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
+          {validationMessage ? <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-700">{validationMessage}</p> : null}
         </div>
 
-        <form action={action}>
-          <StepPanel active={step === 0}>
+        <form ref={formRef} action={action} noValidate onInput={handleFormDraftChange} onChange={handleFormDraftChange} onSubmit={handleSubmit}>
+          <StepPanel index={0} active={step === 0}>
             <FormCard>
               <section>
                 <FieldLabel>캠페인 카테고리 <Required /></FieldLabel>
@@ -143,26 +592,38 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
               <section>
                 <div className="mb-2 flex items-end justify-between gap-4">
                   <FieldLabel>대표 이미지 (썸네일) <Required /></FieldLabel>
-                  <span className="text-xs text-slate-400">권장 사이즈 1200x800px (최대 5MB)</span>
+                  <span className="text-xs text-slate-400">권장 사이즈 1200x800px (최대 10MB)</span>
                 </div>
-                <label className="group mt-2 flex cursor-pointer justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 transition-colors hover:border-primary hover:bg-primary/5">
-                  <div className="text-center">
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-slate-100 bg-white text-primary shadow-sm transition-transform group-hover:scale-110">
-                      <CloudUpload size={24} />
+                <label className={`group mt-2 flex cursor-pointer justify-center overflow-hidden rounded-xl border-2 border-dashed transition-colors hover:border-primary hover:bg-primary/5 ${coverImagePreview ? "border-primary bg-slate-100 p-0" : "border-slate-300 bg-slate-50 px-6 py-10"}`}>
+                  {coverImagePreview ? (
+                    <div className="relative h-64 w-full">
+                      <img src={coverImagePreview.url} alt="" className="h-full w-full object-cover" />
+                      <div className="absolute inset-x-0 bottom-0 bg-charcoal/70 px-4 py-3 text-sm font-bold text-white backdrop-blur-sm">
+                        {coverImagePreview.name}
+                      </div>
+                      <div className="absolute right-3 top-3 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-black text-primary shadow-sm">
+                        이미지 변경
+                      </div>
                     </div>
-                    <div className="mt-4 flex justify-center text-sm leading-6 text-slate-600">
-                      <span className="font-bold text-primary transition-colors hover:text-primaryHover">파일 업로드</span>
-                      <p className="pl-1">또는 여기로 드래그 앤 드롭</p>
+                  ) : (
+                    <div className="text-center">
+                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-slate-100 bg-white text-primary shadow-sm transition-transform group-hover:scale-110">
+                        <CloudUpload size={24} />
+                      </div>
+                      <div className="mt-4 flex justify-center text-sm leading-6 text-slate-600">
+                        <span className="font-bold text-primary transition-colors hover:text-primaryHover">파일 업로드</span>
+                        <p className="pl-1">또는 여기로 드래그 앤 드롭</p>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-slate-500">PNG, JPG, JPEG, WEBP 지원</p>
                     </div>
-                    <p className="mt-2 text-xs leading-5 text-slate-500">PNG, JPG, JPEG 지원</p>
-                  </div>
-                  <input name="file-upload" type="file" accept="image/*" className="sr-only" />
+                  )}
+                  <input name="cover_image" type="file" accept={campaignImageAccept} required onChange={handleCoverImageChange} className="sr-only" />
                 </label>
               </section>
             </FormCard>
           </StepPanel>
 
-          <StepPanel active={step === 1}>
+          <StepPanel index={1} active={step === 1}>
             <FormCard>
               <section>
                 <FieldLabel>모집 채널 및 콘텐츠 타입 <Required /></FieldLabel>
@@ -182,13 +643,13 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
               <Divider />
 
               <section className="space-y-6">
-                <TextField name="recruit_count" label="모집 인원" placeholder="예: 5" suffix="명" requiredMark />
+                <TextField name="recruit_count" label="모집 인원" placeholder="예: 5" suffix="명" type="number" min={1} requiredMark />
                 <div>
                   <FieldLabel>캠페인 일정 설정 <Required /></FieldLabel>
                   <div className="grid gap-4 sm:grid-cols-3">
-                    <TextField name="recruit_end" label="모집 마감일" type="date" requiredMark />
-                    <TextField name="selection_date" label="크리에이터 선정 발표일" type="date" />
-                    <TextField name="submission_due" label="콘텐츠 등록 마감일" type="date" />
+                    <TextField name="recruit_end" label="모집 마감일" type="date" min={defaultSchedule.today} defaultValue={defaultSchedule.recruitEnd} requiredMark />
+                    <TextField name="selection_date" label="크리에이터 선정 발표일" type="date" min={defaultSchedule.recruitEnd} defaultValue={defaultSchedule.selectionDate} />
+                    <TextField name="submission_due" label="콘텐츠 등록 마감일" type="date" min={defaultSchedule.selectionDate} defaultValue={defaultSchedule.submissionDue} />
                   </div>
                   <p className="mt-2 text-xs text-slate-400">선정 발표일은 모집 마감일 이후, 콘텐츠 등록 마감일은 선정 발표일 이후로 설정해주세요.</p>
                 </div>
@@ -198,7 +659,7 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
 
               <section className="space-y-6">
                 <div className="grid gap-4 sm:grid-cols-3">
-                  <TextField name="benefit_type" label="혜택 유형" placeholder="체험 제공" />
+                  <SelectField name="benefit_type" label="혜택 유형" options={benefitTypeOptions} defaultValue="방문 체험 제공" />
                   <TextField name="benefit_value" label="제공 내역 (혜택)" placeholder="디저트 2종 + 음료 2잔" requiredMark />
                   <TextField name="fee" label="활동비 또는 제작비" placeholder="선택 입력" />
                 </div>
@@ -207,7 +668,7 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
             </FormCard>
           </StepPanel>
 
-          <StepPanel active={step === 2}>
+          <StepPanel index={2} active={step === 2}>
             <FormCard>
               <TextArea
                 name="description"
@@ -221,32 +682,36 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
               <Divider />
 
               <section>
-                <FieldLabel>대표 이미지 및 참고 사진 <Required /></FieldLabel>
-                <p className="mb-4 text-xs text-slate-500">캠페인 목록에 노출될 대표 이미지와 크리에이터가 참고할 수 있는 사진을 등록해주세요.</p>
+                <FieldLabel>대표 이미지 및 참고 사진</FieldLabel>
+                <p className="mb-4 text-xs text-slate-500">1단계에서 등록한 대표 이미지는 첫 번째 카드에 표시됩니다. 추가 참고사진은 선택사항입니다.</p>
                 <div className="grid gap-4 sm:grid-cols-4">
-                  <label className="relative flex h-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 text-slate-400 transition-colors hover:border-primary hover:bg-slate-50 hover:text-primary">
-                    <Camera size={26} />
-                    <span className="mt-2 text-xs font-bold">사진 추가</span>
-                    <input type="file" className="absolute inset-0 h-full w-full cursor-pointer opacity-0" multiple accept="image/*" />
-                  </label>
-
-                  <div className="grid gap-4 sm:col-span-3 sm:grid-cols-3">
-                    <div className="group relative h-32 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-                      <span className="absolute left-2 top-2 z-10 rounded bg-charcoal px-2 py-0.5 text-[10px] font-bold text-white">대표</span>
+                  <div className="group relative h-32 overflow-hidden rounded-xl border border-primary bg-slate-100">
+                    <span className="absolute left-2 top-2 z-10 rounded bg-charcoal px-2 py-0.5 text-[10px] font-bold text-white">대표</span>
+                    {coverImagePreview ? (
+                      <img src={coverImagePreview.url} alt="" className="h-full w-full object-cover" />
+                    ) : (
                       <div className="flex h-full items-center justify-center text-slate-300">
                         <ImageIcon size={28} />
                       </div>
-                      <button type="button" className="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-xs font-bold text-slate-500 opacity-0 shadow-sm transition-all hover:text-primary group-hover:opacity-100" aria-label="이미지 삭제">
+                    )}
+                  </div>
+
+                  {referenceImagePreviews.map((preview) => (
+                    <div key={preview.id} className="group relative h-32 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                      <img src={preview.url} alt="" className="h-full w-full object-cover" />
+                      <button type="button" onClick={() => removeReferenceImage(preview.id)} className="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-xs font-bold text-slate-500 opacity-0 shadow-sm transition-all hover:text-primary group-hover:opacity-100" aria-label={`${preview.name} 삭제`}>
                         ×
                       </button>
                     </div>
-                    <div className="flex h-32 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 text-slate-300">
-                      <ImageIcon size={28} />
-                    </div>
-                    <div className="hidden h-32 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 text-slate-300 sm:flex">
-                      <ImageIcon size={28} />
-                    </div>
-                  </div>
+                  ))}
+
+                  {referenceImagePreviews.length < maxReferenceImageCount ? (
+                    <label htmlFor="reference-images" className="relative flex h-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 text-slate-400 transition-colors hover:border-primary hover:bg-slate-50 hover:text-primary">
+                      <Camera size={26} />
+                      <span className="mt-2 text-xs font-bold">참고사진 추가</span>
+                    </label>
+                  ) : null}
+                  <input id="reference-images" ref={referenceImagesInputRef} name="reference_images" type="file" className="sr-only" multiple accept={campaignImageAccept} onChange={handleReferenceImagesChange} />
                 </div>
               </section>
 
@@ -256,10 +721,24 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
                 <FieldLabel>필수 삽입 키워드 <Required /></FieldLabel>
                 <p className="mb-3 text-xs text-slate-500">제목과 본문에 반드시 포함되어야 할 해시태그나 키워드를 입력해주세요.</p>
                 <div className="flex min-h-14 flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
-                  {["#노원맛집", "#노원역데이트", "#신상카페"].map((tag) => (
-                    <span key={tag} className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-sm font-bold text-charcoal">{tag}</span>
+                  {keywordTags.map((tag) => (
+                    <span key={tag} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-sm font-bold text-charcoal">
+                      {tag}
+                      <button type="button" onClick={() => removeKeywordTag(tag)} className="ml-1 text-slate-400 transition-colors hover:text-primary" aria-label={`${tag} 삭제`}>
+                        ×
+                      </button>
+                    </span>
                   ))}
-                  <input name="keywords" className="min-w-[120px] flex-1 border-none bg-transparent p-1 text-sm outline-none placeholder:text-slate-400" placeholder="태그 입력..." />
+                  <input
+                    ref={keywordInputRef}
+                    onChange={handleKeywordChange}
+                    onCompositionStart={handleKeywordCompositionStart}
+                    onCompositionEnd={handleKeywordCompositionEnd}
+                    onKeyDown={handleKeywordKeyDown}
+                    className="min-w-[160px] flex-1 border-none bg-transparent p-1 text-sm outline-none placeholder:text-slate-400"
+                    placeholder={keywordTags.length ? "키워드 추가..." : "예: 노원맛집 입력 후 Tab 또는 쉼표"}
+                  />
+                  <input ref={keywordHiddenInputRef} type="hidden" name="keywords" value={keywordTags.join(",")} readOnly />
                 </div>
               </section>
 
@@ -271,7 +750,7 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
                   <div className="grid gap-4 sm:grid-cols-2">
                     {missionOptions.map((mission, index) => (
                       <label key={mission} className="group flex cursor-pointer items-start gap-3">
-                        <input type="checkbox" defaultChecked={index < 2} className="sr-only" />
+                        <input type="checkbox" name="mission_options" value={mission} defaultChecked={index < 2} className="sr-only" />
                         <span className="mt-0.5 flex h-5 w-5 items-center justify-center rounded border-2 border-slate-300 bg-white transition-colors group-hover:border-primary group-has-[:checked]:border-primary group-has-[:checked]:bg-primary">
                           <Check size={13} className="text-white opacity-0 transition-opacity group-has-[:checked]:opacity-100" strokeWidth={3} />
                         </span>
@@ -292,7 +771,7 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
             </FormCard>
           </StepPanel>
 
-          <StepPanel active={step === 3}>
+          <StepPanel index={3} active={step === 3}>
             <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
               <div className="space-y-6 lg:col-span-8">
                 <div className="flex gap-4 rounded-[20px] border border-slate-100 bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
@@ -306,27 +785,38 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
                 <div className="overflow-hidden rounded-[20px] border border-slate-100 bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
                   <div className="p-6 sm:p-8">
                     <ReviewSection title="1. 기본 정보" onEdit={() => setStep(0)}>
-                      <ReviewRow label="캠페인 제목" value="[노원역] 신선한 브런치와 커피가 있는 감성 카페 체험단" strong />
-                      <ReviewRow label="모집 채널" value="네이버 블로그 | 인스타그램" />
-                      <ReviewRow label="모집 인원" value="총 10명" />
-                      <ReviewRow label="모집 기간" value="2026.07.10 ~ 2026.07.20" />
+                      <ReviewRow label="캠페인 제목" value={reviewTitle} strong />
+                      <ReviewRow label="상호명" value={displayOrPending(campaignDraft.operatorName)} />
+                      <ReviewRow label="카테고리" value={displayOrPending(campaignDraft.category)} />
+                      <ReviewRow label="모집 채널" value={reviewChannel} />
+                      <ReviewRow label="모집 인원" value={reviewRecruitCount} />
+                      <ReviewRow label="모집 기간" value={reviewRecruitPeriod} />
+                      <ReviewRow label="선정 발표일" value={formatReviewDate(campaignDraft.selectionDate)} />
+                      <ReviewRow label="콘텐츠 마감일" value={formatReviewDate(campaignDraft.submissionDue)} />
                     </ReviewSection>
                     <ReviewSection title="2. 제공 내역 및 안내" onEdit={() => setStep(1)}>
-                      <ReviewRow label="제공 서비스" value="3만원 상당의 브런치 세트 (2인 기준)" />
-                      <ReviewRow label="방문 위치" value="서울시 노원구 상계동 123-45, 1층" />
-                      <ReviewRow label="유의사항" value="방문 하루 전 예약 필수, 주말 방문 불가, 초과 비용 본인 부담" boxed />
+                      <ReviewRow label="제공 서비스" value={reviewBenefit} />
+                      <ReviewRow label="활동비" value={reviewFee} />
+                      <ReviewRow label="방문 위치" value={displayOrPending(campaignDraft.region)} />
+                      <ReviewRow label="방문 및 사용 안내" value={displayOrPending(campaignDraft.usageRights, "입력된 안내사항이 없습니다.")} boxed />
                     </ReviewSection>
                     <ReviewSection title="3. 미션 상세 가이드" onEdit={() => setStep(2)} last>
+                      <ReviewRow label="상세 설명" value={displayOrPending(campaignDraft.description)} boxed />
                       <div className="grid gap-1 sm:grid-cols-3 sm:gap-4">
                         <dt className="pt-1 text-sm font-medium text-slate-500">필수 해시태그</dt>
                         <dd className="flex flex-wrap gap-2 text-sm font-medium sm:col-span-2">
-                          {["#노원맛집", "#노원역데이트", "#신상카페"].map((tag) => (
-                            <span key={tag} className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-charcoal">{tag}</span>
-                          ))}
+                          {keywordTags.length ? (
+                            keywordTags.map((tag) => (
+                              <span key={tag} className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-charcoal">{tag}</span>
+                            ))
+                          ) : (
+                            <span className="text-sm text-slate-400">입력 전</span>
+                          )}
                         </dd>
                       </div>
-                      <ReviewRow label="콘텐츠 조건" value="사진 최소 15장 이상 포함, 동영상 15초 이상 최소 1개 포함" />
-                      <ReviewRow label="상세 가이드" value="매장 외부 간판, 시그니처 메뉴 디테일 컷, 분위기 설명을 포함해주세요." />
+                      <ReviewRow label="콘텐츠 조건" value={reviewMissions} />
+                      <ReviewRow label="상세 가이드" value={displayOrPending(campaignDraft.contentRequirements)} boxed />
+                      <ReviewRow label="참고 사진" value={referenceImagePreviews.length ? `${referenceImagePreviews.length}장 추가` : "추가 참고사진 없음"} />
                     </ReviewSection>
                   </div>
                 </div>
@@ -340,20 +830,19 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
                   </div>
                   <div className="overflow-hidden rounded-xl border border-slate-200 transition-shadow hover:shadow-md">
                     <div className="relative h-40 bg-slate-100">
-                      <img className="h-full w-full object-cover" src="https://storage.googleapis.com/uxpilot-auth.appspot.com/gen_abe3604481_9dd7ad35470b2f2a.png" alt="" />
+                      <img className="h-full w-full object-cover" src={coverImagePreview?.url ?? fallbackPreviewImage} alt="" />
                       <div className="absolute left-3 top-3 flex gap-1.5">
-                        <span className="rounded bg-charcoal/90 px-2 py-1 text-[10px] font-bold text-white">블로그</span>
-                        <span className="rounded bg-charcoal/90 px-2 py-1 text-[10px] font-bold text-white">인스타</span>
+                        <span className="rounded bg-charcoal/90 px-2 py-1 text-[10px] font-bold text-white">{reviewChannel}</span>
                       </div>
-                      <div className="absolute bottom-3 right-3 rounded bg-white/90 px-2 py-1 text-[10px] font-bold text-primary shadow-sm">D-10</div>
+                      <div className="absolute bottom-3 right-3 rounded bg-white/90 px-2 py-1 text-[10px] font-bold text-primary shadow-sm">{dDayLabel(campaignDraft.recruitEnd)}</div>
                     </div>
                     <div className="bg-white p-4">
-                      <div className="mb-1 text-xs font-medium text-slate-500">노원구 상계동</div>
-                      <h4 className="mb-2 line-clamp-2 text-sm font-black leading-tight text-charcoal">[노원역] 신선한 브런치와 커피가 있는 감성 카페 체험단</h4>
-                      <p className="mb-3 truncate text-xs text-slate-500">제공: 3만원 상당 브런치 세트</p>
+                      <div className="mb-1 text-xs font-medium text-slate-500">{cardRegion}</div>
+                      <h4 className="mb-2 line-clamp-2 text-sm font-black leading-tight text-charcoal">{reviewTitle}</h4>
+                      <p className="mb-3 truncate text-xs text-slate-500">{cardBenefit}</p>
                       <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-                        <div className="text-xs text-slate-500">모집 <span className="font-bold text-charcoal">10명</span></div>
-                        <div className="rounded bg-primary/10 px-2 py-1 text-xs font-bold text-primary">모집중</div>
+                        <div className="text-xs text-slate-500">모집 <span className="font-bold text-charcoal">{campaignDraft.recruitCount || "-"}명</span></div>
+                        <div className="rounded bg-primary/10 px-2 py-1 text-xs font-bold text-primary">검수 대기</div>
                       </div>
                     </div>
                   </div>
@@ -380,7 +869,7 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
           <div className={`mt-8 flex flex-col items-center justify-between gap-4 sm:flex-row ${isLastStep ? "mx-auto max-w-4xl" : ""}`}>
             <button
               type="button"
-              onClick={() => (step === 0 ? history.back() : setStep((currentStep) => currentStep - 1))}
+              onClick={handlePreviousStep}
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-6 py-3.5 font-bold text-slate-600 transition-all hover:bg-white hover:shadow-sm sm:w-auto"
             >
               <ArrowLeft size={16} />
@@ -398,7 +887,7 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
               ) : (
                 <button
                   type="button"
-                  onClick={() => setStep((currentStep) => Math.min(currentStep + 1, steps.length - 1))}
+                  onClick={handleNextStep}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-10 py-3.5 font-black text-white shadow-md shadow-primary/30 transition-all hover:-translate-y-0.5 hover:bg-primaryHover sm:w-auto"
                 >
                   다음 단계로
@@ -413,8 +902,8 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
   );
 }
 
-function StepPanel({ active, children }: { active: boolean; children: React.ReactNode }) {
-  return <div className={active ? "block" : "hidden"}>{children}</div>;
+function StepPanel({ index, active, children }: { index: number; active: boolean; children: React.ReactNode }) {
+  return <div data-step-panel={index} className={active ? "block" : "hidden"}>{children}</div>;
 }
 
 function FormCard({ children }: { children: React.ReactNode }) {
@@ -465,6 +954,8 @@ function TextField({
   icon,
   suffix,
   type = "text",
+  min,
+  defaultValue,
   requiredMark = false
 }: {
   name: string;
@@ -474,6 +965,8 @@ function TextField({
   icon?: React.ReactNode;
   suffix?: string;
   type?: string;
+  min?: number | string;
+  defaultValue?: string;
   requiredMark?: boolean;
 }) {
   return (
@@ -484,6 +977,8 @@ function TextField({
         <input
           name={name}
           type={type}
+          min={min}
+          defaultValue={defaultValue}
           required={requiredMark}
           className={`w-full rounded-xl border border-slate-200 px-4 py-3.5 text-sm text-charcoal outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary ${icon ? "pl-10" : ""} ${suffix ? "pr-12" : ""}`}
           placeholder={placeholder}
@@ -491,6 +986,36 @@ function TextField({
         {suffix ? <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">{suffix}</span> : null}
       </div>
       {helper ? <p className="mt-2 text-xs text-slate-500">{helper}</p> : null}
+    </label>
+  );
+}
+
+function SelectField({
+  name,
+  label,
+  options,
+  defaultValue,
+  requiredMark = false
+}: {
+  name: string;
+  label: string;
+  options: string[];
+  defaultValue?: string;
+  requiredMark?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-black text-charcoal">{label} {requiredMark ? <Required /> : null}</span>
+      <select
+        name={name}
+        defaultValue={defaultValue ?? options[0]}
+        required={requiredMark}
+        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm text-charcoal outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>{option}</option>
+        ))}
+      </select>
     </label>
   );
 }
@@ -554,7 +1079,7 @@ function ReviewRow({ label, value, strong = false, boxed = false }: { label: str
   return (
     <div className="grid gap-1 sm:grid-cols-3 sm:gap-4">
       <dt className="text-sm font-medium text-slate-500">{label}</dt>
-      <dd className={`text-sm sm:col-span-2 ${strong ? "font-black" : "font-medium"} ${boxed ? "rounded-lg bg-slate-50 p-3 leading-relaxed text-slate-600" : "text-charcoal"}`}>{value}</dd>
+      <dd className={`text-sm sm:col-span-2 ${strong ? "font-black" : "font-medium"} ${boxed ? "whitespace-pre-line rounded-lg bg-slate-50 p-3 leading-relaxed text-slate-600" : "text-charcoal"}`}>{value}</dd>
     </div>
   );
 }

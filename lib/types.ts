@@ -80,6 +80,7 @@ export type Campaign = {
   usageRights: string;
   status: CampaignStatus;
   coverImage: string;
+  referenceImages: string[];
   beginnerFriendly: boolean;
   operatorRecommended: boolean;
 };

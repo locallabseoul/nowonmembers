@@ -1,8 +1,13 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
 import { getKoreaTodayString } from "@/lib/campaign-lifecycle";
+
+const CAMPAIGN_IMAGE_BUCKET = "campaign-images";
+const MAX_CAMPAIGN_IMAGE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_CAMPAIGN_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function splitLines(value: FormDataEntryValue | null) {
   return String(value ?? "")
@@ -11,9 +16,74 @@ function splitLines(value: FormDataEntryValue | null) {
     .filter(Boolean);
 }
 
+function getContentRequirements(formData: FormData) {
+  const requirements = [
+    ...formData.getAll("mission_options").map((value) => String(value).trim()).filter(Boolean),
+    ...splitLines(formData.get("content_requirements"))
+  ];
+
+  return Array.from(new Set(requirements));
+}
+
 function toNullableNumber(value: FormDataEntryValue | null) {
   const raw = String(value ?? "").replace(/[^0-9]/g, "");
   return raw ? Number(raw) : null;
+}
+
+function redirectWithError(message: string): never {
+  redirect(`/business/campaigns/new?error=${encodeURIComponent(message)}`);
+}
+
+function getImageFile(formData: FormData, fieldName: string) {
+  const value = formData.get(fieldName);
+  return value instanceof File && value.size > 0 ? value : null;
+}
+
+function getImageFiles(formData: FormData, fieldName: string) {
+  return formData
+    .getAll(fieldName)
+    .filter((value): value is File => value instanceof File && value.size > 0);
+}
+
+function validateImageFile(file: File, label: string) {
+  if (!ALLOWED_CAMPAIGN_IMAGE_TYPES.has(file.type)) {
+    return `${label}는 JPG, PNG, WEBP 형식만 업로드할 수 있습니다.`;
+  }
+
+  if (file.size > MAX_CAMPAIGN_IMAGE_BYTES) {
+    return `${label}는 10MB 이하 파일만 업로드할 수 있습니다.`;
+  }
+
+  return null;
+}
+
+function imageExtension(file: File) {
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/webp") return "webp";
+  return "jpg";
+}
+
+async function uploadCampaignImage({
+  supabase,
+  userId,
+  file
+}: {
+  supabase: Awaited<ReturnType<typeof requireRole>>["supabase"];
+  userId: string;
+  file: File;
+}) {
+  const path = `${userId}/campaigns/${Date.now()}-${randomUUID()}.${imageExtension(file)}`;
+  const { error } = await supabase.storage.from(CAMPAIGN_IMAGE_BUCKET).upload(path, file, {
+    cacheControl: "31536000",
+    contentType: file.type,
+    upsert: false
+  });
+
+  if (error) throw new Error(error.message);
+
+  const { data } = supabase.storage.from(CAMPAIGN_IMAGE_BUCKET).getPublicUrl(path);
+
+  return { path, publicUrl: data.publicUrl };
 }
 
 export async function createCampaign(formData: FormData) {
@@ -24,13 +94,27 @@ export async function createCampaign(formData: FormData) {
   const benefitValue = String(formData.get("benefit_value") ?? "").trim();
   const recruitCount = Number(formData.get("recruit_count") ?? 0);
   const recruitEnd = String(formData.get("recruit_end") ?? "");
+  const coverImage = getImageFile(formData, "cover_image");
+  const referenceImages = getImageFiles(formData, "reference_images").slice(0, 6);
 
   if (!title || !region || !description || !benefitValue || !recruitCount || !recruitEnd) {
-    redirect(`/business/campaigns/new?error=${encodeURIComponent("캠페인 제목, 지역, 모집 인원, 모집 마감일, 제공 내역, 상세 설명을 입력해주세요.")}`);
+    redirectWithError("캠페인 제목, 지역, 모집 인원, 모집 마감일, 제공 내역, 상세 설명을 입력해주세요.");
+  }
+
+  if (!coverImage) {
+    redirectWithError("대표 이미지를 등록해주세요.");
   }
 
   if (recruitEnd < getKoreaTodayString()) {
-    redirect(`/business/campaigns/new?error=${encodeURIComponent("모집 마감일은 오늘 또는 이후 날짜로 설정해주세요.")}`);
+    redirectWithError("모집 마감일은 오늘 또는 이후 날짜로 설정해주세요.");
+  }
+
+  const imageValidationError = [coverImage, ...referenceImages]
+    .map((file, index) => validateImageFile(file, index === 0 ? "대표 이미지" : "참고 사진"))
+    .find(Boolean);
+
+  if (imageValidationError) {
+    redirectWithError(imageValidationError);
   }
 
   const { data: business, error: businessError } = await supabase
@@ -41,6 +125,26 @@ export async function createCampaign(formData: FormData) {
 
   if (businessError || !business) {
     redirect(`/business/dashboard?error=${encodeURIComponent("캠페인 생성 전 가게 프로필을 먼저 등록해주세요.")}`);
+  }
+
+  const uploadedPaths: string[] = [];
+  let coverImageUrl = "";
+  const referenceImageUrls: string[] = [];
+
+  try {
+    const uploadedCoverImage = await uploadCampaignImage({ supabase, userId: user.id, file: coverImage });
+    uploadedPaths.push(uploadedCoverImage.path);
+    coverImageUrl = uploadedCoverImage.publicUrl;
+
+    for (const image of referenceImages) {
+      const uploadedImage = await uploadCampaignImage({ supabase, userId: user.id, file: image });
+      uploadedPaths.push(uploadedImage.path);
+      referenceImageUrls.push(uploadedImage.publicUrl);
+    }
+  } catch (uploadError) {
+    if (uploadedPaths.length) await supabase.storage.from(CAMPAIGN_IMAGE_BUCKET).remove(uploadedPaths);
+    const message = uploadError instanceof Error ? uploadError.message : "이미지 업로드 중 오류가 발생했습니다.";
+    redirectWithError(message);
   }
 
   const { error } = await supabase.from("campaigns").insert({
@@ -60,13 +164,18 @@ export async function createCampaign(formData: FormData) {
     benefit_type: String(formData.get("benefit_type") ?? ""),
     benefit_value: benefitValue,
     fee: toNullableNumber(formData.get("fee")),
-    content_requirements: splitLines(formData.get("content_requirements")),
+    content_requirements: getContentRequirements(formData),
     usage_rights: String(formData.get("usage_rights") ?? ""),
     status: "in_review",
-    cover_image_url: String(formData.get("cover_image_url") ?? "") || null,
+    cover_image_url: coverImageUrl,
+    reference_image_urls: referenceImageUrls,
     beginner_friendly: formData.get("beginner_friendly") === "on"
   });
 
-  if (error) redirect(`/business/campaigns/new?error=${encodeURIComponent(error.message)}`);
+  if (error) {
+    if (uploadedPaths.length) await supabase.storage.from(CAMPAIGN_IMAGE_BUCKET).remove(uploadedPaths);
+    redirectWithError(error.message);
+  }
+
   redirect("/business/dashboard");
 }
