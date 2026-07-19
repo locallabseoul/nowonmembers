@@ -41,7 +41,7 @@ export async function applyCampaign(formData: FormData) {
     .maybeSingle();
 
   if (creatorError || !creator) {
-    redirect(`/creator/profile?error=${encodeURIComponent("캠페인 신청 전 크리에이터 프로필을 완성해주세요.")}`);
+    redirect(`/creator/profile?next=${encodeURIComponent(`/campaigns/${campaignId}/apply`)}&error=${encodeURIComponent("캠페인 신청 전 크리에이터 프로필을 완성해주세요.")}`);
   }
 
   const { error } = await supabase.from("campaign_applications").insert({

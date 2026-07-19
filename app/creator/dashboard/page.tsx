@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Clock, FileCheck2, Send, Trophy } from "lucide-react";
 import { Badge, StatCard } from "@/app/components/ui";
 import { requireRole } from "@/lib/auth/guards";
@@ -9,13 +10,7 @@ export default async function CreatorDashboardPage() {
   const { creator, applications, collaborations, submissions } = await getCreatorDashboard();
 
   if (!creator) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
-        <h1 className="text-3xl font-black text-charcoal">크리에이터 프로필이 필요합니다</h1>
-        <p className="mt-2 text-gray-500">캠페인 신청과 제출 관리를 위해 프로필을 먼저 완성해주세요.</p>
-        <Link href="/creator/profile" className="mt-6 inline-flex rounded-lg bg-primary px-5 py-3 font-black text-white hover:bg-primaryHover">프로필 등록하기</Link>
-      </main>
-    );
+    redirect(`/creator/profile?next=${encodeURIComponent("/creator/dashboard")}`);
   }
 
   return (

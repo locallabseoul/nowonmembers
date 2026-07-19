@@ -12,7 +12,7 @@ export default async function CampaignApplyPage({ params, searchParams }: { para
   const { data: creator } = await supabase.from("creator_profiles").select("id").eq("user_id", user.id).maybeSingle();
 
   if (!creator) {
-    redirect(`/creator/profile?error=${encodeURIComponent("캠페인 신청 전 크리에이터 프로필을 완성해주세요.")}`);
+    redirect(`/creator/profile?next=${encodeURIComponent(`/campaigns/${id}/apply`)}&error=${encodeURIComponent("캠페인 신청 전 크리에이터 프로필을 완성해주세요.")}`);
   }
 
   const [campaign, defaults] = await Promise.all([getPublicCampaign(id), getCreatorApplicationDefaults()]);
