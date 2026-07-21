@@ -51,6 +51,7 @@ type Relation<T> = T | T[] | null | undefined;
 type CreatorChannelRow = {
   platform: string | null;
   channel_name: string | null;
+  channel_url?: string | null;
   follower_count: number | null;
 };
 
@@ -120,6 +121,51 @@ type DashboardSubmissionRow = {
   selected_at: string | null;
   creator_profiles?: Relation<ApplicantCreatorRow>;
   content_submissions?: DashboardSubmissionContentRow[] | null;
+};
+
+type BusinessCreatorCampaignRow = {
+  id: string;
+  title: string | null;
+  status: Campaign["status"];
+  cover_image_url: string | null;
+};
+
+type BusinessCreatorProfileRow = {
+  id: string;
+  user_id: string;
+  avatar_url: string | null;
+  activity_areas: string[] | null;
+  interests: string[] | null;
+  content_types: string[] | null;
+  profiles?: Relation<{ nickname: string | null; email: string | null }>;
+  creator_channels?: CreatorChannelRow[] | null;
+  portfolios?: CountRelation;
+};
+
+type BusinessCreatorReviewRow = {
+  id: string;
+  content_quality: number | null;
+  guideline_compliance: number | null;
+  communication: number | null;
+  punctuality: number | null;
+  rework_intent: boolean | null;
+  private_comment: string | null;
+  tags: string[] | null;
+  updated_at: string | null;
+};
+
+type BusinessCreatorCollaborationRow = {
+  id: string;
+  campaign_id: string;
+  creator_id: string;
+  selected_at: string | null;
+  submission_due: string | null;
+  status: string;
+  created_at: string | null;
+  campaigns?: Relation<BusinessCreatorCampaignRow>;
+  creator_profiles?: Relation<BusinessCreatorProfileRow>;
+  content_submissions?: DashboardSubmissionContentRow[] | null;
+  reviews?: BusinessCreatorReviewRow[] | null;
 };
 
 type BusinessHoursValue =
@@ -212,6 +258,68 @@ export type BusinessDashboardData = {
   selectedCampaignApplications: DashboardApplication[];
   selectedCampaignSubmissions: DashboardSubmission[];
   recommendedApplications: DashboardApplication[];
+};
+
+export type BusinessCreatorReviewItem = {
+  collaborationId: string;
+  campaignId: string;
+  campaignTitle: string;
+  campaignStatus: Campaign["status"];
+  campaignCoverImage: string;
+  selectedAt: string;
+  submissionDue: string;
+  collaborationStatus: string;
+  creatorId: string;
+  creatorUserId: string;
+  creatorNickname: string;
+  creatorEmail: string;
+  creatorAvatarUrl: string;
+  creatorChannelSummary: string;
+  creatorChannelUrl: string;
+  activityAreas: string[];
+  interests: string[];
+  contentTypes: string[];
+  portfolioCount: number;
+  submission: {
+    id: string;
+    platform: string;
+    contentUrl: string;
+    publishedAt: string;
+    previewImageUrl: string;
+    reviewStatus: string;
+    adminMemo: string;
+    submittedAt: string;
+    updatedAt: string;
+  } | null;
+  review: {
+    id: string;
+    contentQuality: number | null;
+    guidelineCompliance: number | null;
+    communication: number | null;
+    punctuality: number | null;
+    reworkIntent: boolean | null;
+    privateComment: string;
+    tags: string[];
+    updatedAt: string;
+  } | null;
+};
+
+export type BusinessCreatorManagementData = {
+  business: BusinessDashboardData["business"];
+  campaigns: {
+    id: string;
+    title: string;
+    status: Campaign["status"];
+  }[];
+  creators: BusinessCreatorReviewItem[];
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+  filters: {
+    q: string;
+    campaignId: string;
+    rehire: "all" | "yes" | "no";
+  };
 };
 
 export type AdminDashboardData = {
@@ -390,6 +498,76 @@ function mapDashboardSubmission(row: DashboardSubmissionRow): DashboardSubmissio
         adminMemo: submission.admin_memo ?? "",
         submittedAt: submission.created_at ?? "",
         updatedAt: submission.updated_at ?? ""
+      }
+      : null
+  };
+}
+
+function getPrimaryCreatorChannel(channels?: CreatorChannelRow[] | null) {
+  if (!channels?.length) return null;
+
+  return [...channels].sort((a, b) => (b.follower_count ?? 0) - (a.follower_count ?? 0))[0];
+}
+
+function getTimestamp(value?: string | null) {
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function mapBusinessCreatorReviewItem(row: BusinessCreatorCollaborationRow): BusinessCreatorReviewItem {
+  const campaign = asRelation(row.campaigns);
+  const creator = asRelation(row.creator_profiles);
+  const profile = asRelation(creator?.profiles);
+  const primaryChannel = getPrimaryCreatorChannel(creator?.creator_channels);
+  const submission = row.content_submissions?.[0] ?? null;
+  const review = row.reviews?.[0] ?? null;
+
+  return {
+    collaborationId: row.id,
+    campaignId: row.campaign_id,
+    campaignTitle: campaign?.title ?? "캠페인",
+    campaignStatus: campaign?.status ?? "draft",
+    campaignCoverImage: campaign?.cover_image_url ?? "",
+    selectedAt: row.selected_at ?? row.created_at ?? "",
+    submissionDue: row.submission_due ?? "",
+    collaborationStatus: row.status,
+    creatorId: row.creator_id,
+    creatorUserId: creator?.user_id ?? "",
+    creatorNickname: profile?.nickname || profile?.email?.split("@")[0] || "크리에이터",
+    creatorEmail: profile?.email ?? "",
+    creatorAvatarUrl: creator?.avatar_url ?? "",
+    creatorChannelSummary: formatCreatorChannelSummary(creator?.creator_channels),
+    creatorChannelUrl: primaryChannel?.channel_url ?? "",
+    activityAreas: asStringArray(creator?.activity_areas),
+    interests: asStringArray(creator?.interests),
+    contentTypes: asStringArray(creator?.content_types),
+    portfolioCount: relationCount(creator?.portfolios),
+    submission: submission
+      ? {
+        id: submission.id,
+        platform: submission.platform ?? "",
+        contentUrl: submission.content_url ?? "",
+        publishedAt: submission.published_at ?? "",
+        previewImageUrl: submission.preview_image_url ?? "",
+        reviewStatus: submission.review_status ?? "",
+        adminMemo: submission.admin_memo ?? "",
+        submittedAt: submission.created_at ?? "",
+        updatedAt: submission.updated_at ?? ""
+      }
+      : null,
+    review: review
+      ? {
+        id: review.id,
+        contentQuality: review.content_quality,
+        guidelineCompliance: review.guideline_compliance,
+        communication: review.communication,
+        punctuality: review.punctuality,
+        reworkIntent: review.rework_intent,
+        privateComment: review.private_comment ?? "",
+        tags: asStringArray(review.tags),
+        updatedAt: review.updated_at ?? ""
       }
       : null
   };
@@ -705,6 +883,178 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
     selectedCampaignApplications,
     selectedCampaignSubmissions,
     recommendedApplications: selectedCampaignApplications.filter((application) => application.status === "recommended")
+  };
+}
+
+export async function getBusinessCreatorManagement({
+  q,
+  campaignId,
+  rehire,
+  page,
+  perPage = 6
+}: {
+  q?: string;
+  campaignId?: string;
+  rehire?: string;
+  page?: number;
+  perPage?: number;
+} = {}): Promise<BusinessCreatorManagementData> {
+  const supabase = await createSupabaseServerClient();
+  await syncExpiredCampaigns(supabase);
+  const { data: authData } = await supabase.auth.getUser();
+  const user = authData.user;
+  const normalizedQuery = q?.trim() ?? "";
+  const normalizedCampaignId = campaignId?.trim() ?? "";
+  const normalizedRehire = rehire === "yes" || rehire === "no" ? rehire : "all";
+  const requestedPage = Number.isInteger(page) && page && page > 0 ? page : 1;
+
+  const emptyResult = (business: BusinessCreatorManagementData["business"] = null): BusinessCreatorManagementData => ({
+    business,
+    campaigns: [],
+    creators: [],
+    totalCount: 0,
+    totalPages: 1,
+    currentPage: 1,
+    filters: {
+      q: normalizedQuery,
+      campaignId: normalizedCampaignId,
+      rehire: normalizedRehire
+    }
+  });
+
+  if (!user) return emptyResult();
+
+  const { data: business } = await supabase
+    .from("business_profiles")
+    .select("id,business_name,category,short_intro,description,address,district,contact,business_hours,website_url,social_urls,verification_status,is_public,cover_image_url")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!business) return emptyResult();
+
+  const businessSummary: BusinessCreatorManagementData["business"] = {
+    id: business.id,
+    businessName: business.business_name,
+    category: business.category,
+    shortIntro: business.short_intro ?? "",
+    description: business.description ?? "",
+    address: business.address ?? "",
+    district: business.district ?? "",
+    contact: business.contact ?? "",
+    businessHours: getBusinessHoursText(business.business_hours as BusinessHoursValue, "summary"),
+    businessHoursPreset: getBusinessHoursText(business.business_hours as BusinessHoursValue, "preset"),
+    businessHoursNote: getBusinessHoursText(business.business_hours as BusinessHoursValue, "note"),
+    websiteUrl: business.website_url ?? "",
+    socialUrls: Array.isArray(business.social_urls) ? business.social_urls.filter(Boolean) : [],
+    verificationStatus: business.verification_status,
+    isPublic: business.is_public,
+    coverImage: business.cover_image_url ?? ""
+  };
+
+  const { data: campaignRows } = await supabase
+    .from("campaigns")
+    .select("id,title,status")
+    .eq("business_id", business.id)
+    .order("created_at", { ascending: false });
+
+  let collaborationQuery = supabase
+    .from("collaborations")
+    .select(`
+      id,
+      campaign_id,
+      creator_id,
+      selected_at,
+      submission_due,
+      status,
+      created_at,
+      campaigns!inner(
+        id,
+        title,
+        status,
+        cover_image_url
+      ),
+      creator_profiles!inner(
+        id,
+        user_id,
+        avatar_url,
+        activity_areas,
+        interests,
+        content_types,
+        profiles(nickname,email),
+        creator_channels(platform,channel_name,channel_url,follower_count),
+        portfolios(count)
+      ),
+      content_submissions(
+        id,
+        platform,
+        content_url,
+        published_at,
+        preview_image_url,
+        review_status,
+        admin_memo,
+        created_at,
+        updated_at
+      ),
+      reviews(
+        id,
+        content_quality,
+        guideline_compliance,
+        communication,
+        punctuality,
+        rework_intent,
+        private_comment,
+        tags,
+        updated_at
+      )
+    `)
+    .eq("campaigns.business_id", business.id)
+    .neq("status", "cancelled");
+
+  if (normalizedCampaignId) {
+    collaborationQuery = collaborationQuery.eq("campaign_id", normalizedCampaignId);
+  }
+
+  const { data: collaborationRows } = await collaborationQuery.order("selected_at", { ascending: false });
+  const loweredQuery = normalizedQuery.toLocaleLowerCase("ko-KR");
+  const allItems = ((collaborationRows ?? []) as BusinessCreatorCollaborationRow[])
+    .map(mapBusinessCreatorReviewItem)
+    .filter((item) => {
+      if (normalizedCampaignId && item.campaignId !== normalizedCampaignId) return false;
+      if (normalizedRehire === "yes" && item.review?.reworkIntent !== true) return false;
+      if (normalizedRehire === "no" && item.review?.reworkIntent !== false) return false;
+      if (!loweredQuery) return true;
+
+      return [item.creatorNickname, item.creatorEmail, item.campaignTitle, item.creatorChannelSummary].some((value) =>
+        value.toLocaleLowerCase("ko-KR").includes(loweredQuery)
+      );
+    })
+    .sort((a, b) => {
+      const aSortDate = a.submission?.updatedAt || a.selectedAt;
+      const bSortDate = b.submission?.updatedAt || b.selectedAt;
+      return getTimestamp(bSortDate) - getTimestamp(aSortDate);
+    });
+
+  const totalCount = allItems.length;
+  const totalPages = Math.max(Math.ceil(totalCount / perPage), 1);
+  const currentPage = Math.min(requestedPage, totalPages);
+  const creators = allItems.slice((currentPage - 1) * perPage, currentPage * perPage);
+
+  return {
+    business: businessSummary,
+    campaigns: ((campaignRows ?? []) as { id: string; title: string | null; status: Campaign["status"] }[]).map((campaign) => ({
+      id: campaign.id,
+      title: campaign.title ?? "캠페인",
+      status: campaign.status
+    })),
+    creators,
+    totalCount,
+    totalPages,
+    currentPage,
+    filters: {
+      q: normalizedQuery,
+      campaignId: normalizedCampaignId,
+      rehire: normalizedRehire
+    }
   };
 }
 

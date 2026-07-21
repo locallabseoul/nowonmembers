@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { BarChart3, ChevronLeft, ChevronRight, CreditCard, ExternalLink, ImageIcon, ListChecks, Plus, Search, Users, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, ImageIcon, Plus, Search, X } from "lucide-react";
 import { Badge } from "@/app/components/ui";
+import { OperatorSidebar } from "@/app/business/components/operator-sidebar";
 import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
-import { getBusinessDashboard, type BusinessDashboardData, type DashboardApplication, type DashboardCampaign, type DashboardSubmission } from "@/lib/supabase/queries";
+import { getBusinessDashboard, type DashboardApplication, type DashboardCampaign, type DashboardSubmission } from "@/lib/supabase/queries";
 import { requireRole } from "@/lib/auth/guards";
 import { approveRecommendedApplication, saveBusinessProfile } from "./actions";
 import { BusinessProfileWizard } from "./business-profile-wizard";
@@ -529,58 +530,6 @@ function ApplicantModal({
   );
 }
 
-function OperatorSidebar({ business }: { business: NonNullable<BusinessDashboardData["business"]> }) {
-  const initial = business.businessName.slice(0, 1);
-
-  return (
-    <aside className="w-full shrink-0 space-y-6 lg:w-64">
-      <section className="flex flex-col items-center rounded-[20px] border border-gray-100 bg-white p-6 text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-        <div className="mb-4 h-20 w-20 overflow-hidden rounded-full border-2 border-gray-100 bg-gray-200 shadow-sm">
-          {business.coverImage ? (
-            <img src={business.coverImage} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-primary/10 text-2xl font-black text-primary">{initial}</div>
-          )}
-        </div>
-        <h2 className="text-lg font-bold text-charcoal">{business.businessName}</h2>
-        <p className="mb-4 mt-1 text-sm text-gray-500">사업자 회원</p>
-        <Link href="/business/dashboard?profile=edit" className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100">
-          프로필 수정
-        </Link>
-      </section>
-
-      <nav className="overflow-hidden rounded-[20px] border border-gray-100 bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)]" aria-label="가게 대시보드 메뉴">
-        <ul className="flex flex-col">
-          <li>
-            <Link href="/business/dashboard" className="flex items-center gap-3 border-l-4 border-primary bg-primary/5 px-6 py-4 font-bold text-primary transition-colors">
-              <ListChecks size={20} />
-              캠페인 관리
-            </Link>
-          </li>
-          <li>
-            <span className="flex items-center gap-3 border-l-4 border-transparent px-6 py-4 font-medium text-gray-600">
-              <Users size={20} />
-              크리에이터 관리
-            </span>
-          </li>
-          <li>
-            <span className="flex items-center gap-3 border-l-4 border-transparent px-6 py-4 font-medium text-gray-600">
-              <BarChart3 size={20} />
-              통계 및 리포트
-            </span>
-          </li>
-          <li>
-            <span className="flex items-center gap-3 border-l-4 border-transparent px-6 py-4 font-medium text-gray-600">
-              <CreditCard size={20} />
-              결제 내역
-            </span>
-          </li>
-        </ul>
-      </nav>
-    </aside>
-  );
-}
-
 function StatusSummaryCard({ label, count, dotClassName }: { label: string; count: number; dotClassName: string }) {
   return (
     <div className="flex min-h-[124px] flex-col justify-between rounded-[20px] border border-gray-100 bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
@@ -677,7 +626,7 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
     return (
       <main className="bg-[#F8F9FA]">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 md:py-10 lg:flex-row lg:px-8">
-          <OperatorSidebar business={business} />
+          <OperatorSidebar business={business} active="campaigns" />
           <div className="min-w-0 flex-grow">
             <BusinessProfileWizard action={saveBusinessProfile} error={error} next={next} mode="edit" initialBusiness={business} />
           </div>
@@ -689,7 +638,7 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
   return (
     <main className="bg-[#F8F9FA]">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 md:py-10 lg:flex-row lg:px-8">
-        <OperatorSidebar business={business} />
+        <OperatorSidebar business={business} active="campaigns" />
 
         <div className="min-w-0 flex-grow space-y-8">
           {error ? <p className="rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
