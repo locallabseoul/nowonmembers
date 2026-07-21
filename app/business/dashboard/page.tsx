@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { BarChart3, ChevronLeft, ChevronRight, CreditCard, ListChecks, Plus, Search, Users, X } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, CreditCard, ExternalLink, ImageIcon, ListChecks, Plus, Search, Users, X } from "lucide-react";
 import { Badge } from "@/app/components/ui";
 import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
-import { getBusinessDashboard, type BusinessDashboardData, type DashboardApplication, type DashboardCampaign } from "@/lib/supabase/queries";
+import { getBusinessDashboard, type BusinessDashboardData, type DashboardApplication, type DashboardCampaign, type DashboardSubmission } from "@/lib/supabase/queries";
 import { requireRole } from "@/lib/auth/guards";
 import { approveRecommendedApplication, saveBusinessProfile } from "./actions";
 import { BusinessProfileWizard } from "./business-profile-wizard";
@@ -24,6 +24,7 @@ const campaignListTabs = [
 
 type CampaignListFilter = (typeof campaignListTabs)[number][0];
 type CampaignSort = "latest" | "deadline";
+type ModalTab = "applications" | "submissions";
 
 const CAMPAIGNS_PER_PAGE = 8;
 
@@ -70,10 +71,11 @@ function formatAppliedAt(value: string) {
   }).format(date);
 }
 
-function dashboardHref(path: string, campaignId?: string, appStatus?: string) {
+function dashboardHref(path: string, campaignId?: string, appStatus?: string, modalTab: ModalTab = "applications") {
   const params = new URLSearchParams();
   if (campaignId) params.set("campaign", campaignId);
   if (appStatus) params.set("appStatus", appStatus);
+  if (modalTab !== "applications") params.set("tab", modalTab);
   const query = params.toString();
 
   return query ? `${path}?${query}` : path;
@@ -81,6 +83,10 @@ function dashboardHref(path: string, campaignId?: string, appStatus?: string) {
 
 function normalizeApplicationStatusFilter(value?: string) {
   return applicationStatusTabs.some(([status]) => status === value) ? value ?? "" : "";
+}
+
+function normalizeModalTab(value?: string): ModalTab {
+  return value === "submissions" ? "submissions" : "applications";
 }
 
 function filterApplications(applications: DashboardApplication[], statusFilter: string) {
@@ -154,6 +160,51 @@ function formatDateShort(value: string) {
   return `${year}.${month}.${day}`;
 }
 
+function formatDateTimeShort(value: string) {
+  if (!value) return "미정";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
+function collaborationStatusLabel(status: string) {
+  if (status === "selected") return "선정";
+  if (status === "visit_scheduled") return "방문 예정";
+  if (status === "visited") return "방문 완료";
+  if (status === "submitted") return "제출 완료";
+  if (status === "revision_requested") return "수정 요청";
+  if (status === "approved") return "승인";
+  if (status === "completed") return "완료";
+  if (status === "no_show") return "미방문";
+  if (status === "cancelled") return "취소";
+  return status || "진행중";
+}
+
+function submissionStatusLabel(submission: DashboardSubmission) {
+  const reviewStatus = submission.submission?.reviewStatus;
+  if (!reviewStatus) return "제출 대기";
+  if (reviewStatus === "submitted") return "관리자 검수 대기";
+  if (reviewStatus === "needs_revision") return "수정 요청됨";
+  if (reviewStatus === "approved") return "승인 완료";
+  if (reviewStatus === "rejected") return "반려";
+  return reviewStatus;
+}
+
+function submissionStatusTone(submission: DashboardSubmission): "blue" | "green" | "gray" | "amber" | "red" {
+  const reviewStatus = submission.submission?.reviewStatus;
+  if (!reviewStatus) return "gray";
+  if (reviewStatus === "approved") return "green";
+  if (reviewStatus === "needs_revision" || reviewStatus === "rejected") return "red";
+  if (reviewStatus === "submitted") return "amber";
+  return "blue";
+}
+
 function campaignTypeLabel(campaign: DashboardCampaign) {
   if (campaign.campaignType === "shortform") return "릴스/쇼츠";
   if (campaign.campaignType === "interview") return "인스타";
@@ -224,6 +275,22 @@ function campaignApplicantText(campaign: DashboardCampaign) {
   };
 }
 
+function campaignSubmissionText(campaign: DashboardCampaign) {
+  if (campaign.selectedCount <= 0) return null;
+
+  const detail = [
+    campaign.pendingReviewCount ? `검수 ${campaign.pendingReviewCount}` : "",
+    campaign.revisionRequestedCount ? `수정요청 ${campaign.revisionRequestedCount}` : "",
+    campaign.approvedSubmissionCount ? `승인 ${campaign.approvedSubmissionCount}` : "",
+    campaign.pendingSubmissionCount ? `미제출 ${campaign.pendingSubmissionCount}` : ""
+  ].filter(Boolean).join(" · ");
+
+  return {
+    main: `제출 ${campaign.submissionCount}/${campaign.selectedCount}명`,
+    detail
+  };
+}
+
 function campaignActionLabel(campaign: DashboardCampaign) {
   if (campaign.status === "selecting") return "선정하기";
   if (campaign.status === "submission_review") return "리뷰 검토";
@@ -242,7 +309,9 @@ function CampaignManagementRow({
   statusFilter: string;
 }) {
   const applicantText = campaignApplicantText(campaign);
+  const submissionText = campaignSubmissionText(campaign);
   const actionIsPrimary = campaign.status === "selecting";
+  const actionTab: ModalTab = campaign.status === "submission_review" || campaign.status === "completed" ? "submissions" : "applications";
 
   return (
     <tr className={`group transition-colors hover:bg-gray-50 ${selected ? "bg-primary/5" : ""} ${campaign.status === "completed" ? "opacity-75" : ""}`}>
@@ -273,11 +342,17 @@ function CampaignManagementRow({
       <td className="px-6 py-5">
         <div className={`text-sm font-medium ${applicantText.highlight ? "text-primary" : "text-charcoal"}`}>{applicantText.main}</div>
         {applicantText.sub ? <div className="mt-1 text-xs text-gray-500">{applicantText.sub}</div> : null}
+        {submissionText ? (
+          <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-xs font-bold text-gray-600">
+            <span className={campaign.pendingReviewCount || campaign.revisionRequestedCount ? "text-primary" : "text-gray-700"}>{submissionText.main}</span>
+            {submissionText.detail ? <span className="ml-1 text-gray-400">· {submissionText.detail}</span> : null}
+          </div>
+        ) : null}
       </td>
       <td className="px-6 py-5 text-sm text-gray-600">{campaignPeriodText(campaign)}</td>
       <td className="px-6 py-5 text-right">
         <Link
-          href={dashboardHref("/business/dashboard", campaign.id, statusFilter)}
+          href={dashboardHref("/business/dashboard", campaign.id, statusFilter, actionTab)}
           className={`inline-flex rounded-lg px-3 py-1.5 text-sm shadow-sm transition-colors ${
             actionIsPrimary
               ? "bg-primary font-bold text-white hover:bg-primaryHover"
@@ -326,14 +401,63 @@ function ApplicantCard({ application }: { application: DashboardApplication }) {
   );
 }
 
+function SubmissionCard({ item }: { item: DashboardSubmission }) {
+  const submission = item.submission;
+
+  return (
+    <article className="overflow-hidden rounded-lg bg-gray-50">
+      {submission?.previewImageUrl ? (
+        <a href={submission.previewImageUrl} target="_blank" rel="noreferrer" className="block h-44 overflow-hidden bg-gray-100">
+          <img src={submission.previewImageUrl} alt="" className="h-full w-full object-cover transition-transform hover:scale-[1.02]" />
+        </a>
+      ) : (
+        <div className="flex h-44 items-center justify-center bg-gray-100 text-gray-400">
+          <ImageIcon size={28} />
+        </div>
+      )}
+      <div className="space-y-4 p-4">
+        <div className="flex flex-wrap gap-2">
+          <Badge tone={submissionStatusTone(item)}>{submissionStatusLabel(item)}</Badge>
+          <Badge tone="gray">{collaborationStatusLabel(item.collaborationStatus)}</Badge>
+        </div>
+        <div>
+          <p className="text-sm font-black text-charcoal">{item.creatorNickname}</p>
+          <p className="mt-1 text-xs font-bold text-gray-400">{item.creatorChannelSummary}</p>
+        </div>
+        <div className="grid gap-2 text-xs text-gray-500 sm:grid-cols-2">
+          <span>선정일 {formatDateTimeShort(item.selectedAt)}</span>
+          <span>제출 마감 {formatDateShort(item.submissionDue)}</span>
+          <span>게시 채널 {submission?.platform || "미제출"}</span>
+          <span>게시일 {formatDateShort(submission?.publishedAt ?? "")}</span>
+          <span>제공 표시 {submission?.disclosureConfirmed ? "확인" : "미확인"}</span>
+          <span>업데이트 {formatDateTimeShort(submission?.updatedAt ?? "")}</span>
+        </div>
+        {submission?.contentUrl ? (
+          <a href={submission.contentUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 break-all text-sm font-black text-primary">
+            콘텐츠 열기
+            <ExternalLink size={14} />
+          </a>
+        ) : (
+          <p className="text-sm text-gray-500">아직 제출된 콘텐츠 URL이 없습니다.</p>
+        )}
+        {submission?.adminMemo ? <p className="rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-700">관리자 메모: {submission.adminMemo}</p> : null}
+      </div>
+    </article>
+  );
+}
+
 function ApplicantModal({
   campaign,
   applications,
-  statusFilter
+  submissions,
+  statusFilter,
+  activeTab
 }: {
   campaign: DashboardCampaign;
   applications: DashboardApplication[];
+  submissions: DashboardSubmission[];
   statusFilter: string;
+  activeTab: ModalTab;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center px-4 py-6 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="business-applicant-modal-title">
@@ -348,30 +472,57 @@ function ApplicantModal({
               <Badge tone="green">선정 {campaign.selectedCount}/{campaign.recruitCount}명</Badge>
             </div>
             <h2 id="business-applicant-modal-title" className="text-xl font-black text-charcoal">{campaign.title}</h2>
-            <p className="mt-1 text-sm text-gray-500">캠페인 지원자</p>
+            <p className="mt-1 text-sm text-gray-500">캠페인 지원자와 제출 콘텐츠</p>
           </div>
           <Link href="/business/dashboard" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100" aria-label="닫기">
             <X size={20} />
           </Link>
         </div>
         <div className="border-b border-line p-5">
+          <div className="mb-4 flex flex-wrap gap-2">
+            <Link
+              href={dashboardHref("/business/dashboard", campaign.id, statusFilter, "applications")}
+              className={`rounded-lg px-4 py-2 text-sm font-black ${activeTab === "applications" ? "bg-primary text-white" : "bg-gray-100 text-gray-600"}`}
+            >
+              지원자
+            </Link>
+            <Link
+              href={dashboardHref("/business/dashboard", campaign.id, statusFilter, "submissions")}
+              className={`rounded-lg px-4 py-2 text-sm font-black ${activeTab === "submissions" ? "bg-primary text-white" : "bg-gray-100 text-gray-600"}`}
+            >
+              제출 콘텐츠
+            </Link>
+          </div>
           <div className="flex flex-wrap gap-2">
-            {applicationStatusTabs.map(([status, label]) => (
+            {activeTab === "applications" ? applicationStatusTabs.map(([status, label]) => (
               <Link
                 key={label}
-                href={dashboardHref("/business/dashboard", campaign.id, status)}
+                href={dashboardHref("/business/dashboard", campaign.id, status, "applications")}
                 className={`rounded-lg px-3 py-2 text-xs font-black ${statusFilter === status ? "bg-primary text-white" : "bg-gray-100 text-gray-600"}`}
               >
                 {label}
               </Link>
-            ))}
+            )) : (
+              <p className="text-xs font-bold text-gray-500">선정된 협업 {submissions.length}건의 제출 현황입니다.</p>
+            )}
           </div>
         </div>
         <div className="overflow-y-auto p-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            {applications.map((application) => <ApplicantCard key={application.id} application={application} />)}
-          </div>
-          {applications.length === 0 ? <p className="text-sm text-gray-500">해당 조건의 지원자가 없습니다.</p> : null}
+          {activeTab === "applications" ? (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                {applications.map((application) => <ApplicantCard key={application.id} application={application} />)}
+              </div>
+              {applications.length === 0 ? <p className="text-sm text-gray-500">해당 조건의 지원자가 없습니다.</p> : null}
+            </>
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                {submissions.map((item) => <SubmissionCard key={item.collaborationId} item={item} />)}
+              </div>
+              {submissions.length === 0 ? <p className="text-sm text-gray-500">선정된 협업이 아직 없습니다.</p> : null}
+            </>
+          )}
         </div>
       </section>
     </div>
@@ -493,14 +644,15 @@ function Pagination({
   );
 }
 
-export default async function BusinessDashboardPage({ searchParams }: { searchParams: Promise<{ error?: string; campaign?: string; appStatus?: string; status?: string; sort?: string; q?: string; page?: string; next?: string; profile?: string }> }) {
-  const { error, campaign, appStatus, status, sort, q, page, next, profile } = await searchParams;
+export default async function BusinessDashboardPage({ searchParams }: { searchParams: Promise<{ error?: string; campaign?: string; appStatus?: string; status?: string; sort?: string; q?: string; page?: string; next?: string; profile?: string; tab?: string }> }) {
+  const { error, campaign, appStatus, status, sort, q, page, next, profile, tab } = await searchParams;
   const statusFilter = normalizeApplicationStatusFilter(appStatus);
+  const activeModalTab = normalizeModalTab(tab);
   const campaignFilter = normalizeCampaignListFilter(status);
   const sortOrder = normalizeCampaignSort(sort);
   const searchQuery = q?.trim() ?? "";
   await requireRole("business", "/business/dashboard");
-  const { business, campaigns, selectedCampaign, selectedCampaignApplications } = await getBusinessDashboard(campaign);
+  const { business, campaigns, selectedCampaign, selectedCampaignApplications, selectedCampaignSubmissions } = await getBusinessDashboard(campaign);
   const filteredApplications = filterApplications(selectedCampaignApplications, statusFilter);
   const visibleCampaigns = getFilteredCampaigns(campaigns, campaignFilter, searchQuery, sortOrder);
   const totalPages = Math.max(Math.ceil(visibleCampaigns.length / CAMPAIGNS_PER_PAGE), 1);
@@ -635,7 +787,15 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
         </div>
       </div>
 
-      {selectedCampaign ? <ApplicantModal campaign={selectedCampaign} applications={filteredApplications} statusFilter={statusFilter} /> : null}
+      {selectedCampaign ? (
+        <ApplicantModal
+          campaign={selectedCampaign}
+          applications={filteredApplications}
+          submissions={selectedCampaignSubmissions}
+          statusFilter={statusFilter}
+          activeTab={activeModalTab}
+        />
+      ) : null}
     </main>
   );
 }

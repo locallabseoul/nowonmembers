@@ -10,6 +10,31 @@ async function requireAdmin() {
   return supabase;
 }
 
+const ACTIVE_COLLABORATION_STATUSES = ["selected", "visit_scheduled", "visited", "submitted", "revision_requested", "approved", "completed"];
+
+type Relation<T> = T | T[] | null | undefined;
+
+function asRelation<T>(value: Relation<T>) {
+  return Array.isArray(value) ? value[0] : value ?? null;
+}
+
+async function refreshCampaignSubmissionStatus(supabase: Awaited<ReturnType<typeof requireAdmin>>, campaignId: string) {
+  const { data, error } = await supabase
+    .from("collaborations")
+    .select("id,status")
+    .eq("campaign_id", campaignId)
+    .in("status", ACTIVE_COLLABORATION_STATUSES);
+
+  if (error || !data?.length) return;
+
+  const allCompleted = data.every((collaboration) => collaboration.status === "completed");
+  await supabase
+    .from("campaigns")
+    .update({ status: allCompleted ? "completed" : "submission_review" })
+    .eq("id", campaignId)
+    .in("status", ["in_progress", "submission_review", "completed"]);
+}
+
 export async function approveCampaign(formData: FormData) {
   const supabase = await requireAdmin();
   const id = String(formData.get("campaign_id") ?? "");
@@ -123,7 +148,7 @@ export async function approveSubmission(formData: FormData) {
 
   const { data: submission, error: submissionError } = await supabase
     .from("content_submissions")
-    .select("id,collaboration_id")
+    .select("id,collaboration_id,collaborations(campaign_id)")
     .eq("id", submissionId)
     .maybeSingle();
 
@@ -139,12 +164,29 @@ export async function approveSubmission(formData: FormData) {
   if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
 
   await supabase.from("collaborations").update({ status: "completed" }).eq("id", submission.collaboration_id);
+  const collaboration = asRelation(submission.collaborations);
+  if (collaboration?.campaign_id) {
+    await refreshCampaignSubmissionStatus(supabase, collaboration.campaign_id);
+  }
+
   revalidatePath("/admin");
+  revalidatePath("/business/dashboard");
+  revalidatePath("/campaigns");
 }
 
 export async function requestSubmissionRevision(formData: FormData) {
   const supabase = await requireAdmin();
   const submissionId = String(formData.get("submission_id") ?? "");
+
+  const { data: submission, error: submissionError } = await supabase
+    .from("content_submissions")
+    .select("id,collaboration_id,collaborations(campaign_id)")
+    .eq("id", submissionId)
+    .maybeSingle();
+
+  if (submissionError || !submission) {
+    redirect(`/admin?error=${encodeURIComponent(submissionError?.message ?? "제출물을 찾을 수 없습니다.")}`);
+  }
 
   const { error } = await supabase
     .from("content_submissions")
@@ -155,7 +197,15 @@ export async function requestSubmissionRevision(formData: FormData) {
     .eq("id", submissionId);
 
   if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
+  await supabase.from("collaborations").update({ status: "revision_requested" }).eq("id", submission.collaboration_id);
+  const collaboration = asRelation(submission.collaborations);
+  if (collaboration?.campaign_id) {
+    await refreshCampaignSubmissionStatus(supabase, collaboration.campaign_id);
+  }
+
   revalidatePath("/admin");
+  revalidatePath("/business/dashboard");
+  revalidatePath("/campaigns");
 }
 
 export async function publishLocalStory(formData: FormData) {

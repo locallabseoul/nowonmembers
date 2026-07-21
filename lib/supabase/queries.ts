@@ -95,6 +95,31 @@ type CollaborationSummaryRow = {
   id: string;
   campaign_id: string;
   status: string;
+  content_submissions?: Pick<DashboardSubmissionContentRow, "id" | "review_status">[] | null;
+};
+
+type DashboardSubmissionContentRow = {
+  id: string;
+  platform: string | null;
+  content_url: string | null;
+  published_at: string | null;
+  preview_image_url: string | null;
+  disclosure_confirmed: boolean | null;
+  review_status: string | null;
+  admin_memo: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type DashboardSubmissionRow = {
+  id: string;
+  campaign_id: string;
+  creator_id: string;
+  status: string;
+  submission_due: string | null;
+  selected_at: string | null;
+  creator_profiles?: Relation<ApplicantCreatorRow>;
+  content_submissions?: DashboardSubmissionContentRow[] | null;
 };
 
 type BusinessHoursValue =
@@ -111,6 +136,11 @@ type CampaignApplicationStats = {
   applicationCount: number;
   recommendedCount: number;
   selectedCount: number;
+  submissionCount: number;
+  pendingSubmissionCount: number;
+  pendingReviewCount: number;
+  revisionRequestedCount: number;
+  approvedSubmissionCount: number;
 };
 
 export type DashboardCampaign = Campaign & CampaignApplicationStats;
@@ -135,6 +165,29 @@ export type DashboardApplication = {
   hasCollaboration: boolean;
 };
 
+export type DashboardSubmission = {
+  collaborationId: string;
+  campaignId: string;
+  creatorId: string;
+  creatorNickname: string;
+  creatorChannelSummary: string;
+  collaborationStatus: string;
+  submissionDue: string;
+  selectedAt: string;
+  submission: {
+    id: string;
+    platform: string;
+    contentUrl: string;
+    publishedAt: string;
+    previewImageUrl: string;
+    disclosureConfirmed: boolean;
+    reviewStatus: string;
+    adminMemo: string;
+    submittedAt: string;
+    updatedAt: string;
+  } | null;
+};
+
 export type BusinessDashboardData = {
   business: {
     id: string;
@@ -157,6 +210,7 @@ export type BusinessDashboardData = {
   campaigns: DashboardCampaign[];
   selectedCampaign: DashboardCampaign | null;
   selectedCampaignApplications: DashboardApplication[];
+  selectedCampaignSubmissions: DashboardSubmission[];
   recommendedApplications: DashboardApplication[];
 };
 
@@ -171,10 +225,13 @@ export type AdminDashboardData = {
   campaigns: DashboardCampaign[];
   selectedCampaign: DashboardCampaign | null;
   selectedCampaignApplications: DashboardApplication[];
+  selectedCampaignSubmissions: DashboardSubmission[];
   applications: DashboardApplication[];
   submissions: {
     id: string;
     contentUrl: string;
+    previewImageUrl: string;
+    publishedAt: string;
     reviewStatus: string;
     platform: string;
   }[];
@@ -211,8 +268,19 @@ export type CreatorDashboardData = {
 export type CollaborationSubmissionDetail = {
   id: string;
   campaignTitle: string;
+  campaignCoverImage: string;
   submissionDue: string;
   status: string;
+  submission: {
+    id: string;
+    platform: string;
+    contentUrl: string;
+    publishedAt: string;
+    previewImageUrl: string;
+    disclosureConfirmed: boolean;
+    reviewStatus: string;
+    adminMemo: string;
+  } | null;
 } | null;
 
 function asStringArray(value: unknown) {
@@ -274,13 +342,54 @@ function mapDashboardApplication(row: DashboardApplicationRow): DashboardApplica
   };
 }
 
+function mapDashboardSubmission(row: DashboardSubmissionRow): DashboardSubmission {
+  const creator = asRelation(row.creator_profiles);
+  const profile = asRelation(creator?.profiles);
+  const submission = row.content_submissions?.[0] ?? null;
+
+  return {
+    collaborationId: row.id,
+    campaignId: row.campaign_id,
+    creatorId: row.creator_id,
+    creatorNickname: profile?.nickname || profile?.email?.split("@")[0] || "크리에이터",
+    creatorChannelSummary: formatCreatorChannelSummary(creator?.creator_channels),
+    collaborationStatus: row.status,
+    submissionDue: row.submission_due ?? "",
+    selectedAt: row.selected_at ?? "",
+    submission: submission
+      ? {
+        id: submission.id,
+        platform: submission.platform ?? "",
+        contentUrl: submission.content_url ?? "",
+        publishedAt: submission.published_at ?? "",
+        previewImageUrl: submission.preview_image_url ?? "",
+        disclosureConfirmed: Boolean(submission.disclosure_confirmed),
+        reviewStatus: submission.review_status ?? "",
+        adminMemo: submission.admin_memo ?? "",
+        submittedAt: submission.created_at ?? "",
+        updatedAt: submission.updated_at ?? ""
+      }
+      : null
+  };
+}
+
 function buildCampaignApplicationStats(applications: ApplicationSummaryRow[], collaborations: CollaborationSummaryRow[]) {
   const stats = new Map<string, CampaignApplicationStats>();
+  const emptyStats = (): CampaignApplicationStats => ({
+    applicationCount: 0,
+    recommendedCount: 0,
+    selectedCount: 0,
+    submissionCount: 0,
+    pendingSubmissionCount: 0,
+    pendingReviewCount: 0,
+    revisionRequestedCount: 0,
+    approvedSubmissionCount: 0
+  });
 
   applications.forEach((application) => {
     if (application.status === "cancelled") return;
 
-    const current = stats.get(application.campaign_id) ?? { applicationCount: 0, recommendedCount: 0, selectedCount: 0 };
+    const current = stats.get(application.campaign_id) ?? emptyStats();
     current.applicationCount += 1;
     if (application.status === "recommended") current.recommendedCount += 1;
     stats.set(application.campaign_id, current);
@@ -289,8 +398,17 @@ function buildCampaignApplicationStats(applications: ApplicationSummaryRow[], co
   collaborations.forEach((collaboration) => {
     if (collaboration.status === "cancelled") return;
 
-    const current = stats.get(collaboration.campaign_id) ?? { applicationCount: 0, recommendedCount: 0, selectedCount: 0 };
+    const current = stats.get(collaboration.campaign_id) ?? emptyStats();
+    const submission = collaboration.content_submissions?.[0] ?? null;
     current.selectedCount += 1;
+    if (!submission) {
+      current.pendingSubmissionCount += 1;
+    } else {
+      current.submissionCount += 1;
+      if (submission.review_status === "approved") current.approvedSubmissionCount += 1;
+      if (submission.review_status === "needs_revision") current.revisionRequestedCount += 1;
+      if (submission.review_status === "submitted") current.pendingReviewCount += 1;
+    }
     stats.set(collaboration.campaign_id, current);
   });
 
@@ -304,7 +422,12 @@ function mapDashboardCampaign(row: CampaignRow, stats?: CampaignApplicationStats
     ...campaign,
     applicationCount: stats?.applicationCount ?? campaign.appliedCount,
     recommendedCount: stats?.recommendedCount ?? 0,
-    selectedCount: stats?.selectedCount ?? 0
+    selectedCount: stats?.selectedCount ?? 0,
+    submissionCount: stats?.submissionCount ?? 0,
+    pendingSubmissionCount: stats?.pendingSubmissionCount ?? 0,
+    pendingReviewCount: stats?.pendingReviewCount ?? 0,
+    revisionRequestedCount: stats?.revisionRequestedCount ?? 0,
+    approvedSubmissionCount: stats?.approvedSubmissionCount ?? 0
   };
 }
 
@@ -337,6 +460,32 @@ const dashboardApplicationSelect = `
     recruit_count,
     campaign_applications(count),
     collaborations(count)
+  )
+`;
+
+const dashboardSubmissionSelect = `
+  id,
+  campaign_id,
+  creator_id,
+  status,
+  submission_due,
+  selected_at,
+  creator_profiles(
+    id,
+    profiles(nickname,email),
+    creator_channels(platform,channel_name,follower_count)
+  ),
+  content_submissions(
+    id,
+    platform,
+    content_url,
+    published_at,
+    preview_image_url,
+    disclosure_confirmed,
+    review_status,
+    admin_memo,
+    created_at,
+    updated_at
   )
 `;
 
@@ -388,6 +537,22 @@ function mapStory(row: StoryRow): LocalStory {
 
 async function syncExpiredCampaigns(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
   await supabase.rpc("sync_expired_campaigns");
+}
+
+async function getSelectedCampaignSubmissions(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  selectedCampaign: DashboardCampaign | null
+) {
+  if (!selectedCampaign) return [];
+
+  const { data } = await supabase
+    .from("collaborations")
+    .select(dashboardSubmissionSelect)
+    .eq("campaign_id", selectedCampaign.id)
+    .neq("status", "cancelled")
+    .order("selected_at", { ascending: false });
+
+  return ((data ?? []) as DashboardSubmissionRow[]).map(mapDashboardSubmission);
 }
 
 export async function getPublicCampaigns(): Promise<Campaign[]> {
@@ -451,7 +616,7 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
   const user = authData.user;
 
   if (!user) {
-    return { business: null, campaigns: [], selectedCampaign: null, selectedCampaignApplications: [], recommendedApplications: [] };
+    return { business: null, campaigns: [], selectedCampaign: null, selectedCampaignApplications: [], selectedCampaignSubmissions: [], recommendedApplications: [] };
   }
 
   const { data: business } = await supabase
@@ -461,7 +626,7 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
     .maybeSingle();
 
   if (!business) {
-    return { business: null, campaigns: [], selectedCampaign: null, selectedCampaignApplications: [], recommendedApplications: [] };
+    return { business: null, campaigns: [], selectedCampaign: null, selectedCampaignApplications: [], selectedCampaignSubmissions: [], recommendedApplications: [] };
   }
 
   const { data: campaignRows } = await supabase
@@ -474,7 +639,7 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
   const [applicationSummaryRows, collaborationSummaryRows] = campaignIds.length
     ? await Promise.all([
       supabase.from("campaign_applications").select("id,campaign_id,status").in("campaign_id", campaignIds),
-      supabase.from("collaborations").select("id,campaign_id,status").in("campaign_id", campaignIds)
+      supabase.from("collaborations").select("id,campaign_id,status,content_submissions(id,review_status)").in("campaign_id", campaignIds)
     ])
     : [{ data: [] }, { data: [] }];
   const stats = buildCampaignApplicationStats(
@@ -492,6 +657,7 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
       .order("applied_at", { ascending: false })
     : { data: [] };
   const selectedCampaignApplications = ((selectedApplicationRows ?? []) as DashboardApplicationRow[]).map(mapDashboardApplication);
+  const selectedCampaignSubmissions = await getSelectedCampaignSubmissions(supabase, selectedCampaign);
 
   return {
     business: {
@@ -515,6 +681,7 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
     campaigns,
     selectedCampaign,
     selectedCampaignApplications,
+    selectedCampaignSubmissions,
     recommendedApplications: selectedCampaignApplications.filter((application) => application.status === "recommended")
   };
 }
@@ -531,6 +698,7 @@ export async function getAdminDashboard(selectedCampaignId?: string): Promise<Ad
       campaigns: [],
       selectedCampaign: null,
       selectedCampaignApplications: [],
+      selectedCampaignSubmissions: [],
       applications: [],
       submissions: [],
       isAdmin: false
@@ -545,6 +713,7 @@ export async function getAdminDashboard(selectedCampaignId?: string): Promise<Ad
       campaigns: [],
       selectedCampaign: null,
       selectedCampaignApplications: [],
+      selectedCampaignSubmissions: [],
       applications: [],
       submissions: [],
       isAdmin: false
@@ -573,10 +742,10 @@ export async function getAdminDashboard(selectedCampaignId?: string): Promise<Ad
       .in("status", ["draft", "in_review", "revision_requested", "approved", "scheduled", "recruiting", "selecting", "in_progress", "submission_review", "completed", "cancelled", "failed"])
       .order("created_at", { ascending: false }),
     supabase.from("campaign_applications").select("id,campaign_id,status"),
-    supabase.from("collaborations").select("id,campaign_id,status"),
+    supabase.from("collaborations").select("id,campaign_id,status,content_submissions(id,review_status)"),
     supabase
       .from("content_submissions")
-      .select("id,content_url,review_status,platform")
+      .select("id,content_url,preview_image_url,published_at,review_status,platform")
       .order("created_at", { ascending: false })
       .limit(10)
   ]);
@@ -595,6 +764,7 @@ export async function getAdminDashboard(selectedCampaignId?: string): Promise<Ad
       .order("applied_at", { ascending: false })
     : { data: [] };
   const selectedCampaignApplications = ((selectedApplicationRows ?? []) as DashboardApplicationRow[]).map(mapDashboardApplication);
+  const selectedCampaignSubmissions = await getSelectedCampaignSubmissions(supabase, selectedCampaign);
 
   return {
     stats: {
@@ -607,10 +777,13 @@ export async function getAdminDashboard(selectedCampaignId?: string): Promise<Ad
     campaigns,
     selectedCampaign,
     selectedCampaignApplications,
+    selectedCampaignSubmissions,
     applications: selectedCampaignApplications,
     submissions: (submissionRows.data ?? []).map((submission) => ({
       id: submission.id,
       contentUrl: submission.content_url,
+      previewImageUrl: submission.preview_image_url ?? "",
+      publishedAt: submission.published_at ?? "",
       reviewStatus: submission.review_status,
       platform: submission.platform
     })),
@@ -691,19 +864,41 @@ export async function getCreatorDashboard(): Promise<CreatorDashboardData> {
 
 export async function getCollaborationSubmissionDetail(id: string): Promise<CollaborationSubmissionDetail> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("collaborations")
-    .select("id,submission_due,status,campaigns(title)")
-    .eq("id", id)
-    .maybeSingle();
+  const [{ data, error }, { data: submissionRows }] = await Promise.all([
+    supabase
+      .from("collaborations")
+      .select("id,submission_due,status,campaigns(title,cover_image_url)")
+      .eq("id", id)
+      .maybeSingle(),
+    supabase
+      .from("content_submissions")
+      .select("id,platform,content_url,published_at,preview_image_url,disclosure_confirmed,review_status,admin_memo")
+      .eq("collaboration_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+  ]);
 
   if (error || !data) return null;
   const campaign = Array.isArray(data.campaigns) ? data.campaigns[0] : data.campaigns;
+  const submission = submissionRows?.[0] ?? null;
 
   return {
     id: data.id,
     campaignTitle: campaign?.title ?? "캠페인",
+    campaignCoverImage: campaign?.cover_image_url ?? "",
     submissionDue: data.submission_due ?? "미정",
-    status: data.status
+    status: data.status,
+    submission: submission
+      ? {
+        id: submission.id,
+        platform: submission.platform ?? "",
+        contentUrl: submission.content_url ?? "",
+        publishedAt: submission.published_at ?? "",
+        previewImageUrl: submission.preview_image_url ?? "",
+        disclosureConfirmed: Boolean(submission.disclosure_confirmed),
+        reviewStatus: submission.review_status ?? "",
+        adminMemo: submission.admin_memo ?? ""
+      }
+      : null
   };
 }
