@@ -1,75 +1,365 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Clock, FileCheck2, Send, Trophy } from "lucide-react";
-import { Badge, StatCard } from "@/app/components/ui";
+import { AlertCircle, CheckCircle2, Clock, ExternalLink, PenLine, Send } from "lucide-react";
+import { Badge } from "@/app/components/ui";
+import { daysUntilDate } from "@/lib/campaign-lifecycle";
 import { requireRole } from "@/lib/auth/guards";
-import { getCreatorDashboard } from "@/lib/supabase/queries";
+import { getCreatorDashboard, type CreatorDashboardData } from "@/lib/supabase/queries";
 
-export default async function CreatorDashboardPage() {
+type CreatorDashboardTab = "active" | "completed";
+type CreatorDashboardCreator = NonNullable<CreatorDashboardData["creator"]>;
+type CreatorApplication = CreatorDashboardData["applications"][number];
+type CreatorCollaboration = CreatorDashboardData["collaborations"][number];
+
+function normalizeTab(value?: string): CreatorDashboardTab {
+  return value === "completed" ? "completed" : "active";
+}
+
+function formatDateShort(value: string) {
+  if (!value || value === "미정") return "미정";
+  const [year, month, day] = value.slice(0, 10).split("-");
+  if (!year || !month || !day) return value;
+
+  return `${year}.${month}.${day}`;
+}
+
+function submissionDeadlineLabel(value: string) {
+  const remainingDays = daysUntilDate(value);
+  if (remainingDays === null) return "제출일 미정";
+  if (remainingDays < 0) return "마감 지남";
+  if (remainingDays === 0) return "오늘 마감";
+  return `제출 D-${remainingDays}`;
+}
+
+function campaignTypeLabel(value: string) {
+  if (value === "shortform") return "릴스/쇼츠";
+  if (value === "interview") return "인스타";
+  return "블로그";
+}
+
+function applicationStatusLabel(status: string) {
+  if (status === "recommended") return "추천 후보";
+  if (status === "submitted") return "결과 대기중";
+  if (status === "selected") return "선정 완료";
+  if (status === "rejected") return "미선정";
+  if (status === "cancelled") return "취소";
+  return status;
+}
+
+function applicationStatusTone(status: string): "blue" | "green" | "gray" | "amber" {
+  if (status === "recommended") return "amber";
+  if (status === "selected") return "green";
+  if (status === "rejected" || status === "cancelled") return "gray";
+  return "blue";
+}
+
+function collaborationStatusLabel(item: CreatorCollaboration) {
+  if (!item.hasSubmission) return "제출 대기";
+  if (item.submissionReviewStatus === "submitted") return "검수 대기";
+  if (item.submissionReviewStatus === "needs_revision") return "수정 요청";
+  if (item.submissionReviewStatus === "approved" || item.status === "completed") return "승인 완료";
+  if (item.submissionReviewStatus === "rejected") return "반려";
+  if (item.status === "visit_scheduled") return "방문 예정";
+  if (item.status === "visited") return "방문 완료";
+  return "진행중";
+}
+
+function collaborationStatusTone(item: CreatorCollaboration): "red" | "green" | "blue" | "gray" | "amber" {
+  if (!item.hasSubmission) return "red";
+  if (item.submissionReviewStatus === "needs_revision" || item.submissionReviewStatus === "rejected") return "red";
+  if (item.submissionReviewStatus === "approved" || item.status === "completed") return "green";
+  if (item.submissionReviewStatus === "submitted") return "amber";
+  return "blue";
+}
+
+function isFinishedCollaboration(item: CreatorCollaboration) {
+  return item.status === "completed" || item.submissionReviewStatus === "approved";
+}
+
+function requiresSubmissionAction(item: CreatorCollaboration) {
+  if (item.status === "cancelled" || item.status === "no_show" || isFinishedCollaboration(item)) return false;
+  return !item.hasSubmission || item.submissionReviewStatus === "needs_revision";
+}
+
+function ProfileSummary({ creator }: { creator: CreatorDashboardCreator }) {
+  const initial = creator.nickname.slice(0, 1);
+  const profileBadge = creator.contentTypes[0] ?? "크리에이터";
+  const chips = creator.interests.length ? creator.interests : creator.activityAreas;
+
+  return (
+    <section className="rounded-[20px] border border-gray-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:p-8">
+      <div className="mb-6 flex items-center gap-4">
+        <div className="h-16 w-16 overflow-hidden rounded-full border border-gray-200 bg-gray-100">
+          {creator.avatarUrl ? (
+            <img src={creator.avatarUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-primary/10 text-xl font-black text-primary">{initial}</div>
+          )}
+        </div>
+        <div className="min-w-0">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-bold text-charcoal">{creator.nickname}</h2>
+            <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600">{profileBadge}</span>
+          </div>
+          <p className="truncate text-sm text-gray-500">{creator.email || "이메일 미등록"}</p>
+        </div>
+      </div>
+
+      <div className="mb-6 flex flex-wrap gap-2">
+        {chips.length ? chips.slice(0, 6).map((chip) => (
+          <span key={chip} className="inline-block rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-charcoal">
+            #{chip.replace(/^#/, "")}
+          </span>
+        )) : (
+          <span className="inline-block rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500">관심 분야 미등록</span>
+        )}
+      </div>
+
+      <Link href="/creator/profile" className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50">
+        <PenLine size={14} />
+        프로필 수정
+      </Link>
+    </section>
+  );
+}
+
+function ActivityStats({
+  applicationsCount,
+  actionRequiredCount,
+  submittedCount,
+  deadlineRate
+}: {
+  applicationsCount: number;
+  actionRequiredCount: number;
+  submittedCount: number;
+  deadlineRate: number;
+}) {
+  return (
+    <section className="rounded-[20px] border border-gray-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+      <h3 className="mb-4 text-base font-bold text-charcoal">활동 요약</h3>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="rounded-xl bg-gray-50 p-4 text-center">
+          <div className="mb-1 text-2xl font-bold text-charcoal">{applicationsCount}</div>
+          <div className="text-xs font-medium text-gray-500">신청한 캠페인</div>
+        </div>
+        <div className="rounded-xl border border-primary/15 bg-primary/10 p-4 text-center">
+          <div className="mb-1 text-2xl font-bold text-primary">{actionRequiredCount}</div>
+          <div className="text-xs font-medium text-primary">진행 중 제출 대기</div>
+        </div>
+        <div className="col-span-2 flex items-center justify-between rounded-xl bg-gray-50 p-4">
+          <div className="text-sm font-medium text-gray-500">완료 및 제출한 콘텐츠</div>
+          <div className="text-lg font-bold text-charcoal">{submittedCount}건</div>
+        </div>
+        <div className="col-span-2 flex items-center justify-between rounded-xl bg-gray-50 p-4">
+          <div className="text-sm font-medium text-gray-500">기한 준수율</div>
+          <div className="text-lg font-bold text-charcoal">{deadlineRate}%</div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ActionRequiredCard({ item }: { item: CreatorCollaboration }) {
+  const isRevision = item.submissionReviewStatus === "needs_revision";
+
+  return (
+    <article className="overflow-hidden rounded-[20px] border border-primary/20 bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+      <div className="flex flex-col items-start gap-5 p-5 sm:flex-row sm:items-center sm:p-6">
+        <div className="h-24 w-full shrink-0 overflow-hidden rounded-lg bg-gray-100 sm:w-32">
+          <img src={item.campaignCoverImage} alt="" className="h-full w-full object-cover" />
+        </div>
+        <div className="min-w-0 flex-grow">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="rounded bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">{isRevision ? "수정 요청" : submissionDeadlineLabel(item.submissionDue)}</span>
+            {item.campaignRegion ? <span className="text-xs font-medium text-gray-500">{item.campaignRegion}</span> : null}
+          </div>
+          <h4 className="mb-1 line-clamp-2 text-base font-bold text-charcoal">{item.campaignTitle}</h4>
+          <p className="text-sm text-gray-500">{item.benefitSummary ? `제공: ${item.benefitSummary}` : `제출 마감 ${formatDateShort(item.submissionDue)}`}</p>
+        </div>
+        <div className="w-full shrink-0 sm:w-auto">
+          <Link href={`/creator/submissions/${item.id}`} className="block w-full rounded-xl bg-primary px-5 py-2.5 text-center text-sm font-bold text-white shadow-md shadow-primary/25 transition-colors hover:bg-primaryHover sm:w-auto">
+            {isRevision ? "다시 제출하기" : "콘텐츠 제출하기"}
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function CollaborationCard({ item }: { item: CreatorCollaboration }) {
+  return (
+    <article className="flex flex-col items-start gap-5 rounded-[20px] border border-gray-100 bg-white p-5 transition-shadow hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:flex-row sm:items-center">
+      <div className="h-20 w-full shrink-0 overflow-hidden rounded-lg bg-gray-100 sm:w-28">
+        <img src={item.campaignCoverImage} alt="" className="h-full w-full object-cover" />
+      </div>
+      <div className="min-w-0 flex-grow">
+        <div className="mb-1.5 flex flex-wrap items-center gap-2">
+          <Badge tone={collaborationStatusTone(item)}>{collaborationStatusLabel(item)}</Badge>
+          <span className="rounded bg-charcoal/90 px-2 py-1 text-[10px] font-bold text-white">{campaignTypeLabel(item.campaignType)}</span>
+        </div>
+        <h4 className="mb-1 line-clamp-1 text-sm font-bold text-charcoal">{item.campaignTitle}</h4>
+        <p className="text-xs text-gray-500">방문일 {formatDateShort(item.visitDate)} · 제출 마감 {formatDateShort(item.submissionDue)}</p>
+      </div>
+      <div className="w-full shrink-0 sm:w-auto">
+        {item.submissionContentUrl ? (
+          <a href={item.submissionContentUrl} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 sm:w-auto">
+            콘텐츠 보기
+            <ExternalLink size={14} />
+          </a>
+        ) : (
+          <Link href={`/campaigns/${item.campaignId}`} className="block w-full rounded-lg border border-gray-200 px-4 py-2 text-center text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 sm:w-auto">
+            캠페인 보기
+          </Link>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function ApplicationCard({ application }: { application: CreatorApplication }) {
+  return (
+    <article className="flex flex-col items-start gap-5 rounded-[20px] border border-gray-100 bg-white p-5 transition-shadow hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:flex-row sm:items-center">
+      <div className="h-20 w-full shrink-0 overflow-hidden rounded-lg bg-gray-100 sm:w-28">
+        <img src={application.campaignCoverImage} alt="" className="h-full w-full object-cover" />
+      </div>
+      <div className="min-w-0 flex-grow">
+        <div className="mb-1.5 flex flex-wrap items-center gap-2">
+          <Badge tone={applicationStatusTone(application.status)}>{applicationStatusLabel(application.status)}</Badge>
+          <span className="rounded bg-charcoal/90 px-2 py-1 text-[10px] font-bold text-white">{campaignTypeLabel(application.campaignType || application.proposedContentType)}</span>
+        </div>
+        <h4 className="mb-1 line-clamp-1 text-sm font-bold text-charcoal">{application.campaignTitle}</h4>
+        <p className="text-xs text-gray-500">
+          {application.selectionDate ? `${formatDateShort(application.selectionDate)} 선정 결과 발표 예정` : application.campaignRegion || "선정 결과를 기다리고 있습니다."}
+        </p>
+      </div>
+      <div className="w-full shrink-0 sm:w-auto">
+        <Link href={`/campaigns/${application.campaignId}`} className="block w-full rounded-lg border border-gray-200 px-4 py-2 text-center text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 sm:w-auto">
+          캠페인 보기
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+function EmptyState({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="rounded-[20px] border border-dashed border-gray-200 bg-white p-8 text-center">
+      <p className="font-bold text-charcoal">{title}</p>
+      <p className="mt-2 text-sm text-gray-500">{description}</p>
+    </div>
+  );
+}
+
+export default async function CreatorDashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   await requireRole("creator", "/creator/dashboard");
+  const { tab } = await searchParams;
+  const activeTab = normalizeTab(tab);
   const { creator, applications, collaborations, submissions } = await getCreatorDashboard();
 
   if (!creator) {
     redirect(`/creator/profile?next=${encodeURIComponent("/creator/dashboard")}`);
   }
 
-  return (
-    <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-black text-charcoal">마이페이지</h1>
-          <p className="mt-2 text-gray-500">{creator.nickname}님의 캠페인 활동과 제출 일정을 관리하세요.</p>
-        </div>
-        <Link href="/creator/profile" className="rounded-lg border border-line bg-white px-4 py-2 text-sm font-black text-charcoal hover:border-primary">프로필 수정</Link>
-      </div>
-      <div className="mb-8 grid gap-4 md:grid-cols-4">
-        <StatCard label="신청한 캠페인" value={`${applications.length}`} icon={<Send size={20} />} />
-        <StatCard label="진행 중" value={`${collaborations.filter((item) => item.status !== "completed").length}`} icon={<Clock size={20} />} />
-        <StatCard label="완료 콘텐츠" value={`${submissions.length}`} icon={<FileCheck2 size={20} />} />
-        <StatCard label="기한 준수율" value={`${creator.deadlineRate}%`} icon={<Trophy size={20} />} />
-      </div>
-      <section className="rounded-lg border border-line bg-white p-6 shadow-sm">
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-xl font-black text-charcoal">콘텐츠 제출이 필요해요</h2>
-          <Badge tone="red">{collaborations.length}건</Badge>
-        </div>
-        <div className="grid gap-5">
-          {collaborations.map((collaboration) => (
-            <div key={collaboration.id} className="grid gap-5 rounded-lg bg-gray-50 p-4 md:grid-cols-[180px_1fr_auto] md:items-center">
-              <img src={collaboration.campaignCoverImage} alt="" className="h-32 w-full rounded-lg object-cover" />
-              <div>
-                <div className="mb-2"><Badge tone={collaboration.status === "completed" ? "green" : "amber"}>{collaboration.status}</Badge></div>
-                <h3 className="text-lg font-black text-charcoal">{collaboration.campaignTitle}</h3>
-                <p className="mt-2 text-sm text-gray-500">방문일 {collaboration.visitDate} · 제출 마감 {collaboration.submissionDue}</p>
-              </div>
-              {collaboration.hasSubmission ? (
-                <span className="rounded-lg bg-white px-5 py-3 text-center text-sm font-black text-gray-500">제출 완료</span>
-              ) : (
-                <Link href={`/creator/submissions/${collaboration.id}`} className="rounded-lg bg-primary px-5 py-3 text-center font-black text-white hover:bg-primaryHover">
-                  콘텐츠 제출하기
-                </Link>
-              )}
-            </div>
-          ))}
-          {collaborations.length === 0 ? <p className="text-sm text-gray-500">선정된 캠페인이 아직 없습니다.</p> : null}
-        </div>
-      </section>
+  const activeApplications = applications.filter((item) => item.status === "submitted" || item.status === "recommended");
+  const activeCollaborations = collaborations.filter((item) => item.status !== "cancelled" && item.status !== "no_show" && !isFinishedCollaboration(item));
+  const actionRequiredCollaborations = activeCollaborations.filter(requiresSubmissionAction);
+  const reviewingCollaborations = activeCollaborations.filter((item) => !requiresSubmissionAction(item));
+  const completedCollaborations = collaborations.filter(isFinishedCollaboration);
+  const activeCount = activeApplications.length + activeCollaborations.length;
+  const completedCount = completedCollaborations.length;
 
-      <section className="mt-8 rounded-lg border border-line bg-white p-6 shadow-sm">
-        <h2 className="mb-5 text-xl font-black text-charcoal">내 지원 현황</h2>
-        <div className="grid gap-3">
-          {applications.map((application) => (
-            <div key={application.id} className="flex flex-col gap-2 rounded-lg bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-black text-charcoal">{application.campaignTitle}</p>
-                <p className="mt-1 text-sm text-gray-500">{application.proposedContentType}</p>
-              </div>
-              <Badge tone={application.status === "selected" ? "green" : application.status === "recommended" ? "amber" : "gray"}>{application.status}</Badge>
-            </div>
-          ))}
-          {applications.length === 0 ? <p className="text-sm text-gray-500">지원한 캠페인이 없습니다.</p> : null}
+  return (
+    <main className="min-h-screen bg-[#F8F9FA]">
+      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 md:py-10 lg:px-8">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-charcoal sm:text-3xl">마이페이지</h1>
+          <p className="mt-2 text-gray-500">{creator.nickname}님의 프로필과 캠페인 활동 내역을 관리하세요.</p>
         </div>
-      </section>
+
+        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
+          <aside className="order-first space-y-6 lg:order-last lg:col-span-4">
+            <ProfileSummary creator={creator} />
+            <ActivityStats
+              applicationsCount={applications.length}
+              actionRequiredCount={actionRequiredCollaborations.length}
+              submittedCount={submissions.length}
+              deadlineRate={creator.deadlineRate}
+            />
+          </aside>
+
+          <section className="lg:col-span-8">
+            <div className="mb-6 border-b border-gray-200">
+              <nav className="flex gap-6" aria-label="크리에이터 활동">
+                <Link href="/creator/dashboard" className={`border-b-2 px-1 py-4 text-sm ${activeTab === "active" ? "border-primary font-bold text-charcoal" : "border-transparent font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700"}`}>
+                  진행 중인 활동
+                  <span className={`ml-1 rounded-full px-2 py-0.5 text-xs ${activeTab === "active" ? "bg-primary/10 text-primary" : "bg-gray-100 text-gray-500"}`}>{activeCount}</span>
+                </Link>
+                <Link href="/creator/dashboard?tab=completed" className={`border-b-2 px-1 py-4 text-sm ${activeTab === "completed" ? "border-primary font-bold text-charcoal" : "border-transparent font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700"}`}>
+                  완료된 캠페인
+                  <span className={`ml-1 rounded-full px-2 py-0.5 text-xs ${activeTab === "completed" ? "bg-primary/10 text-primary" : "bg-gray-100 text-gray-500"}`}>{completedCount}</span>
+                </Link>
+              </nav>
+            </div>
+
+            {activeTab === "active" ? (
+              <div className="space-y-10">
+                <section>
+                  <div className="mb-4 flex items-center justify-between">
+                    <h2 className="flex items-center gap-2 text-lg font-bold text-charcoal">
+                      <AlertCircle size={18} className="text-primary" />
+                      콘텐츠 제출이 필요해요
+                    </h2>
+                  </div>
+                  <div className="space-y-4">
+                    {actionRequiredCollaborations.map((item) => <ActionRequiredCard key={item.id} item={item} />)}
+                    {actionRequiredCollaborations.length === 0 ? (
+                      <EmptyState title="지금 제출할 콘텐츠가 없습니다" description="선정된 캠페인이 생기면 제출 일정이 여기에 표시됩니다." />
+                    ) : null}
+                  </div>
+                </section>
+
+                {reviewingCollaborations.length ? (
+                  <section>
+                    <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-charcoal">
+                      <Clock size={18} className="text-primary" />
+                      검수 중인 콘텐츠
+                    </h2>
+                    <div className="space-y-4">
+                      {reviewingCollaborations.map((item) => <CollaborationCard key={item.id} item={item} />)}
+                    </div>
+                  </section>
+                ) : null}
+
+                <section>
+                  <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-charcoal">
+                    <Send size={18} className="text-primary" />
+                    선정 대기 중인 캠페인
+                  </h2>
+                  <div className="space-y-4">
+                    {activeApplications.map((application) => <ApplicationCard key={application.id} application={application} />)}
+                    {activeApplications.length === 0 ? (
+                      <EmptyState title="선정 대기 중인 캠페인이 없습니다" description="관심 있는 캠페인에 지원하면 결과 대기 내역이 표시됩니다." />
+                    ) : null}
+                  </div>
+                </section>
+              </div>
+            ) : (
+              <section>
+                <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-charcoal">
+                  <CheckCircle2 size={18} className="text-primary" />
+                  완료된 캠페인
+                </h2>
+                <div className="space-y-4">
+                  {completedCollaborations.map((item) => <CollaborationCard key={item.id} item={item} />)}
+                  {completedCollaborations.length === 0 ? (
+                    <EmptyState title="완료된 캠페인이 없습니다" description="콘텐츠가 승인되면 완료 내역이 여기에 표시됩니다." />
+                  ) : null}
+                </div>
+              </section>
+            )}
+          </section>
+        </div>
+      </div>
     </main>
   );
 }

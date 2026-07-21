@@ -242,22 +242,40 @@ export type CreatorDashboardData = {
   creator: {
     id: string;
     nickname: string;
+    email: string;
+    avatarUrl: string;
+    activityAreas: string[];
+    interests: string[];
+    contentTypes: string[];
     deadlineRate: number;
   } | null;
   applications: {
     id: string;
+    campaignId: string;
     campaignTitle: string;
+    campaignCoverImage: string;
+    campaignRegion: string;
+    campaignType: string;
+    selectionDate: string;
+    benefitSummary: string;
     status: string;
     proposedContentType: string;
   }[];
   collaborations: {
     id: string;
+    campaignId: string;
     campaignTitle: string;
     campaignCoverImage: string;
+    campaignRegion: string;
+    campaignType: string;
+    benefitSummary: string;
     visitDate: string;
     submissionDue: string;
     status: string;
     hasSubmission: boolean;
+    submissionReviewStatus: string;
+    submissionContentUrl: string;
+    submissionUpdatedAt: string;
   }[];
   submissions: {
     id: string;
@@ -314,6 +332,10 @@ function formatCreatorChannelSummary(channels?: CreatorChannelRow[] | null) {
   const extra = sortedChannels.length > 1 ? ` 외 ${sortedChannels.length - 1}개` : "";
 
   return `${platform}${channelName}${followers}${extra}`;
+}
+
+function formatBenefitSummary(benefitType?: string | null, benefitValue?: string | null) {
+  return [benefitType, benefitValue].filter(Boolean).join(" / ");
 }
 
 function mapDashboardApplication(row: DashboardApplicationRow): DashboardApplication {
@@ -800,10 +822,10 @@ export async function getCreatorDashboard(): Promise<CreatorDashboardData> {
     return { creator: null, applications: [], collaborations: [], submissions: [] };
   }
 
-  const { data: profile } = await supabase.from("profiles").select("nickname").eq("id", user.id).maybeSingle();
+  const { data: profile } = await supabase.from("profiles").select("nickname,email").eq("id", user.id).maybeSingle();
   const { data: creator } = await supabase
     .from("creator_profiles")
-    .select("id,deadline_rate")
+    .select("id,deadline_rate,avatar_url,activity_areas,interests,content_types")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -814,12 +836,12 @@ export async function getCreatorDashboard(): Promise<CreatorDashboardData> {
   const [applicationRows, collaborationRows, submissionRows] = await Promise.all([
     supabase
       .from("campaign_applications")
-      .select("id,status,proposed_content_type,campaigns(title)")
+      .select("id,campaign_id,status,proposed_content_type,campaigns(title,cover_image_url,region,campaign_type,selection_date,benefit_type,benefit_value)")
       .eq("creator_id", creator.id)
       .order("applied_at", { ascending: false }),
     supabase
       .from("collaborations")
-      .select("id,visit_date,submission_due,status,campaigns(title,cover_image_url),content_submissions(id)")
+      .select("id,campaign_id,visit_date,submission_due,status,campaigns(title,cover_image_url,region,campaign_type,benefit_type,benefit_value),content_submissions(id,review_status,content_url,updated_at)")
       .eq("creator_id", creator.id)
       .order("created_at", { ascending: false }),
     supabase
@@ -832,27 +854,46 @@ export async function getCreatorDashboard(): Promise<CreatorDashboardData> {
     creator: {
       id: creator.id,
       nickname: profile?.nickname ?? "크리에이터",
+      email: profile?.email ?? user.email ?? "",
+      avatarUrl: creator.avatar_url ?? "",
+      activityAreas: asStringArray(creator.activity_areas),
+      interests: asStringArray(creator.interests),
+      contentTypes: asStringArray(creator.content_types),
       deadlineRate: Number(creator.deadline_rate ?? 0)
     },
     applications: (applicationRows.data ?? []).map((application) => {
       const campaign = Array.isArray(application.campaigns) ? application.campaigns[0] : application.campaigns;
       return {
         id: application.id,
+        campaignId: application.campaign_id,
         campaignTitle: campaign?.title ?? "캠페인",
+        campaignCoverImage: campaign?.cover_image_url ?? "https://storage.googleapis.com/uxpilot-auth.appspot.com/default-placeholder.png",
+        campaignRegion: campaign?.region ?? "",
+        campaignType: campaign?.campaign_type ?? "",
+        selectionDate: campaign?.selection_date ?? "",
+        benefitSummary: formatBenefitSummary(campaign?.benefit_type, campaign?.benefit_value),
         status: application.status,
         proposedContentType: application.proposed_content_type ?? ""
       };
     }),
     collaborations: (collaborationRows.data ?? []).map((collaboration) => {
       const campaign = Array.isArray(collaboration.campaigns) ? collaboration.campaigns[0] : collaboration.campaigns;
+      const submission = collaboration.content_submissions?.[0] ?? null;
       return {
         id: collaboration.id,
+        campaignId: collaboration.campaign_id,
         campaignTitle: campaign?.title ?? "캠페인",
         campaignCoverImage: campaign?.cover_image_url ?? "https://storage.googleapis.com/uxpilot-auth.appspot.com/default-placeholder.png",
+        campaignRegion: campaign?.region ?? "",
+        campaignType: campaign?.campaign_type ?? "",
+        benefitSummary: formatBenefitSummary(campaign?.benefit_type, campaign?.benefit_value),
         visitDate: collaboration.visit_date ?? "미정",
         submissionDue: collaboration.submission_due ?? "미정",
         status: collaboration.status,
-        hasSubmission: Boolean(collaboration.content_submissions?.length)
+        hasSubmission: Boolean(submission),
+        submissionReviewStatus: submission?.review_status ?? "",
+        submissionContentUrl: submission?.content_url ?? "",
+        submissionUpdatedAt: submission?.updated_at ?? ""
       };
     }),
     submissions: (submissionRows.data ?? []).map((submission) => ({
