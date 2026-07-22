@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import type { UserRole } from "@/lib/types";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -14,9 +15,16 @@ function withError(path: string, message: string) {
   return `${path}${separator}error=${encodeURIComponent(message)}`;
 }
 
-export async function getCurrentSessionProfile() {
+export const getCurrentSessionProfile = cache(async function getCurrentSessionProfile() {
   const supabase = await createSupabaseServerClient();
-  const { data: authData } = await supabase.auth.getUser();
+  const { data: authData, error: authError } = await supabase.auth.getUser().catch(() => ({
+    data: { user: null },
+    error: new Error("Failed to read current user")
+  }));
+  if (authError) {
+    return { supabase, user: null, profile: null };
+  }
+
   const user = authData.user;
 
   if (!user) {
@@ -30,7 +38,7 @@ export async function getCurrentSessionProfile() {
     .maybeSingle();
 
   return { supabase, user, profile };
-}
+});
 
 export async function requireUser(next = "/") {
   const session = await getCurrentSessionProfile();

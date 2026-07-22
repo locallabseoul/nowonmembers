@@ -65,7 +65,12 @@ async function getCreatorApplicationDefaults() {
     message: ""
   };
   const supabase = await createSupabaseServerClient();
-  const { data: authData } = await supabase.auth.getUser();
+  const { data: authData, error: authError } = await supabase.auth.getUser().catch(() => ({
+    data: { user: null },
+    error: new Error("Failed to read current user")
+  }));
+  if (authError) return empty;
+
   const user = authData.user;
 
   if (!user) return empty;

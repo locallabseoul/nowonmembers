@@ -739,6 +739,15 @@ async function syncExpiredCampaigns(supabase: Awaited<ReturnType<typeof createSu
   await supabase.rpc("sync_expired_campaigns");
 }
 
+async function getCurrentSupabaseUser(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
+  const { data, error } = await supabase.auth.getUser().catch(() => ({
+    data: { user: null },
+    error: new Error("Failed to read current user")
+  }));
+
+  return error ? null : data.user;
+}
+
 async function getSelectedCampaignSubmissions(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   selectedCampaign: DashboardCampaign | null
@@ -812,8 +821,7 @@ export function getDisplayCreator(id: string) {
 export async function getBusinessDashboard(selectedCampaignId?: string): Promise<BusinessDashboardData> {
   const supabase = await createSupabaseServerClient();
   await syncExpiredCampaigns(supabase);
-  const { data: authData } = await supabase.auth.getUser();
-  const user = authData.user;
+  const user = await getCurrentSupabaseUser(supabase);
 
   if (!user) {
     return { business: null, campaigns: [], selectedCampaign: null, selectedCampaignApplications: [], selectedCampaignSubmissions: [], recommendedApplications: [] };
@@ -901,8 +909,7 @@ export async function getBusinessCreatorManagement({
 } = {}): Promise<BusinessCreatorManagementData> {
   const supabase = await createSupabaseServerClient();
   await syncExpiredCampaigns(supabase);
-  const { data: authData } = await supabase.auth.getUser();
-  const user = authData.user;
+  const user = await getCurrentSupabaseUser(supabase);
   const normalizedQuery = q?.trim() ?? "";
   const normalizedCampaignId = campaignId?.trim() ?? "";
   const normalizedRehire = rehire === "yes" || rehire === "no" ? rehire : "all";
@@ -1061,8 +1068,7 @@ export async function getBusinessCreatorManagement({
 export async function getAdminDashboard(selectedCampaignId?: string): Promise<AdminDashboardData> {
   const supabase = await createSupabaseServerClient();
   await syncExpiredCampaigns(supabase);
-  const { data: authData } = await supabase.auth.getUser();
-  const user = authData.user;
+  const user = await getCurrentSupabaseUser(supabase);
 
   if (!user) {
     return {
@@ -1165,8 +1171,7 @@ export async function getAdminDashboard(selectedCampaignId?: string): Promise<Ad
 
 export async function getCreatorDashboard(): Promise<CreatorDashboardData> {
   const supabase = await createSupabaseServerClient();
-  const { data: authData } = await supabase.auth.getUser();
-  const user = authData.user;
+  const user = await getCurrentSupabaseUser(supabase);
 
   if (!user) {
     return { creator: null, applications: [], collaborations: [], submissions: [] };
