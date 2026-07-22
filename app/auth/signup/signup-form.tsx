@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 import { BriefcaseBusiness, Camera, CheckCircle2, UserPlus } from "lucide-react";
 
 type SignupRole = "creator" | "business";
 type SignupAction = (formData: FormData) => void | Promise<void>;
+type NicknameCheckStatus = "idle" | "checking" | "available" | "unavailable" | "error";
 
 function Field({
   label,
@@ -35,6 +36,83 @@ function Field({
         className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all placeholder:text-gray-400 focus:border-primary focus:ring-2 focus:ring-primary/20"
         placeholder={placeholder}
       />
+    </label>
+  );
+}
+
+function NicknameField({
+  label,
+  name,
+  placeholder,
+  value,
+  onChange,
+  status,
+  message
+}: {
+  label: string;
+  name: string;
+  placeholder: string;
+  value: string;
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  status: NicknameCheckStatus;
+  message: string;
+}) {
+  const tone = status === "available" ? "text-emerald-700" : status === "checking" ? "text-gray-500" : "text-primary";
+
+  return (
+    <label className="block space-y-2">
+      <span className="block text-sm font-bold text-gray-700">
+        {label} <span className="text-primary">*</span>
+      </span>
+      <input
+        name={name}
+        value={value}
+        onChange={onChange}
+        required
+        minLength={2}
+        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all placeholder:text-gray-400 focus:border-primary focus:ring-2 focus:ring-primary/20"
+        placeholder={placeholder}
+      />
+      {message ? <p className={`text-xs font-bold ${tone}`}>{message}</p> : null}
+    </label>
+  );
+}
+
+function formatPhone(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
+function PhoneField({
+  value,
+  onChange
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block space-y-2">
+      <span className="block text-sm font-bold text-gray-700">
+        전화번호 <span className="text-primary">*</span>
+      </span>
+      <input
+        name="phone"
+        type="tel"
+        inputMode="numeric"
+        autoComplete="tel"
+        value={value}
+        onChange={(event) => onChange(formatPhone(event.target.value))}
+        required
+        minLength={12}
+        maxLength={13}
+        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all placeholder:text-gray-400 focus:border-primary focus:ring-2 focus:ring-primary/20"
+        placeholder="010-0000-0000"
+      />
+      <p className="text-xs font-medium text-gray-400">숫자만 입력해도 자동으로 하이픈이 입력됩니다.</p>
     </label>
   );
 }
@@ -91,6 +169,62 @@ export function SignupForm({
   initialRole: SignupRole;
 }) {
   const [role, setRole] = useState<SignupRole>(initialRole);
+  const [creatorNickname, setCreatorNickname] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [nicknameStatus, setNicknameStatus] = useState<NicknameCheckStatus>("idle");
+  const [nicknameMessage, setNicknameMessage] = useState("");
+  const activeNickname = useMemo(
+    () => (role === "business" ? businessName : creatorNickname).trim(),
+    [businessName, creatorNickname, role]
+  );
+
+  useEffect(() => {
+    if (activeNickname.length === 0) {
+      setNicknameStatus("idle");
+      setNicknameMessage("");
+      return;
+    }
+
+    if (activeNickname.length < 2) {
+      setNicknameStatus("unavailable");
+      setNicknameMessage("닉네임/상호는 2자 이상 입력해주세요.");
+      return;
+    }
+
+    const controller = new AbortController();
+    setNicknameStatus("checking");
+    setNicknameMessage("중복 확인 중입니다.");
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/auth/signup/check-nickname?value=${encodeURIComponent(activeNickname)}`, {
+          signal: controller.signal
+        });
+        const result = await response.json() as { available?: boolean; message?: string };
+
+        if (!response.ok) {
+          setNicknameStatus("error");
+          setNicknameMessage(result.message ?? "닉네임 중복 확인 중 오류가 발생했습니다.");
+          return;
+        }
+
+        setNicknameStatus(result.available ? "available" : "unavailable");
+        setNicknameMessage(result.message ?? (result.available ? "사용 가능한 닉네임입니다." : "이미 사용 중인 닉네임입니다."));
+      } catch {
+        if (controller.signal.aborted) return;
+        setNicknameStatus("error");
+        setNicknameMessage("닉네임 중복 확인 중 오류가 발생했습니다.");
+      }
+    }, 400);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [activeNickname]);
+
+  const canSubmit = nicknameStatus === "available";
 
   return (
     <div className="w-full max-w-2xl rounded-[20px] border border-gray-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:p-10">
@@ -146,22 +280,38 @@ export function SignupForm({
           {role === "business" ? (
             <>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <Field label="상호" name="business_name" placeholder="노원역 감성카페" />
+                <NicknameField
+                  label="상호"
+                  name="business_name"
+                  placeholder="노원역 감성카페"
+                  value={businessName}
+                  onChange={(event) => setBusinessName(event.target.value)}
+                  status={nicknameStatus}
+                  message={role === "business" ? nicknameMessage : ""}
+                />
                 <Field label="사업자등록번호" name="business_registration_number" placeholder="000-00-00000" />
               </div>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <Field label="담당자명" name="manager_name" placeholder="홍길동" />
-                <Field label="전화번호" name="phone" type="tel" placeholder="010-0000-0000" />
+                <PhoneField value={phone} onChange={setPhone} />
               </div>
               <Field label="추천코드" name="referral_code" placeholder="추천코드가 있다면 입력" required={false} />
             </>
           ) : (
             <>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <Field label="닉네임" name="nickname" placeholder="노원리뷰어" />
+                <NicknameField
+                  label="닉네임"
+                  name="nickname"
+                  placeholder="노원리뷰어"
+                  value={creatorNickname}
+                  onChange={(event) => setCreatorNickname(event.target.value)}
+                  status={nicknameStatus}
+                  message={role === "creator" ? nicknameMessage : ""}
+                />
                 <Field label="이름" name="name" placeholder="홍길동" />
               </div>
-              <Field label="전화번호" name="phone" type="tel" placeholder="010-0000-0000" />
+              <PhoneField value={phone} onChange={setPhone} />
             </>
           )}
         </section>
@@ -184,7 +334,11 @@ export function SignupForm({
         </section>
 
         <div className="pt-2">
-          <button type="submit" className="w-full rounded-xl bg-primary px-5 py-4 font-black text-white shadow-sm transition-colors hover:bg-primaryHover">
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="w-full rounded-xl bg-primary px-5 py-4 font-black text-white shadow-sm transition-colors hover:bg-primaryHover disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
+          >
             가입 완료하기
           </button>
           <p className="mt-4 text-center text-sm text-gray-500">

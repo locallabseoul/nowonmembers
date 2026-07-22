@@ -29,11 +29,44 @@ function getSignupRedirect(role: "business" | "creator", error: string) {
   return `/auth/signup?role=${role}&error=${encodeURIComponent(error)}`;
 }
 
+function getDuplicateSignupMessage(error: { code?: string; message?: string; status?: number } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? "";
+
+  if (message.includes("profiles_nickname_normalized_unique") || message.includes("nickname")) {
+    return "이미 사용 중인 닉네임입니다.";
+  }
+
+  if (message.includes("profiles_phone_normalized_unique") || message.includes("phone")) {
+    return "이미 가입된 전화번호입니다.";
+  }
+
+  if (
+    message.includes("profiles_email_normalized_unique") ||
+    message.includes("email") ||
+    message.includes("already registered") ||
+    message.includes("already exists") ||
+    message.includes("user already registered") ||
+    error?.status === 422
+  ) {
+    return "이미 가입된 이메일입니다.";
+  }
+
+  if (error?.code === "23505" || message.includes("duplicate") || message.includes("unique")) {
+    return "이미 사용 중인 정보가 있습니다.";
+  }
+
+  return null;
+}
+
 function requiredText(formData: FormData, name: string, label: string, role: "business" | "creator") {
   const value = String(formData.get(name) ?? "").trim();
   if (!value) redirect(getSignupRedirect(role, `${label}을(를) 입력해주세요.`));
 
   return value;
+}
+
+function normalizePhone(phone: string) {
+  return phone.replace(/\D/g, "");
 }
 
 export async function signIn(formData: FormData) {
@@ -61,7 +94,7 @@ export async function signIn(formData: FormData) {
 export async function signUp(formData: FormData) {
   const rawRole = String(formData.get("role") ?? "creator");
   const role: "business" | "creator" = rawRole === "business" ? "business" : "creator";
-  const email = requiredText(formData, "email", "이메일", role);
+  const email = requiredText(formData, "email", "이메일", role).toLowerCase();
   const password = requiredText(formData, "password", "비밀번호", role);
   const agreedTerms = formData.get("agreement_terms") === "on";
   const agreedPrivacy = formData.get("agreement_privacy") === "on";
@@ -80,7 +113,11 @@ export async function signUp(formData: FormData) {
   const name = role === "business"
     ? requiredText(formData, "manager_name", "담당자명", role)
     : requiredText(formData, "name", "이름", role);
-  const phone = requiredText(formData, "phone", "전화번호", role);
+  const phone = normalizePhone(requiredText(formData, "phone", "전화번호", role));
+  if (phone.length < 10 || phone.length > 11) {
+    redirect(getSignupRedirect(role, "전화번호를 정확히 입력해주세요."));
+  }
+
   const businessRegistrationNumber = role === "business"
     ? requiredText(formData, "business_registration_number", "사업자등록번호", role)
     : null;
@@ -92,6 +129,45 @@ export async function signUp(formData: FormData) {
     (origin ? `${origin}/auth/callback?next=${encodeURIComponent(profilePathForRole(role))}` : undefined);
 
   const supabase = await createSupabaseServerClient();
+  const { data: isEmailAvailable, error: emailAvailabilityError } = await supabase.rpc("is_signup_email_available", {
+    target_email: email
+  });
+
+  if (emailAvailabilityError) {
+    redirect(getSignupRedirect(role, "이메일 중복 확인 중 오류가 발생했습니다."));
+  }
+
+  if (!isEmailAvailable) {
+    redirect(getSignupRedirect(role, "이미 가입된 이메일입니다."));
+  }
+
+  const { data: isNicknameAvailable, error: nicknameAvailabilityError } = await supabase.rpc(
+    "is_signup_nickname_available",
+    {
+      target_nickname: nickname
+    }
+  );
+
+  if (nicknameAvailabilityError) {
+    redirect(getSignupRedirect(role, "닉네임 중복 확인 중 오류가 발생했습니다."));
+  }
+
+  if (!isNicknameAvailable) {
+    redirect(getSignupRedirect(role, "이미 사용 중인 닉네임입니다."));
+  }
+
+  const { data: isPhoneAvailable, error: phoneAvailabilityError } = await supabase.rpc("is_signup_phone_available", {
+    target_phone: phone
+  });
+
+  if (phoneAvailabilityError) {
+    redirect(getSignupRedirect(role, "전화번호 중복 확인 중 오류가 발생했습니다."));
+  }
+
+  if (!isPhoneAvailable) {
+    redirect(getSignupRedirect(role, "이미 가입된 전화번호입니다."));
+  }
+
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -108,7 +184,7 @@ export async function signUp(formData: FormData) {
     }
   });
 
-  if (error) redirect(getSignupRedirect(role, error.message));
+  if (error) redirect(getSignupRedirect(role, getDuplicateSignupMessage(error) ?? error.message));
 
   if (data.session && data.user) {
     const { error: profileError } = await supabase.from("profiles").upsert({
@@ -124,7 +200,7 @@ export async function signUp(formData: FormData) {
       status: "active"
     });
 
-    if (profileError) redirect(getSignupRedirect(role, profileError.message));
+    if (profileError) redirect(getSignupRedirect(role, getDuplicateSignupMessage(profileError) ?? profileError.message));
   }
 
   if (!data.session) {
