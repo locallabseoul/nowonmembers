@@ -52,6 +52,11 @@ function normalizeBusinessRegistrationNumber(value: string) {
   return value.replace(/\D/g, "");
 }
 
+function toCoordinate(value: FormDataEntryValue | null) {
+  const coordinate = Number(String(value ?? "").trim());
+  return Number.isFinite(coordinate) ? coordinate : null;
+}
+
 function getProfileDuplicateMessage(error: { code?: string; message?: string } | null | undefined) {
   const message = error?.message?.toLowerCase() ?? "";
 
@@ -153,10 +158,17 @@ export async function saveBusinessProfile(formData: FormData) {
   const category = requiredText(formData, "category", "업종");
   const shortIntro = requiredText(formData, "short_intro", "한 줄 소개");
   const address = requiredText(formData, "address", "주소");
-  const district = requiredText(formData, "district", "활동 지역");
+  const addressDetail = nullableText(formData, "address_detail");
+  const latitude = toCoordinate(formData.get("latitude"));
+  const longitude = toCoordinate(formData.get("longitude"));
+  const district = requiredText(formData, "district", "소재지");
   const contact = normalizePhone(requiredText(formData, "contact", "매장 연락처"));
   if (contact.length < 8 || contact.length > 11) {
     redirectWithError(formData, "매장 연락처를 정확히 입력해주세요.");
+  }
+
+  if (latitude === null || longitude === null) {
+    redirectWithError(formData, "주소 검색 결과에서 매장 위치를 선택해주세요.");
   }
 
   const businessHoursSummary = requiredText(formData, "business_hours_summary", "영업시간");
@@ -227,6 +239,9 @@ export async function saveBusinessProfile(formData: FormData) {
     short_intro: shortIntro,
     description: nullableText(formData, "description"),
     address,
+    address_detail: addressDetail,
+    latitude,
+    longitude,
     district,
     contact,
     business_hours: {

@@ -601,7 +601,7 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
   const sortOrder = normalizeCampaignSort(sort);
   const searchQuery = q?.trim() ?? "";
   await requireRole("business", "/business/dashboard");
-  const { business, campaigns, selectedCampaign, selectedCampaignApplications, selectedCampaignSubmissions } = await getBusinessDashboard(campaign);
+  const { business, businessProfileDefaults, campaigns, selectedCampaign, selectedCampaignApplications, selectedCampaignSubmissions } = await getBusinessDashboard(campaign);
   const filteredApplications = filterApplications(selectedCampaignApplications, statusFilter);
   const visibleCampaigns = getFilteredCampaigns(campaigns, campaignFilter, searchQuery, sortOrder);
   const totalPages = Math.max(Math.ceil(visibleCampaigns.length / CAMPAIGNS_PER_PAGE), 1);
@@ -617,7 +617,7 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
   if (!business) {
     return (
       <main className="bg-[#F8F9FA]">
-        <BusinessProfileWizard action={saveBusinessProfile} error={error} message={message} next={next} />
+        <BusinessProfileWizard action={saveBusinessProfile} error={error} message={message} next={next} initialBusiness={businessProfileDefaults ?? undefined} />
       </main>
     );
   }

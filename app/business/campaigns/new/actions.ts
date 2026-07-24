@@ -30,6 +30,11 @@ function toNullableNumber(value: FormDataEntryValue | null) {
   return raw ? Number(raw) : null;
 }
 
+function toCoordinate(value: FormDataEntryValue | null) {
+  const coordinate = Number(String(value ?? "").trim());
+  return Number.isFinite(coordinate) ? coordinate : null;
+}
+
 function redirectWithError(message: string): never {
   redirect(`/business/campaigns/new?error=${encodeURIComponent(message)}`);
 }
@@ -90,15 +95,24 @@ export async function createCampaign(formData: FormData) {
   const { supabase, user } = await requireRole("business", "/business/campaigns/new");
   const title = String(formData.get("title") ?? "").trim();
   const region = String(formData.get("region") ?? "").trim();
+  const regionDetail = String(formData.get("region_detail") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const benefitValue = String(formData.get("benefit_value") ?? "").trim();
   const recruitCount = Number(formData.get("recruit_count") ?? 0);
   const recruitEnd = String(formData.get("recruit_end") ?? "");
+  const selectionDate = String(formData.get("selection_date") ?? "");
+  const submissionDue = String(formData.get("submission_due") ?? "");
+  const latitude = toCoordinate(formData.get("latitude"));
+  const longitude = toCoordinate(formData.get("longitude"));
   const coverImage = getImageFile(formData, "cover_image");
   const referenceImages = getImageFiles(formData, "reference_images").slice(0, 6);
 
   if (!title || !region || !description || !benefitValue || !recruitCount || !recruitEnd) {
-    redirectWithError("캠페인 제목, 지역, 모집 인원, 모집 마감일, 제공 내역, 상세 설명을 입력해주세요.");
+    redirectWithError("캠페인 제목, 주소, 모집 인원, 모집 마감일, 제공 내역, 상세 설명을 입력해주세요.");
+  }
+
+  if (latitude === null || longitude === null) {
+    redirectWithError("주소 검색 결과에서 캠페인 위치를 선택해주세요.");
   }
 
   if (!coverImage) {
@@ -107,6 +121,14 @@ export async function createCampaign(formData: FormData) {
 
   if (recruitEnd < getKoreaTodayString()) {
     redirectWithError("모집 마감일은 오늘 또는 이후 날짜로 설정해주세요.");
+  }
+
+  if (selectionDate && selectionDate < recruitEnd) {
+    redirectWithError("선정 발표일은 모집 마감일과 같거나 이후 날짜로 설정해주세요.");
+  }
+
+  if (submissionDue && selectionDate && submissionDue < selectionDate) {
+    redirectWithError("콘텐츠 등록 마감일은 선정 발표일과 같거나 이후 날짜로 설정해주세요.");
   }
 
   const imageValidationError = [coverImage, ...referenceImages]
@@ -153,14 +175,17 @@ export async function createCampaign(formData: FormData) {
     description,
     campaign_type: String(formData.get("campaign_type") ?? "visit"),
     region,
+    region_detail: regionDetail || null,
+    latitude,
+    longitude,
     category: String(formData.get("category") ?? ""),
     recruit_count: recruitCount,
     recruit_start: String(formData.get("recruit_start") ?? "") || null,
     recruit_end: recruitEnd,
-    selection_date: String(formData.get("selection_date") ?? "") || null,
+    selection_date: selectionDate || null,
     visit_start: String(formData.get("visit_start") ?? "") || null,
     visit_end: String(formData.get("visit_end") ?? "") || null,
-    submission_due: String(formData.get("submission_due") ?? "") || null,
+    submission_due: submissionDue || null,
     benefit_type: String(formData.get("benefit_type") ?? ""),
     benefit_value: benefitValue,
     fee: toNullableNumber(formData.get("fee")),

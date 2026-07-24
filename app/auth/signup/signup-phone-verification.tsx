@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
-import { verifyAuthPhoneOtp } from "../actions";
+import { resendAuthPhoneOtp, verifyAuthPhoneOtp } from "../actions";
 
 type SignupRole = "creator" | "business";
 
@@ -42,6 +42,16 @@ export function SignupPhoneVerification({
           <input name="token" inputMode="numeric" autoComplete="one-time-code" required className="w-full rounded-lg border border-line px-4 py-3 text-sm focus-ring" placeholder="6자리 인증번호" />
         </label>
         <button className="w-full rounded-xl bg-primary px-5 py-3 font-black text-white shadow-sm transition-colors hover:bg-primaryHover">인증 완료하고 시작하기</button>
+      </form>
+
+      <form action={resendAuthPhoneOtp} className="mt-3">
+        <input type="hidden" name="role" value={role} />
+        <input type="hidden" name="phone" value={phone} />
+        <input type="hidden" name="type" value="sms" />
+        <input type="hidden" name="source" value="signup" />
+        <button className="w-full rounded-xl border border-line bg-white px-5 py-3 text-sm font-black text-charcoal transition-colors hover:border-primary hover:text-primary">
+          인증번호 다시 보내기
+        </button>
       </form>
 
       <p className="mt-5 text-center text-sm text-gray-500">

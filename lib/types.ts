@@ -33,6 +33,9 @@ export type BusinessProfile = {
   shortIntro: string;
   description: string;
   address: string;
+  addressDetail?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   district: string;
   contact: string;
   businessHours: string;
@@ -64,6 +67,9 @@ export type Campaign = {
   description: string;
   campaignType: "visit" | "shortform" | "interview";
   region: string;
+  regionDetail?: string | null;
+  latitude?: number;
+  longitude?: number;
   category: string;
   recruitCount: number;
   appliedCount: number;

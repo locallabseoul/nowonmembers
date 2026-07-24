@@ -10,6 +10,9 @@ type CampaignRow = {
   description: string | null;
   campaign_type: string;
   region: string;
+  region_detail: string | null;
+  latitude: number | null;
+  longitude: number | null;
   category: string | null;
   recruit_count: number;
   recruit_start: string | null;
@@ -235,14 +238,16 @@ export type DashboardSubmission = {
   } | null;
 };
 
-export type BusinessDashboardData = {
-  business: {
+export type BusinessDashboardBusiness = {
     id: string;
     businessName: string;
     category: string;
     shortIntro: string;
     description: string;
     address: string;
+    addressDetail: string;
+    latitude: number | null;
+    longitude: number | null;
     district: string;
     contact: string;
     businessHours: string;
@@ -262,7 +267,11 @@ export type BusinessDashboardData = {
       emailVerified: boolean;
       phoneVerified: boolean;
     };
-  } | null;
+};
+
+export type BusinessDashboardData = {
+  business: BusinessDashboardBusiness | null;
+  businessProfileDefaults: BusinessDashboardBusiness | null;
   campaigns: DashboardCampaign[];
   selectedCampaign: DashboardCampaign | null;
   selectedCampaignApplications: DashboardApplication[];
@@ -331,6 +340,60 @@ export type BusinessCreatorManagementData = {
     rehire: "all" | "yes" | "no";
   };
 };
+
+function buildBusinessProfileDefaults({
+  user,
+  profile
+}: {
+  user: {
+    email?: string | null;
+    email_confirmed_at?: string | null;
+    phone?: string | null;
+    phone_confirmed_at?: string | null;
+  };
+  profile: {
+    nickname?: string | null;
+    email?: string | null;
+    name?: string | null;
+    phone?: string | null;
+    business_registration_number?: string | null;
+    referral_code?: string | null;
+  } | null;
+}): BusinessDashboardBusiness {
+  return {
+    id: "signup-defaults",
+    businessName: profile?.nickname ?? "",
+    category: "",
+    shortIntro: "",
+    description: "",
+    address: "",
+    addressDetail: "",
+    latitude: null,
+    longitude: null,
+    district: "",
+    contact: "",
+    businessHours: "",
+    businessHoursPreset: "",
+    businessHoursNote: "",
+    websiteUrl: "",
+    socialUrls: [],
+    verificationStatus: "pending",
+    isPublic: false,
+    coverImage: "",
+    managerName: profile?.name ?? "",
+    managerEmail: profile?.email ?? user.email ?? "",
+    managerPhone: profile?.phone ?? "",
+    businessRegistrationNumber: profile?.business_registration_number ?? "",
+    referralCode: profile?.referral_code ?? "",
+    verification: {
+      emailVerified: Boolean(user.email_confirmed_at),
+      phoneVerified: Boolean(
+        user.phone_confirmed_at
+        && normalizeKoreanAuthPhone(user.phone) === normalizeKoreanAuthPhone(profile?.phone)
+      )
+    }
+  };
+}
 
 export type AdminDashboardData = {
   stats: {
@@ -708,6 +771,9 @@ function mapCampaign(row: CampaignRow): Campaign {
     description: row.description ?? "",
     campaignType: row.campaign_type === "shortform" ? "shortform" : row.campaign_type === "interview" ? "interview" : "visit",
     region: row.region,
+    regionDetail: row.region_detail ?? undefined,
+    latitude: row.latitude ?? undefined,
+    longitude: row.longitude ?? undefined,
     category: row.category ?? "콘텐츠 협업",
     recruitCount: row.recruit_count,
     appliedCount: row.campaign_applications?.[0]?.count ?? 0,
@@ -834,24 +900,26 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
   const user = await getCurrentSupabaseUser(supabase);
 
   if (!user) {
-    return { business: null, campaigns: [], selectedCampaign: null, selectedCampaignApplications: [], selectedCampaignSubmissions: [], recommendedApplications: [] };
+    return { business: null, businessProfileDefaults: null, campaigns: [], selectedCampaign: null, selectedCampaignApplications: [], selectedCampaignSubmissions: [], recommendedApplications: [] };
   }
 
   const [{ data: business }, { data: profile }] = await Promise.all([
     supabase
       .from("business_profiles")
-      .select("id,business_name,category,short_intro,description,address,district,contact,business_hours,website_url,social_urls,verification_status,is_public,cover_image_url")
+      .select("id,business_name,category,short_intro,description,address,address_detail,latitude,longitude,district,contact,business_hours,website_url,social_urls,verification_status,is_public,cover_image_url")
       .eq("user_id", user.id)
       .maybeSingle(),
     supabase
       .from("profiles")
-      .select("email,name,phone,business_registration_number,referral_code")
+      .select("nickname,email,name,phone,business_registration_number,referral_code")
       .eq("id", user.id)
       .maybeSingle()
   ]);
 
+  const businessProfileDefaults = buildBusinessProfileDefaults({ user, profile });
+
   if (!business) {
-    return { business: null, campaigns: [], selectedCampaign: null, selectedCampaignApplications: [], selectedCampaignSubmissions: [], recommendedApplications: [] };
+    return { business: null, businessProfileDefaults, campaigns: [], selectedCampaign: null, selectedCampaignApplications: [], selectedCampaignSubmissions: [], recommendedApplications: [] };
   }
 
   const { data: campaignRows } = await supabase
@@ -892,6 +960,9 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
       shortIntro: business.short_intro ?? "",
       description: business.description ?? "",
       address: business.address ?? "",
+      addressDetail: business.address_detail ?? "",
+      latitude: business.latitude === null ? null : Number(business.latitude),
+      longitude: business.longitude === null ? null : Number(business.longitude),
       district: business.district ?? "",
       contact: business.contact ?? "",
       businessHours: getBusinessHoursText(business.business_hours as BusinessHoursValue, "summary"),
@@ -915,6 +986,7 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
         )
       }
     },
+    businessProfileDefaults,
     campaigns,
     selectedCampaign,
     selectedCampaignApplications,
@@ -963,7 +1035,7 @@ export async function getBusinessCreatorManagement({
   const [{ data: business }, { data: profile }] = await Promise.all([
     supabase
       .from("business_profiles")
-      .select("id,business_name,category,short_intro,description,address,district,contact,business_hours,website_url,social_urls,verification_status,is_public,cover_image_url")
+      .select("id,business_name,category,short_intro,description,address,address_detail,latitude,longitude,district,contact,business_hours,website_url,social_urls,verification_status,is_public,cover_image_url")
       .eq("user_id", user.id)
       .maybeSingle(),
     supabase
@@ -982,6 +1054,9 @@ export async function getBusinessCreatorManagement({
     shortIntro: business.short_intro ?? "",
     description: business.description ?? "",
     address: business.address ?? "",
+    addressDetail: business.address_detail ?? "",
+    latitude: business.latitude === null ? null : Number(business.latitude),
+    longitude: business.longitude === null ? null : Number(business.longitude),
     district: business.district ?? "",
     contact: business.contact ?? "",
     businessHours: getBusinessHoursText(business.business_hours as BusinessHoursValue, "summary"),

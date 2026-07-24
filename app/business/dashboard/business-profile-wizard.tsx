@@ -41,6 +41,9 @@ type BusinessProfileDraft = {
   district: string;
   short_intro: string;
   address: string;
+  address_detail: string;
+  latitude: string;
+  longitude: string;
   contact: string;
   business_hours_preset: string;
   business_hours_custom: string;
@@ -53,6 +56,14 @@ type BusinessProfileDraft = {
 type ImagePreview = {
   url: string;
   name: string;
+};
+
+type AddressSearchResult = {
+  address: string;
+  jibunAddress?: string;
+  roadAddress?: string;
+  latitude: string;
+  longitude: string;
 };
 
 const steps = [
@@ -135,6 +146,9 @@ function createInitialDraft(initial?: InitialBusinessProfile): BusinessProfileDr
     district: initial?.district ?? "",
     short_intro: initial?.shortIntro ?? "",
     address: initial?.address ?? "",
+    address_detail: initial?.addressDetail ?? "",
+    latitude: initial?.latitude === null || initial?.latitude === undefined ? "" : String(initial.latitude),
+    longitude: initial?.longitude === null || initial?.longitude === undefined ? "" : String(initial.longitude),
     contact: formatContactNumber(initial?.contact ?? ""),
     business_hours_preset: businessHours.preset,
     business_hours_custom: businessHours.custom,
@@ -246,7 +260,8 @@ function BusinessProfileCreateWizard({
   const [draftLoaded, setDraftLoaded] = useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const isEditMode = mode === "edit";
-  const draftStorageKey = `business-profile-wizard:${mode}:${initialBusiness?.id ?? "new"}`;
+  const draftIdentity = initialBusiness?.managerEmail || initialBusiness?.managerPhone || initialBusiness?.id || "anonymous";
+  const draftStorageKey = `business-profile-wizard:${mode}:${draftIdentity}`;
   const businessHoursSummary = useMemo(() => getBusinessHoursSummary(draft), [draft]);
   const displayImageUrl = coverImagePreview?.url ?? initialBusiness?.coverImage ?? "";
   const title = isEditMode ? "가게 프로필 수정" : "가게 프로필 등록";
@@ -260,6 +275,10 @@ function BusinessProfileCreateWizard({
         setDraft((current) => ({
           ...current,
           ...parsedDraft,
+          business_name: current.business_name || parsedDraft.business_name || "",
+          manager_name: current.manager_name || parsedDraft.manager_name || "",
+          manager_phone: current.manager_phone || parsedDraft.manager_phone || "",
+          business_registration_number: current.business_registration_number || parsedDraft.business_registration_number || "",
           social_urls: Array.isArray(parsedDraft.social_urls) ? parsedDraft.social_urls.map(String).filter(Boolean) : current.social_urls
         }));
         if (typeof parsedDraft.step === "number" && Number.isInteger(parsedDraft.step)) {
@@ -303,11 +322,12 @@ function BusinessProfileCreateWizard({
         [hasCoverImage, "대표 이미지를 등록해주세요."],
         [draft.business_name.trim(), "가게명을 입력해주세요."],
         [draft.category.trim(), "업종을 선택해주세요."],
-        [draft.district.trim(), "활동 지역을 입력해주세요."],
+        [draft.district.trim(), "소재지을 입력해주세요."],
         [draft.short_intro.trim(), "한 줄 소개를 입력해주세요."]
       ],
       1: [
         [draft.address.trim(), "주소를 입력해주세요."],
+        [draft.latitude.trim() && draft.longitude.trim(), "주소 검색 결과에서 매장 위치를 선택해주세요."],
         [draft.contact.replace(/\D/g, "").length >= 8, "매장 연락처를 정확히 입력해주세요."],
         [draft.manager_name.trim(), "담당자명을 입력해주세요."],
         [draft.manager_phone.replace(/\D/g, "").length >= 10, "담당자 전화번호를 정확히 입력해주세요."],
@@ -518,7 +538,7 @@ function BusinessProfileCreateWizard({
                 <div>
                   <TextField
                     name="district"
-                    label="활동 지역"
+                    label="소재지"
                     value={draft.district}
                     onChange={(value) => updateDraftField("district", value)}
                     placeholder="공릉동"
@@ -562,14 +582,17 @@ function BusinessProfileCreateWizard({
           <FormCard>
             <StepTitle step={steps[1]} />
             <div className="grid gap-5 sm:grid-cols-2">
-              <TextField
-                name="address"
-                label="주소"
+              <BusinessAddressField
                 value={draft.address}
-                onChange={(value) => updateDraftField("address", value)}
-                placeholder="서울 노원구 공릉로 ..."
-                icon={<MapPin size={17} />}
-                requiredMark
+                detailValue={draft.address_detail}
+                latitude={draft.latitude}
+                longitude={draft.longitude}
+                onChange={(address, addressDetail, latitude, longitude) => {
+                  updateDraftField("address", address);
+                  updateDraftField("address_detail", addressDetail);
+                  updateDraftField("latitude", latitude);
+                  updateDraftField("longitude", longitude);
+                }}
               />
               <TextField
                 name="contact"
@@ -735,8 +758,9 @@ function BusinessProfileCreateWizard({
               <div className="grid gap-4 sm:grid-cols-2">
                 <ReviewItem label="가게명" value={draft.business_name} />
                 <ReviewItem label="업종" value={draft.category} />
-                <ReviewItem label="활동 지역" value={draft.district} />
+                <ReviewItem label="소재지" value={draft.district} />
                 <ReviewItem label="주소" value={draft.address} />
+                <ReviewItem label="상세 주소" value={draft.address_detail || "입력 없음"} />
                 <ReviewItem label="매장 연락처" value={draft.contact} />
                 <ReviewItem label="담당자명" value={draft.manager_name} />
                 <ReviewItem label="담당자 전화번호" value={draft.manager_phone} />
@@ -887,9 +911,10 @@ function BusinessProfileEditForm({
     if (!displayImageUrl) return "대표 이미지를 등록해주세요.";
     if (!draft.business_name.trim()) return "가게명을 입력해주세요.";
     if (!draft.category.trim()) return "업종을 선택해주세요.";
-    if (!draft.district.trim()) return "활동 지역을 입력해주세요.";
+    if (!draft.district.trim()) return "소재지을 입력해주세요.";
     if (!draft.short_intro.trim()) return "한 줄 소개를 입력해주세요.";
     if (!draft.address.trim()) return "주소를 입력해주세요.";
+    if (!draft.latitude.trim() || !draft.longitude.trim()) return "주소 검색 결과에서 매장 위치를 선택해주세요.";
     if (draft.contact.replace(/\D/g, "").length < 8) return "매장 연락처를 정확히 입력해주세요.";
     if (!draft.manager_name.trim()) return "담당자명을 입력해주세요.";
     if (draft.manager_phone.replace(/\D/g, "").length < 10) return "담당자 전화번호를 정확히 입력해주세요.";
@@ -949,7 +974,7 @@ function BusinessProfileEditForm({
             <TextField name="business_name" label="가게명/상호" value={draft.business_name} onChange={(value) => updateDraftField("business_name", value)} placeholder="카페 오디너리" icon={<Store size={17} />} requiredMark />
             <SelectField name="category" label="업종" value={draft.category} onChange={(value) => updateDraftField("category", value)} options={categoryOptions} requiredMark />
             <div>
-              <TextField name="district" label="활동 지역" value={draft.district} onChange={(value) => updateDraftField("district", value)} placeholder="공릉동" icon={<MapPin size={17} />} requiredMark />
+              <TextField name="district" label="소재지" value={draft.district} onChange={(value) => updateDraftField("district", value)} placeholder="공릉동" icon={<MapPin size={17} />} requiredMark />
               <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
                 {districtOptions.map((district) => (
                   <button
@@ -1000,7 +1025,18 @@ function BusinessProfileEditForm({
         <FormCard>
           <SectionHeading title="주소와 매장 연락처" description="크리에이터가 방문과 문의에 참고하는 공개 정보입니다." />
           <div className="grid gap-5 sm:grid-cols-2">
-            <TextField name="address" label="주소" value={draft.address} onChange={(value) => updateDraftField("address", value)} placeholder="서울 노원구 공릉로 ..." icon={<MapPin size={17} />} requiredMark />
+            <BusinessAddressField
+              value={draft.address}
+              detailValue={draft.address_detail}
+              latitude={draft.latitude}
+              longitude={draft.longitude}
+              onChange={(address, addressDetail, latitude, longitude) => {
+                updateDraftField("address", address);
+                updateDraftField("address_detail", addressDetail);
+                updateDraftField("latitude", latitude);
+                updateDraftField("longitude", longitude);
+              }}
+            />
             <TextField name="contact" label="매장 연락처" value={draft.contact} onChange={(value) => updateDraftField("contact", formatContactNumber(value))} placeholder="02-000-0000" icon={<Phone size={17} />} requiredMark />
           </div>
         </FormCard>
@@ -1266,6 +1302,153 @@ function TextField({
   );
 }
 
+function BusinessAddressField({
+  value,
+  detailValue,
+  latitude,
+  longitude,
+  onChange
+}: {
+  value: string;
+  detailValue: string;
+  latitude: string;
+  longitude: string;
+  onChange: (address: string, addressDetail: string, latitude: string, longitude: string) => void;
+}) {
+  const [query, setQuery] = useState(value);
+  const [selectedAddress, setSelectedAddress] = useState(value);
+  const [detailAddress, setDetailAddress] = useState(detailValue);
+  const [results, setResults] = useState<AddressSearchResult[]>([]);
+  const [message, setMessage] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const hasCoordinates = Boolean(latitude && longitude);
+  const isErrorMessage = message.includes("오류") || message.includes("실패") || message.includes("설정") || message.includes("없습니다");
+
+  useEffect(() => {
+    const trimmedQuery = query.trim();
+    if (trimmedQuery.length < 2 || trimmedQuery === selectedAddress) {
+      setIsSearching(false);
+      setResults([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setIsSearching(true);
+      setMessage("");
+
+      try {
+        const response = await fetch(`/api/maps/geocode?query=${encodeURIComponent(trimmedQuery)}`, {
+          signal: controller.signal
+        });
+        const result = await response.json() as { addresses?: AddressSearchResult[]; error?: string };
+
+        if (!response.ok) throw new Error(result.error ?? "주소 검색 중 오류가 발생했습니다.");
+
+        const addresses = result.addresses ?? [];
+        setResults(addresses);
+        setMessage(addresses.length ? "후보 주소를 선택해주세요." : "검색 결과가 없습니다. 도로명 주소는 건물번호까지 입력해주세요.");
+      } catch (addressError) {
+        if (controller.signal.aborted) return;
+        setMessage(addressError instanceof Error ? addressError.message : "주소 검색 중 오류가 발생했습니다.");
+        setResults([]);
+      } finally {
+        if (!controller.signal.aborted) setIsSearching(false);
+      }
+    }, 350);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [query, selectedAddress]);
+
+  function handleQueryChange(nextQuery: string) {
+    setQuery(nextQuery);
+    setSelectedAddress("");
+    setMessage("");
+    onChange(nextQuery, detailAddress, "", "");
+  }
+
+  function handleDetailChange(nextDetail: string) {
+    setDetailAddress(nextDetail);
+    onChange(selectedAddress || query, nextDetail, latitude, longitude);
+  }
+
+  function selectResult(result: AddressSearchResult) {
+    const address = result.roadAddress || result.address || result.jibunAddress || "";
+    setQuery(address);
+    setSelectedAddress(address);
+    setResults([]);
+    setMessage("주소와 좌표가 선택되었습니다.");
+    onChange(address, detailAddress, result.latitude, result.longitude);
+  }
+
+  return (
+    <div className="block">
+      <FieldLabel>주소 <Required /></FieldLabel>
+      <input type="hidden" name="address" value={(selectedAddress || query).trim()} />
+      <input type="hidden" name="address_detail" value={detailAddress.trim()} />
+      <input type="hidden" name="latitude" value={latitude} />
+      <input type="hidden" name="longitude" value={longitude} />
+      <div className="space-y-3">
+        <div className="relative">
+          <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400"><MapPin size={17} /></span>
+          <input
+            value={query}
+            onChange={(event) => handleQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && results[0]) {
+                event.preventDefault();
+                selectResult(results[0]);
+              }
+            }}
+            className="w-full rounded-xl border border-slate-200 px-4 py-3.5 pl-10 text-sm text-charcoal outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary"
+            placeholder="도로명 주소는 건물번호까지 입력해주세요"
+            aria-required
+          />
+          {isSearching ? (
+            <span className="absolute inset-y-0 right-0 flex items-center pr-4 text-xs font-bold text-slate-400">검색 중</span>
+          ) : null}
+          {results.length ? (
+            <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
+              {results.map((result) => {
+                const displayAddress = result.roadAddress || result.address || result.jibunAddress;
+                return (
+                  <button
+                    key={`${result.longitude}-${result.latitude}-${displayAddress}`}
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => selectResult(result)}
+                    className="block w-full border-b border-slate-100 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-primary/5"
+                  >
+                    <span className="block text-sm font-black text-charcoal">{displayAddress}</span>
+                    {result.jibunAddress && result.jibunAddress !== displayAddress ? (
+                      <span className="mt-1 block text-xs text-slate-500">지번: {result.jibunAddress}</span>
+                    ) : null}
+                    <span className="mt-1 block text-[11px] font-bold text-slate-400">
+                      좌표 {result.longitude}, {result.latitude}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+        <input
+          value={detailAddress}
+          onChange={(event) => handleDetailChange(event.target.value)}
+          className="w-full rounded-xl border border-slate-200 px-4 py-3.5 text-sm text-charcoal outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary"
+          placeholder="상세 주소를 입력해주세요 (예: 2층, 201호)"
+        />
+      </div>
+      <p className={`mt-2 text-xs ${isErrorMessage ? "font-bold text-primary" : "text-slate-500"}`}>
+        {message || (hasCoordinates ? "저장된 좌표를 사용합니다. 주소를 바꾸면 후보 주소를 다시 선택해주세요." : "후보 주소를 선택하면 지도 표시용 좌표가 함께 저장됩니다.")}
+      </p>
+    </div>
+  );
+}
+
 function SelectField({
   name,
   label,
@@ -1375,7 +1558,7 @@ function ProfilePreviewCard({
             </div>
           </div>
           <div className="grid gap-2 text-sm text-slate-600">
-            <span className="flex items-center gap-2"><MapPin size={16} className="text-primary" />{draft.district || "활동 지역"}</span>
+            <span className="flex items-center gap-2"><MapPin size={16} className="text-primary" />{draft.district || "소재지"}</span>
             <span className="flex items-center gap-2"><Phone size={16} className="text-primary" />{draft.contact || "매장 연락처"}</span>
             <span className="flex items-center gap-2"><Clock size={16} className="text-primary" />{businessHoursSummary || "영업시간"}</span>
             {draft.social_urls.length ? <span className="flex items-center gap-2"><Tag size={16} className="text-primary" />SNS {draft.social_urls.length}개</span> : null}

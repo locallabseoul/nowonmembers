@@ -252,7 +252,7 @@ export async function saveCreatorProfile(formData: FormData) {
   const activityAreas = requiredList(formData, "activity_areas", "활동 지역");
   const interests = requiredList(formData, "interests", "관심 분야");
   const contentTypes = requiredList(formData, "content_types", "콘텐츠 유형");
-  const availableDays = requiredList(formData, "available_days", "가능 요일");
+  const availableDays = splitList(formData.get("available_days"));
   const bio = requiredText(formData, "bio", "자기소개");
   const channelPlatform = requiredText(formData, "channel_platform", "채널 플랫폼");
   const channelName = nullableText(formData, "channel_name");

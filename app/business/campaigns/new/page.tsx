@@ -9,7 +9,7 @@ export default async function NewCampaignPage({ searchParams }: { searchParams: 
 
   const { data: business } = await supabase
     .from("business_profiles")
-    .select("id")
+    .select("id,business_name,address,address_detail,latitude,longitude")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -17,5 +17,15 @@ export default async function NewCampaignPage({ searchParams }: { searchParams: 
     redirect(`/business/dashboard?next=${encodeURIComponent("/business/campaigns/new")}&error=${encodeURIComponent("캠페인 생성 전 가게 프로필을 먼저 등록해주세요.")}`);
   }
 
-  return <CampaignCreateWizard action={createCampaign} error={error} />;
+  return (
+    <CampaignCreateWizard
+      action={createCampaign}
+      error={error}
+      businessName={business.business_name ?? ""}
+      businessAddress={business.address ?? ""}
+      businessAddressDetail={business.address_detail ?? ""}
+      businessLatitude={business.latitude === null ? "" : String(business.latitude)}
+      businessLongitude={business.longitude === null ? "" : String(business.longitude)}
+    />
+  );
 }

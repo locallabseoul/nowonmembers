@@ -22,6 +22,11 @@ import {
 type CampaignCreateWizardProps = {
   action: (formData: FormData) => void | Promise<void>;
   error?: string;
+  businessName?: string;
+  businessAddress?: string;
+  businessAddressDetail?: string;
+  businessLatitude?: string;
+  businessLongitude?: string;
 };
 
 const steps = [
@@ -105,11 +110,20 @@ type ImagePreview = {
   name: string;
 };
 
+type AddressSearchResult = {
+  address: string;
+  jibunAddress?: string;
+  roadAddress?: string;
+  latitude: string;
+  longitude: string;
+};
+
 type CampaignDraft = {
   category: string;
   title: string;
   operatorName: string;
   region: string;
+  regionDetail: string;
   campaignType: string;
   recruitCount: string;
   recruitEnd: string;
@@ -165,12 +179,13 @@ function getFormValue(formData: FormData, name: string, fallback = "") {
   return String(formData.get(name) ?? fallback).trim();
 }
 
-function createInitialCampaignDraft(defaultSchedule: ReturnType<typeof getDefaultCampaignSchedule>): CampaignDraft {
+function createInitialCampaignDraft(defaultSchedule: ReturnType<typeof getDefaultCampaignSchedule>, businessName = "", businessAddress = "", businessAddressDetail = ""): CampaignDraft {
   return {
     category: categoryOptions[0]?.value ?? "",
     title: "",
-    operatorName: "",
-    region: "",
+    operatorName: businessName,
+    region: businessAddress,
+    regionDetail: businessAddressDetail,
     campaignType: contentTypeOptions[0]?.value ?? "",
     recruitCount: "",
     recruitEnd: defaultSchedule.recruitEnd,
@@ -194,6 +209,7 @@ function createCampaignDraftFromForm(form: HTMLFormElement, defaultSchedule: Ret
     title: getFormValue(formData, "title"),
     operatorName: getFormValue(formData, "operator_name"),
     region: getFormValue(formData, "region"),
+    regionDetail: getFormValue(formData, "region_detail"),
     campaignType: getFormValue(formData, "campaign_type", contentTypeOptions[0]?.value),
     recruitCount: getFormValue(formData, "recruit_count"),
     recruitEnd: getFormValue(formData, "recruit_end", defaultSchedule.recruitEnd),
@@ -237,8 +253,17 @@ function displayOrPending(value: string, fallback = "입력 전") {
   return value.trim() || fallback;
 }
 
-export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProps) {
+export function CampaignCreateWizard({
+  action,
+  error,
+  businessName = "",
+  businessAddress = "",
+  businessAddressDetail = "",
+  businessLatitude = "",
+  businessLongitude = ""
+}: CampaignCreateWizardProps) {
   const formRef = useRef<HTMLFormElement>(null);
+  const regionInputRef = useRef<HTMLInputElement>(null);
   const keywordInputRef = useRef<HTMLInputElement>(null);
   const keywordHiddenInputRef = useRef<HTMLInputElement>(null);
   const keywordComposingRef = useRef(false);
@@ -248,8 +273,17 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
   const [defaultSchedule] = useState(getDefaultCampaignSchedule);
   const [step, setStep] = useState(0);
   const [validationMessage, setValidationMessage] = useState("");
+  const [addressSearchMessage, setAddressSearchMessage] = useState("");
+  const [addressQuery, setAddressQuery] = useState(businessAddress);
+  const [selectedAddress, setSelectedAddress] = useState(businessAddress);
+  const [addressDetail, setAddressDetail] = useState(businessAddressDetail);
+  const [addressResults, setAddressResults] = useState<AddressSearchResult[]>([]);
+  const [selectedCoordinates, setSelectedCoordinates] = useState<{ latitude: string; longitude: string } | null>(
+    businessLatitude && businessLongitude ? { latitude: businessLatitude, longitude: businessLongitude } : null
+  );
+  const [isAddressSearching, setIsAddressSearching] = useState(false);
   const [keywordTags, setKeywordTags] = useState<string[]>([]);
-  const [campaignDraft, setCampaignDraft] = useState(() => createInitialCampaignDraft(defaultSchedule));
+  const [campaignDraft, setCampaignDraft] = useState(() => createInitialCampaignDraft(defaultSchedule, businessName, businessAddress, businessAddressDetail));
   const [coverImagePreview, setCoverImagePreview] = useState<ImagePreview | null>(null);
   const [referenceImagePreviews, setReferenceImagePreviews] = useState<ImagePreview[]>([]);
   const progress = ((step + 1) / steps.length) * 100;
@@ -266,12 +300,53 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
   const reviewMissions = campaignDraft.missionOptions.length ? campaignDraft.missionOptions.join(", ") : "선택 없음";
   const cardRegion = displayOrPending(campaignDraft.region, "지역 미입력");
   const cardBenefit = campaignDraft.benefitValue ? `제공: ${campaignDraft.benefitValue}` : "제공 내역 미입력";
+  const selectionDateMin = campaignDraft.recruitEnd || defaultSchedule.today;
+  const submissionDueMin = campaignDraft.selectionDate || selectionDateMin;
 
   useEffect(() => {
     return () => {
       previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
+
+  useEffect(() => {
+    const query = addressQuery.trim();
+    if (query.length < 2 || query === selectedAddress) {
+      setIsAddressSearching(false);
+      setAddressResults([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setIsAddressSearching(true);
+      setAddressSearchMessage("");
+
+      try {
+        const response = await fetch(`/api/maps/geocode?query=${encodeURIComponent(query)}`, {
+          signal: controller.signal
+        });
+        const result = await response.json() as { addresses?: AddressSearchResult[]; error?: string };
+
+        if (!response.ok) throw new Error(result.error ?? "주소 검색 중 오류가 발생했습니다.");
+
+        const addresses = result.addresses ?? [];
+        setAddressResults(addresses);
+        setAddressSearchMessage(addresses.length ? "후보 주소를 선택해주세요." : "검색 결과가 없습니다. 도로명 주소는 건물번호까지 입력해주세요.");
+      } catch (addressError) {
+        if (controller.signal.aborted) return;
+        setAddressSearchMessage(addressError instanceof Error ? addressError.message : "주소 검색 중 오류가 발생했습니다.");
+        setAddressResults([]);
+      } finally {
+        if (!controller.signal.aborted) setIsAddressSearching(false);
+      }
+    }, 350);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [addressQuery, selectedAddress]);
 
   function refreshCampaignDraft() {
     if (!formRef.current) return;
@@ -280,6 +355,37 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
 
   function handleFormDraftChange() {
     refreshCampaignDraft();
+  }
+
+  function setRegionValue(value: string) {
+    if (!regionInputRef.current) return;
+    regionInputRef.current.value = value;
+    regionInputRef.current.dispatchEvent(new Event("input", { bubbles: true }));
+    setCampaignDraft((currentDraft) => ({ ...currentDraft, region: value }));
+  }
+
+  function handleAddressInputChange(value: string) {
+    setAddressQuery(value);
+    setSelectedAddress("");
+    setSelectedCoordinates(null);
+    setAddressSearchMessage("");
+    setRegionValue(value);
+  }
+
+  function handleAddressDetailChange(value: string) {
+    setAddressDetail(value);
+    setCampaignDraft((currentDraft) => ({ ...currentDraft, regionDetail: value }));
+  }
+
+  function selectAddressResult(result: AddressSearchResult) {
+    const address = result.roadAddress || result.address || result.jibunAddress || "";
+    setAddressQuery(address);
+    setSelectedAddress(address);
+    setRegionValue(address);
+    setSelectedCoordinates({ latitude: result.latitude, longitude: result.longitude });
+    setAddressResults([]);
+    setAddressSearchMessage("주소와 좌표가 선택되었습니다.");
+    setValidationMessage("");
   }
 
   function getStepControls(stepIndex: number) {
@@ -297,6 +403,15 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
         setValidationMessage(requiredMessage);
         invalidControl.focus();
         invalidControl.reportValidity();
+      }
+
+      return false;
+    }
+
+    if (stepIndex === 0 && !selectedCoordinates) {
+      if (report) {
+        setValidationMessage("주소 검색 결과에서 캠페인 위치를 선택해주세요.");
+        regionInputRef.current?.focus();
       }
 
       return false;
@@ -582,8 +697,20 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
                   requiredMark
                 />
                 <div className="grid gap-6 sm:grid-cols-2">
-                  <TextField name="operator_name" label="상호명 (제공처)" placeholder="상호명을 입력해주세요" requiredMark />
-                  <TextField name="region" label="위치/지역" placeholder="공릉동 또는 도로명 주소" icon={<MapPin size={17} />} requiredMark />
+                  <TextField name="operator_name" label="상호명 (제공처)" placeholder="상호명을 입력해주세요" defaultValue={businessName} requiredMark />
+                  <AddressSearchField
+                    inputRef={regionInputRef}
+                    value={addressQuery}
+                    detailValue={addressDetail}
+                    results={addressResults}
+                    isSearching={isAddressSearching}
+                    selectedAddress={selectedAddress}
+                    selectedCoordinates={selectedCoordinates}
+                    message={addressSearchMessage}
+                    onChange={handleAddressInputChange}
+                    onDetailChange={handleAddressDetailChange}
+                    onSelect={selectAddressResult}
+                  />
                 </div>
               </section>
 
@@ -648,8 +775,8 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
                   <FieldLabel>캠페인 일정 설정 <Required /></FieldLabel>
                   <div className="grid gap-4 sm:grid-cols-3">
                     <TextField name="recruit_end" label="모집 마감일" type="date" min={defaultSchedule.today} defaultValue={defaultSchedule.recruitEnd} requiredMark />
-                    <TextField name="selection_date" label="크리에이터 선정 발표일" type="date" min={defaultSchedule.recruitEnd} defaultValue={defaultSchedule.selectionDate} />
-                    <TextField name="submission_due" label="콘텐츠 등록 마감일" type="date" min={defaultSchedule.selectionDate} defaultValue={defaultSchedule.submissionDue} />
+                    <TextField name="selection_date" label="크리에이터 선정 발표일" type="date" min={selectionDateMin} defaultValue={defaultSchedule.selectionDate} />
+                    <TextField name="submission_due" label="콘텐츠 등록 마감일" type="date" min={submissionDueMin} defaultValue={defaultSchedule.submissionDue} />
                   </div>
                   <p className="mt-2 text-xs text-slate-400">선정 발표일은 모집 마감일 이후, 콘텐츠 등록 마감일은 선정 발표일 이후로 설정해주세요.</p>
                 </div>
@@ -798,6 +925,7 @@ export function CampaignCreateWizard({ action, error }: CampaignCreateWizardProp
                       <ReviewRow label="제공 서비스" value={reviewBenefit} />
                       <ReviewRow label="활동비" value={reviewFee} />
                       <ReviewRow label="방문 위치" value={displayOrPending(campaignDraft.region)} />
+                      <ReviewRow label="상세 주소" value={campaignDraft.regionDetail || "입력 없음"} />
                       <ReviewRow label="방문 및 사용 안내" value={displayOrPending(campaignDraft.usageRights, "입력된 안내사항이 없습니다.")} boxed />
                     </ReviewSection>
                     <ReviewSection title="3. 미션 상세 가이드" onEdit={() => setStep(2)} last>
@@ -987,6 +1115,99 @@ function TextField({
       </div>
       {helper ? <p className="mt-2 text-xs text-slate-500">{helper}</p> : null}
     </label>
+  );
+}
+
+function AddressSearchField({
+  inputRef,
+  value,
+  detailValue,
+  results,
+  isSearching,
+  selectedAddress,
+  selectedCoordinates,
+  message,
+  onChange,
+  onDetailChange,
+  onSelect
+}: {
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  value: string;
+  detailValue: string;
+  results: AddressSearchResult[];
+  isSearching: boolean;
+  selectedAddress: string;
+  selectedCoordinates: { latitude: string; longitude: string } | null;
+  message?: string;
+  onChange: (value: string) => void;
+  onDetailChange: (value: string) => void;
+  onSelect: (result: AddressSearchResult) => void;
+}) {
+  const isErrorMessage = message?.includes("오류") || message?.includes("실패") || message?.includes("설정") || message?.includes("없습니다");
+
+  return (
+    <div className="sm:col-span-1">
+      <span className="mb-2 block text-sm font-black text-charcoal">캠페인 주소 <Required /></span>
+      <input type="hidden" name="region" value={(selectedAddress || value).trim()} />
+      <input type="hidden" name="region_detail" value={detailValue.trim()} />
+      <input type="hidden" name="latitude" value={selectedCoordinates?.latitude ?? ""} />
+      <input type="hidden" name="longitude" value={selectedCoordinates?.longitude ?? ""} />
+      <div className="space-y-3">
+        <div className="relative">
+          <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400"><MapPin size={17} /></span>
+          <input
+            ref={inputRef}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && results[0]) {
+                event.preventDefault();
+                onSelect(results[0]);
+              }
+            }}
+            required
+            className="w-full rounded-xl border border-slate-200 px-4 py-3.5 pl-10 text-sm text-charcoal outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary"
+            placeholder="도로명 주소는 건물번호까지 입력해주세요"
+          />
+          {isSearching ? (
+            <span className="absolute inset-y-0 right-0 flex items-center pr-4 text-xs font-bold text-slate-400">검색 중</span>
+          ) : null}
+          {results.length ? (
+            <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
+              {results.map((result) => {
+                const displayAddress = result.roadAddress || result.address || result.jibunAddress;
+                return (
+                  <button
+                    key={`${result.longitude}-${result.latitude}-${displayAddress}`}
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => onSelect(result)}
+                    className="block w-full border-b border-slate-100 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-primary/5"
+                  >
+                    <span className="block text-sm font-black text-charcoal">{displayAddress}</span>
+                    {result.jibunAddress && result.jibunAddress !== displayAddress ? (
+                      <span className="mt-1 block text-xs text-slate-500">지번: {result.jibunAddress}</span>
+                    ) : null}
+                    <span className="mt-1 block text-[11px] font-bold text-slate-400">
+                      좌표 {result.longitude}, {result.latitude}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+        <input
+          value={detailValue}
+          onChange={(event) => onDetailChange(event.target.value)}
+          className="w-full rounded-xl border border-slate-200 px-4 py-3.5 text-sm text-charcoal outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary"
+          placeholder="상세 주소를 입력해주세요 (예: 2층, 201호)"
+        />
+      </div>
+      <p className={`mt-2 text-xs ${isErrorMessage ? "font-bold text-primary" : "text-slate-500"}`}>
+        {message || "예: 서울특별시 노원구 동일로183길 10. 후보 주소를 선택하면 지도 표시용 좌표가 함께 저장됩니다."}
+      </p>
+    </div>
   );
 }
 

@@ -45,13 +45,19 @@ export default async function CampaignDetailPage({ params, searchParams }: { par
   const applyAlertMessage = "캠페인 신청은 크리에이터 계정으로만 이용할 수 있습니다.";
   const business = getDisplayBusiness(campaign.businessId);
   const businessName = campaign.businessName ?? business.businessName;
+  const displayAddress = [campaign.region, campaign.regionDetail].filter(Boolean).join(" ");
   const businessDetails = {
     category: "노원 지역 파트너",
     businessHours: "방문 전 확인",
-    address: `서울 노원구 ${campaign.region}`,
+    address: displayAddress || campaign.region,
     coverImage: campaign.coverImage,
     ...business
   };
+  const hasCoordinates = typeof campaign.latitude === "number" && typeof campaign.longitude === "number";
+  const mapImageUrl = hasCoordinates ? `/api/maps/static?lat=${campaign.latitude}&lng=${campaign.longitude}` : "";
+  const naverMapUrl = hasCoordinates
+    ? `https://map.naver.com/p/search/${encodeURIComponent(campaign.region)}?c=${campaign.longitude},${campaign.latitude},16,0,0,0,dh`
+    : `https://map.naver.com/p/search/${encodeURIComponent(campaign.region)}`;
   const progress = Math.min(100, Math.round((campaign.appliedCount / Math.max(campaign.recruitCount, 1)) * 100));
   const requirements = campaign.contentRequirements.length
     ? campaign.contentRequirements
@@ -198,16 +204,31 @@ export default async function CampaignDetailPage({ params, searchParams }: { par
                   </div>
                   <div>
                     <span className="mb-1 block text-sm font-bold text-gray-500">주소</span>
-                    <span className="text-charcoal">{businessDetails.address}</span>
+                    <span className="text-charcoal">{campaign.region}</span>
+                    {campaign.regionDetail ? <span className="mt-1 block text-sm text-slate-500">{campaign.regionDetail}</span> : null}
                   </div>
                 </div>
 
-                <div className="flex h-48 items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-gray-200 md:w-1/2">
-                  <img
-                    src="https://storage.googleapis.com/uxpilot-auth.appspot.com/gen_731c82a294_2c159d5458e05fbd.png"
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
+                <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-100 md:w-1/2">
+                  {hasCoordinates ? (
+                    <img
+                      src={mapImageUrl}
+                      alt={`${businessDetails.address} 지도`}
+                      className="h-48 w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-48 items-center justify-center px-4 text-center text-sm font-bold text-gray-400">
+                      지도 표시용 좌표가 아직 등록되지 않았습니다.
+                    </div>
+                  )}
+                  <a
+                    href={naverMapUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block border-t border-gray-200 bg-white px-4 py-3 text-center text-sm font-black text-primary transition-colors hover:bg-primary/5"
+                  >
+                    네이버 지도에서 보기
+                  </a>
                 </div>
               </div>
             </div>

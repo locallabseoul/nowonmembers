@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -94,7 +94,6 @@ const steps = [
 const districtOptions = ["공릉동", "월계동", "하계동", "중계동", "상계동"];
 const interestOptions = ["맛집/카페", "뷰티", "동네산책", "문화/전시", "클래스", "쇼핑", "인터뷰", "숏폼"];
 const contentTypeOptions = ["블로그", "인스타그램 피드", "릴스/쇼츠", "사진 콘텐츠", "인터뷰"];
-const dayOptions = ["월", "화", "수", "목", "금", "토", "일"];
 const channelPlatformOptions = ["네이버 블로그", "인스타그램", "유튜브", "틱톡", "기타"];
 const creatorImageAccept = "image/jpeg,image/png,image/webp";
 const maxCreatorImageBytes = 10 * 1024 * 1024;
@@ -185,7 +184,6 @@ function CreatorProfileCreateWizard({
   const mode = initialProfile.id ? "edit" : "create";
   const title = initialProfile.id ? "크리에이터 프로필 수정" : "크리에이터 프로필 등록";
   const submitLabel = initialProfile.id ? "프로필 저장하기" : "가입 완료하기";
-  const availableDaysLabel = useMemo(() => draft.available_days.join(", "), [draft.available_days]);
 
   useEffect(() => {
     try {
@@ -227,17 +225,10 @@ function CreatorProfileCreateWizard({
     }));
   }
 
-  function updateDraftList(name: "activity_areas" | "interests" | "content_types" | "available_days", value: string) {
+  function updateDraftList(name: "activity_areas" | "interests" | "content_types", value: string) {
     setDraft((current) => ({
       ...current,
       [name]: toggleValue(current[name], value)
-    }));
-  }
-
-  function setWeekdayPreset(type: "weekday" | "weekend") {
-    setDraft((current) => ({
-      ...current,
-      available_days: type === "weekday" ? ["월", "화", "수", "목", "금"] : ["토", "일"]
     }));
   }
 
@@ -271,7 +262,6 @@ function CreatorProfileCreateWizard({
       ],
       1: [
         [draft.content_types.length, "콘텐츠 유형을 1개 이상 선택해주세요."],
-        [draft.available_days.length, "가능 요일을 1개 이상 선택해주세요."],
         [draft.channel_url.trim(), "대표 채널 URL을 입력해주세요."]
       ],
       2: []
@@ -462,7 +452,6 @@ function CreatorProfileCreateWizard({
                 email={initialProfile.email}
                 draft={draft}
                 imageUrl={displayAvatarUrl}
-                availableDaysLabel={availableDaysLabel}
               />
             </div>
           </FormCard>
@@ -478,34 +467,6 @@ function CreatorProfileCreateWizard({
               options={contentTypeOptions}
               onToggle={(value) => updateDraftList("content_types", value)}
             />
-
-            <Divider />
-
-            <div>
-              <FieldLabel>가능 요일 <Required /></FieldLabel>
-              <div className="mb-3 flex flex-wrap gap-2">
-                <button type="button" onClick={() => setWeekdayPreset("weekday")} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:border-primary hover:text-primary">평일</button>
-                <button type="button" onClick={() => setWeekdayPreset("weekend")} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:border-primary hover:text-primary">주말</button>
-              </div>
-              <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-                {dayOptions.map((day) => (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => updateDraftList("available_days", day)}
-                    className={`rounded-xl border px-3 py-3 text-sm font-black transition-colors ${
-                      draft.available_days.includes(day)
-                        ? "border-primary bg-primary text-white"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-primary hover:text-primary"
-                    }`}
-                  >
-                    {day}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <Divider />
 
             <div className="grid gap-5 sm:grid-cols-2">
               <SelectField
@@ -587,7 +548,6 @@ function CreatorProfileCreateWizard({
                 <ReviewItem label="활동 지역" value={draft.activity_areas.join(", ")} />
                 <ReviewItem label="관심 분야" value={draft.interests.join(", ")} />
                 <ReviewItem label="콘텐츠 유형" value={draft.content_types.join(", ")} />
-                <ReviewItem label="가능 요일" value={availableDaysLabel} />
                 <ReviewItem label="대표 채널" value={draft.channel_url} />
                 <ReviewItem label="포트폴리오" value={draft.portfolio_url || "미입력"} />
                 <ReviewItem label="자기소개" value={draft.bio} />
@@ -608,7 +568,6 @@ function CreatorProfileCreateWizard({
                 email={initialProfile.email}
                 draft={draft}
                 imageUrl={displayAvatarUrl}
-                availableDaysLabel={availableDaysLabel}
                 compact
               />
             </FormCard>
@@ -657,7 +616,6 @@ function CreatorProfileEditForm({
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const displayAvatarUrl = avatarPreview?.url ?? initialProfile.avatarUrl;
-  const availableDaysLabel = useMemo(() => draft.available_days.join(", "), [draft.available_days]);
 
   useEffect(() => () => {
     if (avatarPreview) URL.revokeObjectURL(avatarPreview.url);
@@ -670,17 +628,10 @@ function CreatorProfileEditForm({
     }));
   }
 
-  function updateDraftList(name: "activity_areas" | "interests" | "content_types" | "available_days", value: string) {
+  function updateDraftList(name: "activity_areas" | "interests" | "content_types", value: string) {
     setDraft((current) => ({
       ...current,
       [name]: toggleValue(current[name], value)
-    }));
-  }
-
-  function setWeekdayPreset(type: "weekday" | "weekend") {
-    setDraft((current) => ({
-      ...current,
-      available_days: type === "weekday" ? ["월", "화", "수", "목", "금"] : ["토", "일"]
     }));
   }
 
@@ -710,7 +661,6 @@ function CreatorProfileEditForm({
     if (!draft.interests.length) return "관심 분야를 1개 이상 선택해주세요.";
     if (!draft.bio.trim()) return "자기소개를 입력해주세요.";
     if (!draft.content_types.length) return "콘텐츠 유형을 1개 이상 선택해주세요.";
-    if (!draft.available_days.length) return "가능 요일을 1개 이상 선택해주세요.";
     if (!draft.channel_url.trim()) return "대표 채널 URL을 입력해주세요.";
     if (draft.channel_url.trim() && !isValidUrl(draft.channel_url.trim())) {
       return "대표 채널 URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다.";
@@ -842,18 +792,9 @@ function CreatorProfileEditForm({
         </FormCard>
 
         <FormCard>
-          <SectionHeading title="콘텐츠 유형/가능 요일" description="주로 제작 가능한 콘텐츠와 협업 가능 요일을 정리합니다." />
+          <SectionHeading title="콘텐츠 유형" description="주로 제작 가능한 콘텐츠 형식을 정리합니다." />
           <div className="space-y-7">
             <ChipGroup label="콘텐츠 유형" requiredMark values={draft.content_types} options={contentTypeOptions} onToggle={(value) => updateDraftList("content_types", value)} />
-            <div>
-              <FieldLabel>가능 요일 <Required /></FieldLabel>
-              <div className="mb-3 flex gap-2">
-                <button type="button" onClick={() => setWeekdayPreset("weekday")} className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:border-primary hover:text-primary">평일</button>
-                <button type="button" onClick={() => setWeekdayPreset("weekend")} className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:border-primary hover:text-primary">주말</button>
-              </div>
-              <ChipGroup label="" values={draft.available_days} options={dayOptions} onToggle={(value) => updateDraftList("available_days", value)} />
-              <p className="mt-3 text-xs font-bold text-slate-400">{availableDaysLabel || "가능 요일을 선택해주세요."}</p>
-            </div>
           </div>
         </FormCard>
 
@@ -1180,14 +1121,12 @@ function ProfilePreviewCard({
   email,
   draft,
   imageUrl,
-  availableDaysLabel,
   compact = false
 }: {
   nickname: string;
   email: string;
   draft: CreatorProfileDraft;
   imageUrl: string;
-  availableDaysLabel: string;
   compact?: boolean;
 }) {
   const displayName = nickname || email.split("@")[0] || "크리에이터";
@@ -1214,7 +1153,6 @@ function ProfilePreviewCard({
             <span className="flex items-center gap-2"><MapPin size={16} className="text-primary" />{draft.activity_areas.join(", ") || "활동 지역"}</span>
             <span className="flex items-center gap-2"><Sparkles size={16} className="text-primary" />{draft.interests.join(", ") || "관심 분야"}</span>
             <span className="flex items-center gap-2"><Video size={16} className="text-primary" />{draft.content_types.join(", ") || "콘텐츠 유형"}</span>
-            <span className="flex items-center gap-2"><Check size={16} className="text-primary" />{availableDaysLabel || "가능 요일"}</span>
           </div>
         </div>
       </div>

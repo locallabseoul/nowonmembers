@@ -14,7 +14,8 @@ function Field({
   type = "text",
   placeholder,
   required = true,
-  minLength
+  minLength,
+  defaultValue
 }: {
   label: string;
   name: string;
@@ -22,6 +23,7 @@ function Field({
   placeholder: string;
   required?: boolean;
   minLength?: number;
+  defaultValue?: string;
 }) {
   return (
     <label className="block space-y-2">
@@ -33,6 +35,7 @@ function Field({
         type={type}
         required={required}
         minLength={minLength}
+        defaultValue={defaultValue}
         className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all placeholder:text-gray-400 focus:border-primary focus:ring-2 focus:ring-primary/20"
         placeholder={placeholder}
       />
@@ -198,17 +201,31 @@ function SectionTitle({ number, children }: { number: number; children: ReactNod
 export function SignupForm({
   action,
   error,
-  initialRole
+  initialRole,
+  initialValues
 }: {
   action: SignupAction;
   error?: string;
   initialRole: SignupRole;
+  initialValues?: {
+    email?: string;
+    phone?: string;
+    nickname?: string;
+    name?: string;
+    businessName?: string;
+    businessRegistrationNumber?: string;
+    managerName?: string;
+    referralCode?: string;
+    agreedTerms?: boolean;
+    agreedPrivacy?: boolean;
+    agreedMarketing?: boolean;
+  };
 }) {
   const [role, setRole] = useState<SignupRole>(initialRole);
-  const [creatorNickname, setCreatorNickname] = useState("");
-  const [businessName, setBusinessName] = useState("");
-  const [businessRegistrationNumber, setBusinessRegistrationNumber] = useState("");
-  const [phone, setPhone] = useState("");
+  const [creatorNickname, setCreatorNickname] = useState(initialValues?.nickname ?? "");
+  const [businessName, setBusinessName] = useState(initialValues?.businessName ?? "");
+  const [businessRegistrationNumber, setBusinessRegistrationNumber] = useState(initialValues?.businessRegistrationNumber ?? "");
+  const [phone, setPhone] = useState(initialValues?.phone ?? "");
   const [nicknameStatus, setNicknameStatus] = useState<NicknameCheckStatus>("idle");
   const [nicknameMessage, setNicknameMessage] = useState("");
   const activeNickname = useMemo(
@@ -309,7 +326,7 @@ export function SignupForm({
             <Field label="비밀번호" name="password" type="password" placeholder="6자 이상" minLength={6} />
           </div>
           <p className="text-xs font-medium text-gray-400">전화번호로 로그인하고, 가입 완료 전 SMS 인증을 진행합니다.</p>
-          <Field label="이메일" name="email" type="email" placeholder="example@email.com" required={false} />
+          <Field label="이메일" name="email" type="email" placeholder="example@email.com" required={false} defaultValue={initialValues?.email} />
           <p className="text-xs font-medium text-gray-400">이메일은 계정 안내와 알림을 위한 선택 입력입니다.</p>
         </section>
 
@@ -332,8 +349,8 @@ export function SignupForm({
                 <BusinessRegistrationField value={businessRegistrationNumber} onChange={setBusinessRegistrationNumber} />
               </div>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <Field label="담당자명" name="manager_name" placeholder="홍길동" />
-                <Field label="추천코드" name="referral_code" placeholder="추천코드가 있다면 입력" required={false} />
+                <Field label="담당자명" name="manager_name" placeholder="홍길동" defaultValue={initialValues?.managerName} />
+                <Field label="추천코드" name="referral_code" placeholder="추천코드가 있다면 입력" required={false} defaultValue={initialValues?.referralCode} />
               </div>
             </>
           ) : (
@@ -348,7 +365,7 @@ export function SignupForm({
                   status={nicknameStatus}
                   message={role === "creator" ? nicknameMessage : ""}
                 />
-                <Field label="이름" name="name" placeholder="홍길동" />
+                <Field label="이름" name="name" placeholder="홍길동" defaultValue={initialValues?.name} />
               </div>
             </>
           )}
@@ -358,15 +375,15 @@ export function SignupForm({
 
         <section className="space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-5">
           <label className="flex cursor-pointer items-start gap-3">
-            <input name="agreement_terms" type="checkbox" required className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+            <input name="agreement_terms" type="checkbox" required defaultChecked={initialValues?.agreedTerms} className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
             <span className="text-sm font-bold text-charcoal">(필수) 서비스 이용약관 동의</span>
           </label>
           <label className="flex cursor-pointer items-start gap-3">
-            <input name="agreement_privacy" type="checkbox" required className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+            <input name="agreement_privacy" type="checkbox" required defaultChecked={initialValues?.agreedPrivacy} className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
             <span className="text-sm font-bold text-charcoal">(필수) 개인정보 수집 및 이용 동의</span>
           </label>
           <label className="flex cursor-pointer items-start gap-3">
-            <input name="agreement_marketing" type="checkbox" className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+            <input name="agreement_marketing" type="checkbox" defaultChecked={initialValues?.agreedMarketing} className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
             <span className="text-sm text-gray-600">(선택) 맞춤 캠페인 추천 알림 수신 동의</span>
           </label>
         </section>
