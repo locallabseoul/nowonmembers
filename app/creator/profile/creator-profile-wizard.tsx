@@ -936,7 +936,7 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
 
 function VerificationBadge({ verified }: { verified: boolean }) {
   return (
-    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${
+    <span className={`inline-flex shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-black ${
       verified ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
     }`}>
       {verified ? "인증 완료" : "미인증"}
