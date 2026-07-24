@@ -19,7 +19,6 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
   const channel = campaignChannel(campaign);
   const lifecycle = getCampaignLifecycle(campaign);
   const deadline = getCampaignDeadlineLabel(campaign);
-  const progress = Math.min(100, Math.round((campaign.appliedCount / Math.max(campaign.recruitCount, 1)) * 100));
 
   return (
     <Link href={`/campaigns/${campaign.id}`} className="group overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-green">
@@ -51,12 +50,10 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
               <span className="min-w-0 truncate text-sm font-extrabold text-charcoal">{campaign.benefitValue}</span>
             </div>
             <div className="shrink-0 text-right">
-              <p className="mb-1 text-[10px] font-medium leading-none text-slate-400">신청 현황</p>
-              <p className="text-sm font-extrabold leading-none text-charcoal">{campaign.appliedCount}/{campaign.recruitCount}명</p>
+              <p className="mb-1 text-[10px] font-medium leading-none text-slate-400">신청자</p>
+              <p className="text-sm font-extrabold leading-none text-charcoal">{campaign.appliedCount}명</p>
+              <p className="mt-1 text-[10px] font-bold leading-none text-slate-400">선정 {campaign.recruitCount}명</p>
             </div>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-            <div className="h-1.5 rounded-full bg-primary" style={{ width: `${progress}%` }} />
           </div>
         </div>
       </div>

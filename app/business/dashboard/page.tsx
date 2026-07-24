@@ -147,7 +147,7 @@ function normalizePage(value?: string) {
 function getSelectionBlockReason(application: DashboardApplication) {
   if (application.hasCollaboration || application.status === "selected") return "이미 선정된 지원자입니다.";
   if (application.status !== "submitted" && application.status !== "recommended") return `${applicationStatusLabel(application.status)} 상태에서는 선정할 수 없습니다.`;
-  if (application.recruitCount > 0 && application.selectedCount >= application.recruitCount) return "모집 정원이 마감되었습니다.";
+  if (application.recruitCount > 0 && application.selectedCount >= application.recruitCount) return "선정 정원이 마감되었습니다.";
   if (application.campaignStatus === "recruiting") return "모집 종료 후 선정 가능";
   if (application.campaignStatus !== "selecting") return `${campaignStatusLabel(application.campaignStatus)} 상태에서는 선정할 수 없습니다.`;
   return null;
@@ -248,7 +248,7 @@ function campaignApplicantText(campaign: DashboardCampaign) {
   if (campaign.status === "recruiting") {
     return {
       main: `현재 ${campaign.applicationCount}명 지원`,
-      sub: `모집 ${campaign.recruitCount}명`,
+      sub: `선정 ${campaign.recruitCount}명`,
       highlight: true
     };
   }
@@ -270,7 +270,7 @@ function campaignApplicantText(campaign: DashboardCampaign) {
   }
 
   return {
-    main: `모집 ${campaign.recruitCount}명`,
+    main: `선정 ${campaign.recruitCount}명`,
     sub: campaign.applicationCount ? `지원 ${campaign.applicationCount}명` : "지원자 없음",
     highlight: false
   };
@@ -711,7 +711,7 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
                   <tr className="border-b border-gray-200 bg-gray-50">
                     <th className="w-1/3 px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-500">캠페인 정보</th>
                     <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-500">진행 상태</th>
-                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-500">모집 인원</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-500">선정 인원</th>
                     <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-500">기간</th>
                     <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">관리</th>
                   </tr>

@@ -775,7 +775,7 @@ export function CampaignCreateWizard({
               <Divider />
 
               <section className="space-y-6">
-                <TextField name="recruit_count" label="모집 인원" placeholder="예: 5" suffix="명" type="number" min={1} requiredMark />
+                <TextField name="recruit_count" label="선정 인원" placeholder="예: 5" suffix="명" type="number" min={1} requiredMark />
                 <div>
                   <FieldLabel>캠페인 일정 설정 <Required /></FieldLabel>
                   <div className="grid gap-4 sm:grid-cols-3">
@@ -921,7 +921,7 @@ export function CampaignCreateWizard({
                       <ReviewRow label="상호명" value={displayOrPending(campaignDraft.operatorName)} />
                       <ReviewRow label="카테고리" value={displayOrPending(campaignDraft.category)} />
                       <ReviewRow label="모집 채널" value={reviewChannel} />
-                      <ReviewRow label="모집 인원" value={reviewRecruitCount} />
+                      <ReviewRow label="선정 인원" value={reviewRecruitCount} />
                       <ReviewRow label="모집 기간" value={reviewRecruitPeriod} />
                       <ReviewRow label="선정 발표일" value={formatReviewDate(campaignDraft.selectionDate)} />
                       <ReviewRow label="콘텐츠 마감일" value={formatReviewDate(campaignDraft.submissionDue)} />

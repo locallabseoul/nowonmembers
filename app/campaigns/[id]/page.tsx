@@ -46,7 +46,6 @@ export default async function CampaignDetailPage({ params, searchParams }: { par
   };
   const hasCoordinates = typeof campaign.latitude === "number" && typeof campaign.longitude === "number";
   const naverMapsClientId = process.env.NAVER_MAPS_CLIENT_ID ?? process.env.NAVER_CLOUD_MAPS_CLIENT_ID;
-  const progress = Math.min(100, Math.round((campaign.appliedCount / Math.max(campaign.recruitCount, 1)) * 100));
   const requirements = campaign.contentRequirements;
   const requiredKeywords = campaign.requiredKeywords;
   const referenceImages = campaign.referenceImages.filter(Boolean);
@@ -226,12 +225,19 @@ export default async function CampaignDetailPage({ params, searchParams }: { par
             <div className="space-y-6 lg:sticky lg:top-24">
               <div className="rounded-[20px] border border-gray-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
                 <div className="mb-6">
-                  <div className="mb-2 flex items-center justify-between">
+                  <div className="mb-3 flex items-center justify-between">
                     <span className="text-sm font-black text-gray-500">모집 현황</span>
-                    <span className="text-sm font-black text-primary">{campaign.appliedCount}명 / {campaign.recruitCount}명 신청</span>
+                    <span className="text-xs font-bold text-gray-400">모집 기간 내 신청 가능</span>
                   </div>
-                  <div className="h-2.5 w-full rounded-full bg-gray-100">
-                    <div className="h-2.5 rounded-full bg-primary" style={{ width: `${progress}%` }} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-primary/10 p-4">
+                      <p className="text-xs font-bold text-primary">현재 신청자</p>
+                      <p className="mt-1 text-2xl font-black text-charcoal">{campaign.appliedCount}명</p>
+                    </div>
+                    <div className="rounded-xl bg-gray-50 p-4">
+                      <p className="text-xs font-bold text-gray-500">선정 예정</p>
+                      <p className="mt-1 text-2xl font-black text-charcoal">{campaign.recruitCount}명</p>
+                    </div>
                   </div>
                 </div>
 

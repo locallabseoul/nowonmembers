@@ -71,10 +71,7 @@ export function HomeHeroCarousel() {
     <div className="w-full max-w-[400px]">
       <div className="overflow-hidden rounded-3xl">
         <div className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${index * 100}%)` }}>
-          {slides.map((slide) => {
-            const progress = Math.min(100, Math.round((slide.appliedCount / Math.max(slide.recruitCount, 1)) * 100));
-
-            return (
+          {slides.map((slide) => (
               <div key={slide.title} className="w-full shrink-0">
                 <div className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl">
                   <div className="relative h-52 overflow-hidden">
@@ -119,19 +116,16 @@ export function HomeHeroCarousel() {
                           <span className="min-w-0 truncate text-sm font-extrabold text-charcoal">{slide.benefit}</span>
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="mb-1 text-[10px] font-medium leading-none text-slate-400">신청 현황</p>
-                          <p className="text-sm font-extrabold leading-none text-charcoal">{slide.appliedCount}/{slide.recruitCount}명</p>
+                          <p className="mb-1 text-[10px] font-medium leading-none text-slate-400">신청자</p>
+                          <p className="text-sm font-extrabold leading-none text-charcoal">{slide.appliedCount}명</p>
+                          <p className="mt-1 text-[10px] font-bold leading-none text-slate-400">선정 {slide.recruitCount}명</p>
                         </div>
-                      </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                        <div className="h-1.5 rounded-full bg-primary" style={{ width: `${progress}%` }} />
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-            );
-          })}
+          ))}
         </div>
       </div>
 

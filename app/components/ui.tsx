@@ -49,7 +49,7 @@ export function CampaignCard({ campaign }: { campaign: Campaign }) {
         <p className="mt-2 line-clamp-2 text-sm leading-6 text-gray-500">{campaign.description}</p>
         <div className="mt-5 grid gap-2 text-sm text-gray-600">
           <span className="flex items-center gap-2"><MapPin size={16} className="text-primary" />{campaign.region} · {businessName}</span>
-          <span className="flex items-center gap-2"><Users size={16} className="text-primary" />{campaign.appliedCount}명 / {campaign.recruitCount}명 신청</span>
+          <span className="flex items-center gap-2"><Users size={16} className="text-primary" />신청 {campaign.appliedCount}명 · 선정 {campaign.recruitCount}명</span>
           <span className="flex items-center gap-2"><CalendarDays size={16} className="text-primary" />마감 {campaign.recruitEnd}</span>
         </div>
       </div>

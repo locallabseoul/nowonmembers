@@ -112,7 +112,7 @@ export async function createCampaign(formData: FormData) {
   const referenceImages = getImageFiles(formData, "reference_images").slice(0, 6);
 
   if (!title || !region || !description || !benefitValue || !recruitCount || !recruitEnd) {
-    redirectWithError("캠페인 제목, 주소, 모집 인원, 모집 마감일, 제공 내역, 상세 설명을 입력해주세요.");
+    redirectWithError("캠페인 제목, 주소, 선정 인원, 모집 마감일, 제공 내역, 상세 설명을 입력해주세요.");
   }
 
   if (latitude === null || longitude === null) {

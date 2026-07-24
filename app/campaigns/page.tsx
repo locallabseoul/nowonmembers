@@ -99,7 +99,7 @@ function CampaignListCard({ campaign }: { campaign: Campaign }) {
             <span className="truncate font-black text-charcoal">{campaign.benefitValue}</span>
           </div>
           <div className="shrink-0 text-sm font-bold text-gray-500">
-            {campaign.appliedCount}명 / {campaign.recruitCount}명 신청
+            신청 {campaign.appliedCount}명 · 선정 {campaign.recruitCount}명
           </div>
         </div>
       </div>

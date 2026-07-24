@@ -43,12 +43,8 @@ export function isRecruitmentExpired(campaign: CampaignGate, today = getKoreaTod
   return Boolean(campaign.recruitEnd && campaign.recruitEnd < today);
 }
 
-export function isCampaignAtCapacity(campaign: CampaignGate) {
-  return campaign.recruitCount > 0 && campaign.appliedCount >= campaign.recruitCount;
-}
-
 export function canApplyToCampaign(campaign: CampaignGate, today = getKoreaTodayString()) {
-  return campaign.status === "recruiting" && !isRecruitmentExpired(campaign, today) && !isCampaignAtCapacity(campaign);
+  return campaign.status === "recruiting" && !isRecruitmentExpired(campaign, today);
 }
 
 export function daysUntilDate(value: string, today = getKoreaTodayString()) {
@@ -62,7 +58,6 @@ export function daysUntilDate(value: string, today = getKoreaTodayString()) {
 
 export function getCampaignDeadlineLabel(campaign: CampaignGate, today = getKoreaTodayString()) {
   if (campaign.status !== "recruiting") return "마감됨";
-  if (isCampaignAtCapacity(campaign)) return "정원마감";
 
   const remainingDays = daysUntilDate(campaign.recruitEnd, today);
   if (remainingDays === null) return "마감일 미정";
@@ -85,21 +80,9 @@ export function getCampaignLifecycle(campaign: CampaignGate, today = getKoreaTod
       };
     }
 
-    if (isCampaignAtCapacity(campaign)) {
-      return {
-        label: "정원 마감",
-        description: "모집 인원이 모두 채워져 추가 신청을 받을 수 없습니다.",
-        visibilityLabel: "공개 목록 미노출",
-        actionLabel: "모집 정원이 마감되었습니다.",
-        canApply: false,
-        isClosed: true,
-        badgeTone: "gray"
-      };
-    }
-
     return {
       label: "모집중",
-      description: "공개 목록에 노출되며 크리에이터 신청을 받을 수 있습니다.",
+      description: "공개 목록에 노출되며 선정 인원과 관계없이 모집 기간 동안 신청을 받을 수 있습니다.",
       visibilityLabel: "공개 모집중",
       actionLabel: "캠페인 신청하기",
       canApply: true,
