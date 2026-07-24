@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Menu, Plus, UserRound } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
+import { AccountMenu } from "@/app/components/account-menu";
 import { HeaderNav } from "@/app/components/header-nav";
-import { RoleAwareActionLink } from "@/app/components/role-aware-action-link";
 import { getAccountPath, getCurrentSessionProfile } from "@/lib/auth/guards";
 import "./globals.css";
 
@@ -26,9 +26,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
 
 async function Header() {
   const { user, profile } = await getCurrentSessionProfile();
-  const displayName = profile?.nickname || user?.email?.split("@")[0] || "내 계정";
+  const displayName = profile?.nickname || user?.email?.split("@")[0] || user?.phone || "내 계정";
   const role = profile?.role;
   const isLoggedIn = Boolean(user);
+  const accountPath = getAccountPath(role);
+  const profileEditPath = getProfileEditPath(role);
+  const avatarUrl = isLoggedIn ? await getHeaderAvatarUrl(role, user?.id) : "";
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/80 backdrop-blur-md">
@@ -42,29 +45,18 @@ async function Header() {
         <div className="flex items-center gap-3">
           {isLoggedIn ? (
             <>
-              <Link href={getAccountPath(role)} className="hidden text-sm font-bold text-slate-600 hover:text-primary sm:inline-flex">
-                {displayName}
-              </Link>
-              <Link href={getAccountPath(role)} className="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition-all hover:border-primary hover:text-primary">
-                마이페이지
-              </Link>
-              <form action={signOut}>
-                <button className="rounded-full bg-charcoal px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-slate-800">
-                  로그아웃
-                </button>
-              </form>
+              {role === "business" ? (
+                <Link
+                  href="/business/campaigns/new"
+                  className="hidden items-center gap-2 rounded-full bg-charcoal px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-slate-800 md:inline-flex"
+                >
+                  <Plus size={13} /> 캠페인 만들기
+                </Link>
+              ) : null}
+              <AccountMenu displayName={displayName} role={role} accountPath={accountPath} profileEditPath={profileEditPath} avatarUrl={avatarUrl} signOutAction={signOut} />
             </>
           ) : (
             <>
-              <RoleAwareActionLink
-                href="/business/campaigns/new"
-                unauthenticatedHref="/auth?next=/business/campaigns/new"
-                currentRole={role}
-                requiredRole="business"
-                className="hidden items-center gap-2 rounded-full bg-charcoal px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-slate-800 md:inline-flex"
-              >
-                <Plus size={13} /> 캠페인 만들기
-              </RoleAwareActionLink>
               <Link href="/auth" className="flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-primary hover:text-primary">
                 <UserRound size={15} />
                 <span className="hidden sm:inline">로그인</span>
@@ -80,9 +72,45 @@ async function Header() {
   );
 }
 
+function getProfileEditPath(role?: string | null) {
+  if (role === "business") return "/business/dashboard?profile=edit";
+  if (role === "creator") return "/creator/profile";
+  return null;
+}
+
+async function getHeaderAvatarUrl(role?: string | null, userId?: string) {
+  if (!userId) return "";
+
+  const { supabase } = await getCurrentSessionProfile();
+
+  if (role === "creator") {
+    const { data } = await supabase
+      .from("creator_profiles")
+      .select("avatar_url")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    return data?.avatar_url ?? "";
+  }
+
+  if (role === "business") {
+    const { data } = await supabase
+      .from("business_profiles")
+      .select("cover_image_url")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    return data?.cover_image_url ?? "";
+  }
+
+  return "";
+}
+
 async function Footer() {
   const { profile } = await getCurrentSessionProfile();
   const role = profile?.role;
+  const serviceLinks: [string, string][] = [["/campaigns", "캠페인 목록"], ["/stories", "완료 콘텐츠"]];
+  if (role === "business") serviceLinks.push(["/business/campaigns/new", "캠페인 만들기"]);
 
   return (
     <footer className="bg-charcoal pb-8 pt-14 text-white">
@@ -96,7 +124,7 @@ async function Footer() {
             <div className="text-xs font-medium text-gray-500">A service by <span className="font-bold text-primary">Local Lab Community</span></div>
           </div>
           <div className="grid grid-cols-2 gap-8 md:grid-cols-3 lg:gap-16">
-            <FooterColumn role={role} title="서비스" links={[["/campaigns", "캠페인 목록"], ["/stories", "완료 콘텐츠"], ["/business/campaigns/new", "캠페인 만들기"]]} />
+            <FooterColumn title="서비스" links={serviceLinks} />
             <FooterColumn title="마이페이지" links={[["/creator/dashboard", "크리에이터 마이페이지"], ["/business/dashboard", "운영자 마이페이지"], ["/auth", "콘텐츠 제출"]]} />
             <FooterColumn title="정보" links={[["/auth", "이용약관"], ["/auth", "개인정보처리방침"], ["/auth", "고객센터"]]} />
           </div>
@@ -110,26 +138,14 @@ async function Footer() {
   );
 }
 
-function FooterColumn({ title, links, role }: { title: string; links: [string, string][]; role?: string | null }) {
+function FooterColumn({ title, links }: { title: string; links: [string, string][] }) {
   return (
     <div>
       <h4 className="mb-4 text-sm font-black uppercase tracking-wide text-white">{title}</h4>
       <ul className="space-y-2.5">
         {links.map(([href, label]) => (
           <li key={label}>
-            {href === "/business/campaigns/new" ? (
-              <RoleAwareActionLink
-                href={href}
-                unauthenticatedHref="/auth?next=/business/campaigns/new"
-                currentRole={role}
-                requiredRole="business"
-                className="text-sm text-gray-400 transition-colors hover:text-white"
-              >
-                {label}
-              </RoleAwareActionLink>
-            ) : (
-              <Link href={href} className="text-sm text-gray-400 transition-colors hover:text-white">{label}</Link>
-            )}
+            <Link href={href} className="text-sm text-gray-400 transition-colors hover:text-white">{label}</Link>
           </li>
         ))}
       </ul>
