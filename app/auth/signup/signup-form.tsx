@@ -87,6 +87,42 @@ function formatPhone(value: string) {
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 }
 
+function formatBusinessRegistrationNumber(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 10);
+
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 5) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+
+  return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+}
+
+function BusinessRegistrationField({
+  value,
+  onChange
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block space-y-2">
+      <span className="block text-sm font-bold text-gray-700">
+        사업자등록번호 <span className="text-primary">*</span>
+      </span>
+      <input
+        name="business_registration_number"
+        inputMode="numeric"
+        value={value}
+        onChange={(event) => onChange(formatBusinessRegistrationNumber(event.target.value))}
+        required
+        minLength={12}
+        maxLength={12}
+        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all placeholder:text-gray-400 focus:border-primary focus:ring-2 focus:ring-primary/20"
+        placeholder="000-00-00000"
+      />
+    </label>
+  );
+}
+
 function PhoneField({
   value,
   onChange
@@ -171,6 +207,7 @@ export function SignupForm({
   const [role, setRole] = useState<SignupRole>(initialRole);
   const [creatorNickname, setCreatorNickname] = useState("");
   const [businessName, setBusinessName] = useState("");
+  const [businessRegistrationNumber, setBusinessRegistrationNumber] = useState("");
   const [phone, setPhone] = useState("");
   const [nicknameStatus, setNicknameStatus] = useState<NicknameCheckStatus>("idle");
   const [nicknameMessage, setNicknameMessage] = useState("");
@@ -268,9 +305,12 @@ export function SignupForm({
         <section className="space-y-5">
           <SectionTitle number={2}>계정 정보</SectionTitle>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <Field label="이메일" name="email" type="email" placeholder="example@email.com" />
+            <PhoneField value={phone} onChange={setPhone} />
             <Field label="비밀번호" name="password" type="password" placeholder="6자 이상" minLength={6} />
           </div>
+          <p className="text-xs font-medium text-gray-400">전화번호로 로그인하고, 가입 완료 전 SMS 인증을 진행합니다.</p>
+          <Field label="이메일" name="email" type="email" placeholder="example@email.com" required={false} />
+          <p className="text-xs font-medium text-gray-400">이메일은 계정 안내와 알림을 위한 선택 입력입니다.</p>
         </section>
 
         <hr className="border-gray-100" />
@@ -289,13 +329,12 @@ export function SignupForm({
                   status={nicknameStatus}
                   message={role === "business" ? nicknameMessage : ""}
                 />
-                <Field label="사업자등록번호" name="business_registration_number" placeholder="000-00-00000" />
+                <BusinessRegistrationField value={businessRegistrationNumber} onChange={setBusinessRegistrationNumber} />
               </div>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <Field label="담당자명" name="manager_name" placeholder="홍길동" />
-                <PhoneField value={phone} onChange={setPhone} />
+                <Field label="추천코드" name="referral_code" placeholder="추천코드가 있다면 입력" required={false} />
               </div>
-              <Field label="추천코드" name="referral_code" placeholder="추천코드가 있다면 입력" required={false} />
             </>
           ) : (
             <>
@@ -311,7 +350,6 @@ export function SignupForm({
                 />
                 <Field label="이름" name="name" placeholder="홍길동" />
               </div>
-              <PhoneField value={phone} onChange={setPhone} />
             </>
           )}
         </section>
@@ -339,8 +377,9 @@ export function SignupForm({
             disabled={!canSubmit}
             className="w-full rounded-xl bg-primary px-5 py-4 font-black text-white shadow-sm transition-colors hover:bg-primaryHover disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
           >
-            가입 완료하기
+            인증 문자 보내기
           </button>
+          <p className="mt-3 text-center text-xs font-bold text-gray-400">입력한 전화번호로 인증번호를 보낸 뒤, 같은 회원가입 페이지에서 인증을 완료합니다.</p>
           <p className="mt-4 text-center text-sm text-gray-500">
             이미 계정이 있으신가요? <Link href="/auth" className="font-bold text-primary hover:underline">로그인</Link>
           </p>

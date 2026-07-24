@@ -1,8 +1,8 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getAccountPath } from "@/lib/auth/guards";
+import { normalizePhoneNumber, toKoreanE164Phone } from "@/lib/auth/phone";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function profilePathForRole(role: "business" | "creator") {
@@ -15,14 +15,6 @@ function getSafeNext(next: string | null) {
   }
 
   return next;
-}
-
-function getConfiguredCallbackUrl(role: "business" | "creator") {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-
-  if (!siteUrl) return null;
-
-  return `${siteUrl.replace(/\/$/, "")}/auth/callback?next=${encodeURIComponent(profilePathForRole(role))}`;
 }
 
 function getSignupRedirect(role: "business" | "creator", error: string) {
@@ -66,16 +58,23 @@ function requiredText(formData: FormData, name: string, label: string, role: "bu
 }
 
 function normalizePhone(phone: string) {
-  return phone.replace(/\D/g, "");
+  return normalizePhoneNumber(phone);
+}
+
+function normalizeBusinessRegistrationNumber(value: string) {
+  return value.replace(/\D/g, "");
 }
 
 export async function signIn(formData: FormData) {
-  const email = String(formData.get("email") ?? "");
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
   const password = String(formData.get("password") ?? "");
   const next = getSafeNext(String(formData.get("next") ?? ""));
+  const authPhone = toKoreanE164Phone(phone);
 
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = authPhone
+    ? await supabase.auth.signInWithPassword({ phone: authPhone, password })
+    : { data: { user: null }, error: new Error("전화번호를 정확히 입력해주세요.") };
 
   if (error) {
     const nextParam = next ? `&next=${encodeURIComponent(next)}` : "";
@@ -94,7 +93,7 @@ export async function signIn(formData: FormData) {
 export async function signUp(formData: FormData) {
   const rawRole = String(formData.get("role") ?? "creator");
   const role: "business" | "creator" = rawRole === "business" ? "business" : "creator";
-  const email = requiredText(formData, "email", "이메일", role).toLowerCase();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
   const password = requiredText(formData, "password", "비밀번호", role);
   const agreedTerms = formData.get("agreement_terms") === "on";
   const agreedPrivacy = formData.get("agreement_privacy") === "on";
@@ -117,28 +116,32 @@ export async function signUp(formData: FormData) {
   if (phone.length < 10 || phone.length > 11) {
     redirect(getSignupRedirect(role, "전화번호를 정확히 입력해주세요."));
   }
-
-  const businessRegistrationNumber = role === "business"
-    ? requiredText(formData, "business_registration_number", "사업자등록번호", role)
-    : null;
-  const referralCode = role === "business" ? String(formData.get("referral_code") ?? "").trim() || null : null;
-  const headerStore = await headers();
-  const origin = headerStore.get("origin");
-  const emailRedirectTo =
-    getConfiguredCallbackUrl(role) ??
-    (origin ? `${origin}/auth/callback?next=${encodeURIComponent(profilePathForRole(role))}` : undefined);
-
-  const supabase = await createSupabaseServerClient();
-  const { data: isEmailAvailable, error: emailAvailabilityError } = await supabase.rpc("is_signup_email_available", {
-    target_email: email
-  });
-
-  if (emailAvailabilityError) {
-    redirect(getSignupRedirect(role, "이메일 중복 확인 중 오류가 발생했습니다."));
+  const authPhone = toKoreanE164Phone(phone);
+  if (!authPhone) {
+    redirect(getSignupRedirect(role, "전화번호를 정확히 입력해주세요."));
   }
 
-  if (!isEmailAvailable) {
-    redirect(getSignupRedirect(role, "이미 가입된 이메일입니다."));
+  const businessRegistrationNumber = role === "business"
+    ? normalizeBusinessRegistrationNumber(requiredText(formData, "business_registration_number", "사업자등록번호", role))
+    : null;
+  if (role === "business" && businessRegistrationNumber?.length !== 10) {
+    redirect(getSignupRedirect(role, "사업자등록번호를 정확히 입력해주세요."));
+  }
+
+  const referralCode = role === "business" ? String(formData.get("referral_code") ?? "").trim() || null : null;
+  const supabase = await createSupabaseServerClient();
+  if (email) {
+    const { data: isEmailAvailable, error: emailAvailabilityError } = await supabase.rpc("is_signup_email_available", {
+      target_email: email
+    });
+
+    if (emailAvailabilityError) {
+      redirect(getSignupRedirect(role, "이메일 중복 확인 중 오류가 발생했습니다."));
+    }
+
+    if (!isEmailAvailable) {
+      redirect(getSignupRedirect(role, "이미 가입된 이메일입니다."));
+    }
   }
 
   const { data: isNicknameAvailable, error: nicknameAvailabilityError } = await supabase.rpc(
@@ -169,14 +172,15 @@ export async function signUp(formData: FormData) {
   }
 
   const { data, error } = await supabase.auth.signUp({
-    email,
+    phone: authPhone,
     password,
     options: {
-      emailRedirectTo,
+      channel: "sms",
       data: {
         role,
         nickname,
         name,
+        email,
         phone,
         business_registration_number: businessRegistrationNumber,
         referral_code: referralCode
@@ -204,10 +208,49 @@ export async function signUp(formData: FormData) {
   }
 
   if (!data.session) {
-    redirect(`/auth?message=${encodeURIComponent("가입 확인 메일을 확인한 뒤 로그인해주세요.")}`);
+    redirect(`/auth/signup?role=${role}&verify=phone&phone=${encodeURIComponent(phone)}&message=${encodeURIComponent("문자로 받은 인증번호를 입력해주세요.")}`);
   }
 
   redirect(profilePathForRole(role));
+}
+
+export async function verifyAuthPhoneOtp(formData: FormData) {
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
+  const token = String(formData.get("token") ?? "").trim();
+  const rawRole = String(formData.get("role") ?? "creator");
+  const role: "business" | "creator" = rawRole === "business" ? "business" : "creator";
+  const rawType = String(formData.get("type") ?? "sms");
+  const type: "sms" | "phone_change" = rawType === "phone_change" ? "phone_change" : "sms";
+  const source = String(formData.get("source") ?? "");
+  const next = getSafeNext(String(formData.get("next") ?? "")) ?? profilePathForRole(role);
+  const authPhone = toKoreanE164Phone(phone);
+  const errorRedirect = source === "signup"
+    ? `/auth/signup?role=${role}&verify=phone&phone=${encodeURIComponent(phone)}`
+    : `/auth/verify-phone?role=${role}&phone=${encodeURIComponent(phone)}&type=${type}&next=${encodeURIComponent(next)}`;
+
+  if (!authPhone || !token) {
+    redirect(`${errorRedirect}&error=${encodeURIComponent("전화번호와 인증번호를 확인해주세요.")}`);
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.auth.verifyOtp({
+    phone: authPhone,
+    token,
+    type
+  });
+
+  if (error) {
+    redirect(`${errorRedirect}&error=${encodeURIComponent(error.message)}`);
+  }
+
+  if (data.user) {
+    await supabase
+      .from("profiles")
+      .update({ phone })
+      .eq("id", data.user.id);
+  }
+
+  redirect(next);
 }
 
 export async function signOut() {

@@ -593,8 +593,8 @@ function Pagination({
   );
 }
 
-export default async function BusinessDashboardPage({ searchParams }: { searchParams: Promise<{ error?: string; campaign?: string; appStatus?: string; status?: string; sort?: string; q?: string; page?: string; next?: string; profile?: string; tab?: string }> }) {
-  const { error, campaign, appStatus, status, sort, q, page, next, profile, tab } = await searchParams;
+export default async function BusinessDashboardPage({ searchParams }: { searchParams: Promise<{ error?: string; message?: string; campaign?: string; appStatus?: string; status?: string; sort?: string; q?: string; page?: string; next?: string; profile?: string; tab?: string }> }) {
+  const { error, message, campaign, appStatus, status, sort, q, page, next, profile, tab } = await searchParams;
   const statusFilter = normalizeApplicationStatusFilter(appStatus);
   const activeModalTab = normalizeModalTab(tab);
   const campaignFilter = normalizeCampaignListFilter(status);
@@ -617,7 +617,7 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
   if (!business) {
     return (
       <main className="bg-[#F8F9FA]">
-        <BusinessProfileWizard action={saveBusinessProfile} error={error} next={next} />
+        <BusinessProfileWizard action={saveBusinessProfile} error={error} message={message} next={next} />
       </main>
     );
   }
@@ -628,7 +628,7 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 md:py-10 lg:flex-row lg:px-8">
           <OperatorSidebar business={business} active="campaigns" />
           <div className="min-w-0 flex-grow">
-            <BusinessProfileWizard action={saveBusinessProfile} error={error} next={next} mode="edit" initialBusiness={business} />
+            <BusinessProfileWizard action={saveBusinessProfile} error={error} message={message} next={next} mode="edit" initialBusiness={business} />
           </div>
         </div>
       </main>

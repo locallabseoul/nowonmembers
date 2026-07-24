@@ -1,4 +1,5 @@
 import { stories as fallbackStories, getBusiness as getFallbackBusiness, getCreator as getFallbackCreator } from "@/lib/data";
+import { normalizeKoreanAuthPhone } from "@/lib/auth/phone";
 import type { Campaign, LocalStory } from "@/lib/types";
 import { createSupabaseServerClient } from "./server";
 
@@ -252,6 +253,15 @@ export type BusinessDashboardData = {
     verificationStatus: string;
     isPublic: boolean;
     coverImage: string;
+    managerName: string;
+    managerEmail: string;
+    managerPhone: string;
+    businessRegistrationNumber: string;
+    referralCode: string;
+    verification: {
+      emailVerified: boolean;
+      phoneVerified: boolean;
+    };
   } | null;
   campaigns: DashboardCampaign[];
   selectedCampaign: DashboardCampaign | null;
@@ -827,11 +837,18 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
     return { business: null, campaigns: [], selectedCampaign: null, selectedCampaignApplications: [], selectedCampaignSubmissions: [], recommendedApplications: [] };
   }
 
-  const { data: business } = await supabase
-    .from("business_profiles")
-    .select("id,business_name,category,short_intro,description,address,district,contact,business_hours,website_url,social_urls,verification_status,is_public,cover_image_url")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [{ data: business }, { data: profile }] = await Promise.all([
+    supabase
+      .from("business_profiles")
+      .select("id,business_name,category,short_intro,description,address,district,contact,business_hours,website_url,social_urls,verification_status,is_public,cover_image_url")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("email,name,phone,business_registration_number,referral_code")
+      .eq("id", user.id)
+      .maybeSingle()
+  ]);
 
   if (!business) {
     return { business: null, campaigns: [], selectedCampaign: null, selectedCampaignApplications: [], selectedCampaignSubmissions: [], recommendedApplications: [] };
@@ -884,7 +901,19 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
       socialUrls: Array.isArray(business.social_urls) ? business.social_urls.filter(Boolean) : [],
       verificationStatus: business.verification_status,
       isPublic: business.is_public,
-      coverImage: business.cover_image_url ?? ""
+      coverImage: business.cover_image_url ?? "",
+      managerName: profile?.name ?? "",
+      managerEmail: profile?.email ?? user.email ?? "",
+      managerPhone: profile?.phone ?? "",
+      businessRegistrationNumber: profile?.business_registration_number ?? "",
+      referralCode: profile?.referral_code ?? "",
+      verification: {
+        emailVerified: Boolean(user.email_confirmed_at),
+        phoneVerified: Boolean(
+          user.phone_confirmed_at
+          && normalizeKoreanAuthPhone(user.phone) === normalizeKoreanAuthPhone(profile?.phone)
+        )
+      }
     },
     campaigns,
     selectedCampaign,
@@ -931,11 +960,18 @@ export async function getBusinessCreatorManagement({
 
   if (!user) return emptyResult();
 
-  const { data: business } = await supabase
-    .from("business_profiles")
-    .select("id,business_name,category,short_intro,description,address,district,contact,business_hours,website_url,social_urls,verification_status,is_public,cover_image_url")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [{ data: business }, { data: profile }] = await Promise.all([
+    supabase
+      .from("business_profiles")
+      .select("id,business_name,category,short_intro,description,address,district,contact,business_hours,website_url,social_urls,verification_status,is_public,cover_image_url")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("email,name,phone,business_registration_number,referral_code")
+      .eq("id", user.id)
+      .maybeSingle()
+  ]);
 
   if (!business) return emptyResult();
 
@@ -955,7 +991,19 @@ export async function getBusinessCreatorManagement({
     socialUrls: Array.isArray(business.social_urls) ? business.social_urls.filter(Boolean) : [],
     verificationStatus: business.verification_status,
     isPublic: business.is_public,
-    coverImage: business.cover_image_url ?? ""
+    coverImage: business.cover_image_url ?? "",
+    managerName: profile?.name ?? "",
+    managerEmail: profile?.email ?? user.email ?? "",
+    managerPhone: profile?.phone ?? "",
+    businessRegistrationNumber: profile?.business_registration_number ?? "",
+    referralCode: profile?.referral_code ?? "",
+    verification: {
+      emailVerified: Boolean(user.email_confirmed_at),
+      phoneVerified: Boolean(
+        user.phone_confirmed_at
+        && normalizeKoreanAuthPhone(user.phone) === normalizeKoreanAuthPhone(profile?.phone)
+      )
+    }
   };
 
   const { data: campaignRows } = await supabase

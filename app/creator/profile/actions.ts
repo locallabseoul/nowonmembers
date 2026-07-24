@@ -52,6 +52,28 @@ function requiredText(formData: FormData, name: string, label: string) {
   return value;
 }
 
+function normalizePhone(phone: string) {
+  return phone.replace(/\D/g, "");
+}
+
+function getProfileDuplicateMessage(error: { code?: string; message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? "";
+
+  if (message.includes("profiles_phone_normalized_unique") || message.includes("phone")) {
+    return "이미 가입된 전화번호입니다.";
+  }
+
+  if (message.includes("profiles_nickname_normalized_unique") || message.includes("nickname")) {
+    return "이미 사용 중인 닉네임입니다.";
+  }
+
+  if (error?.code === "23505" || message.includes("duplicate") || message.includes("unique")) {
+    return "이미 사용 중인 정보가 있습니다.";
+  }
+
+  return null;
+}
+
 function nullableText(formData: FormData, name: string) {
   const value = String(formData.get(name) ?? "").trim();
   return value || null;
@@ -221,6 +243,12 @@ async function replacePortfolio({
 
 export async function saveCreatorProfile(formData: FormData) {
   const { supabase, user } = await requireRole("creator", "/creator/profile");
+  const name = requiredText(formData, "name", "이름");
+  const phone = normalizePhone(requiredText(formData, "phone", "전화번호"));
+  if (phone.length < 10 || phone.length > 11) {
+    redirectWithError(formData, "전화번호를 정확히 입력해주세요.");
+  }
+
   const activityAreas = requiredList(formData, "activity_areas", "활동 지역");
   const interests = requiredList(formData, "interests", "관심 분야");
   const contentTypes = requiredList(formData, "content_types", "콘텐츠 유형");
@@ -247,6 +275,14 @@ export async function saveCreatorProfile(formData: FormData) {
     const imageValidationError = validateImageFile(avatarImage);
     if (imageValidationError) redirectWithError(formData, imageValidationError);
   }
+
+  const { data: isPhoneAvailable, error: phoneAvailabilityError } = await supabase.rpc("is_profile_phone_available", {
+    target_phone: phone,
+    current_user_id: user.id
+  });
+
+  if (phoneAvailabilityError) redirectWithError(formData, "전화번호 중복 확인 중 오류가 발생했습니다.");
+  if (!isPhoneAvailable) redirectWithError(formData, "이미 가입된 전화번호입니다.");
 
   const { data: existingCreator, error: existingCreatorError } = await supabase
     .from("creator_profiles")
@@ -288,6 +324,16 @@ export async function saveCreatorProfile(formData: FormData) {
   if (creatorError) {
     if (uploadedPaths.length) await supabase.storage.from(CREATOR_IMAGE_BUCKET).remove(uploadedPaths);
     redirectWithError(formData, creatorError.message);
+  }
+
+  const { error: profileError } = await supabase.from("profiles").update({
+    name,
+    phone
+  }).eq("id", user.id);
+
+  if (profileError) {
+    const message = getProfileDuplicateMessage(profileError) ?? profileError.message;
+    redirectWithError(formData, message);
   }
 
   try {

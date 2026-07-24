@@ -44,6 +44,32 @@ function requiredText(formData: FormData, name: string, label: string) {
   return value;
 }
 
+function normalizePhone(phone: string) {
+  return phone.replace(/\D/g, "");
+}
+
+function normalizeBusinessRegistrationNumber(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function getProfileDuplicateMessage(error: { code?: string; message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? "";
+
+  if (message.includes("profiles_nickname_normalized_unique") || message.includes("nickname")) {
+    return "이미 사용 중인 상호입니다.";
+  }
+
+  if (message.includes("profiles_phone_normalized_unique") || message.includes("phone")) {
+    return "이미 가입된 담당자 전화번호입니다.";
+  }
+
+  if (error?.code === "23505" || message.includes("duplicate") || message.includes("unique")) {
+    return "이미 사용 중인 정보가 있습니다.";
+  }
+
+  return null;
+}
+
 function nullableText(formData: FormData, name: string) {
   const value = String(formData.get(name) ?? "").trim();
   return value || null;
@@ -113,11 +139,26 @@ async function uploadBusinessImage({
 export async function saveBusinessProfile(formData: FormData) {
   const { supabase, user } = await requireRole("business", "/business/dashboard");
   const businessName = requiredText(formData, "business_name", "가게명");
+  const managerName = requiredText(formData, "manager_name", "담당자명");
+  const managerPhone = normalizePhone(requiredText(formData, "manager_phone", "담당자 전화번호"));
+  if (managerPhone.length < 10 || managerPhone.length > 11) {
+    redirectWithError(formData, "담당자 전화번호를 정확히 입력해주세요.");
+  }
+
+  const businessRegistrationNumber = normalizeBusinessRegistrationNumber(requiredText(formData, "business_registration_number", "사업자등록번호"));
+  if (businessRegistrationNumber.length !== 10) {
+    redirectWithError(formData, "사업자등록번호를 정확히 입력해주세요.");
+  }
+
   const category = requiredText(formData, "category", "업종");
   const shortIntro = requiredText(formData, "short_intro", "한 줄 소개");
   const address = requiredText(formData, "address", "주소");
   const district = requiredText(formData, "district", "활동 지역");
-  const contact = requiredText(formData, "contact", "연락처");
+  const contact = normalizePhone(requiredText(formData, "contact", "매장 연락처"));
+  if (contact.length < 8 || contact.length > 11) {
+    redirectWithError(formData, "매장 연락처를 정확히 입력해주세요.");
+  }
+
   const businessHoursSummary = requiredText(formData, "business_hours_summary", "영업시간");
   const businessHoursPreset = String(formData.get("business_hours_preset") ?? "").trim();
   const businessHoursNote = String(formData.get("business_hours_note") ?? "").trim();
@@ -139,6 +180,22 @@ export async function saveBusinessProfile(formData: FormData) {
     const imageValidationError = validateImageFile(coverImage);
     if (imageValidationError) redirectWithError(formData, imageValidationError);
   }
+
+  const [{ data: isNicknameAvailable, error: nicknameAvailabilityError }, { data: isPhoneAvailable, error: phoneAvailabilityError }] = await Promise.all([
+    supabase.rpc("is_profile_nickname_available", {
+      target_nickname: businessName,
+      current_user_id: user.id
+    }),
+    supabase.rpc("is_profile_phone_available", {
+      target_phone: managerPhone,
+      current_user_id: user.id
+    })
+  ]);
+
+  if (nicknameAvailabilityError) redirectWithError(formData, "상호 중복 확인 중 오류가 발생했습니다.");
+  if (!isNicknameAvailable) redirectWithError(formData, "이미 사용 중인 상호입니다.");
+  if (phoneAvailabilityError) redirectWithError(formData, "담당자 전화번호 중복 확인 중 오류가 발생했습니다.");
+  if (!isPhoneAvailable) redirectWithError(formData, "이미 가입된 담당자 전화번호입니다.");
 
   const { data: existingBusiness, error: existingBusinessError } = await supabase
     .from("business_profiles")
@@ -191,10 +248,13 @@ export async function saveBusinessProfile(formData: FormData) {
 
   const { error: profileError } = await supabase.from("profiles").update({
     email: user.email,
-    nickname: businessName
+    nickname: businessName,
+    name: managerName,
+    phone: managerPhone,
+    business_registration_number: businessRegistrationNumber
   }).eq("id", user.id);
 
-  if (profileError) redirectWithError(formData, profileError.message);
+  if (profileError) redirectWithError(formData, getProfileDuplicateMessage(profileError) ?? profileError.message);
 
   revalidatePath("/business/dashboard");
   const next = getSafeNext(formData.get("next"));

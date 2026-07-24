@@ -1,4 +1,5 @@
 import { requireRole } from "@/lib/auth/guards";
+import { normalizeKoreanAuthPhone } from "@/lib/auth/phone";
 import { CreatorProfileWizard, type CreatorProfileInitialData } from "./creator-profile-wizard";
 
 type Relation<T> = T | T[] | null | undefined;
@@ -44,12 +45,12 @@ function getSafeNext(next?: string) {
   return next;
 }
 
-export default async function CreatorProfilePage({ searchParams }: { searchParams: Promise<{ error?: string; next?: string }> }) {
-  const { error, next } = await searchParams;
+export default async function CreatorProfilePage({ searchParams }: { searchParams: Promise<{ error?: string; message?: string; next?: string }> }) {
+  const { error, message, next } = await searchParams;
   const safeNext = getSafeNext(next);
   const { supabase, user } = await requireRole("creator", "/creator/profile");
   const [{ data: profile }, { data: creator }] = await Promise.all([
-    supabase.from("profiles").select("nickname,email").eq("id", user.id).maybeSingle(),
+    supabase.from("profiles").select("nickname,email,name,phone").eq("id", user.id).maybeSingle(),
     supabase
       .from("creator_profiles")
       .select(`
@@ -74,6 +75,15 @@ export default async function CreatorProfilePage({ searchParams }: { searchParam
     id: creatorProfile?.id,
     nickname: profile?.nickname ?? user.email?.split("@")[0] ?? "",
     email: profile?.email ?? user.email ?? "",
+    name: profile?.name ?? "",
+    phone: profile?.phone ?? "",
+    verification: {
+      emailVerified: Boolean(user.email_confirmed_at),
+      phoneVerified: Boolean(
+        user.phone_confirmed_at
+        && normalizeKoreanAuthPhone(user.phone) === normalizeKoreanAuthPhone(profile?.phone)
+      )
+    },
     activityAreas: asStringArray(creatorProfile?.activity_areas),
     interests: asStringArray(creatorProfile?.interests),
     contentTypes: asStringArray(creatorProfile?.content_types),
@@ -91,7 +101,7 @@ export default async function CreatorProfilePage({ searchParams }: { searchParam
 
   return (
     <main className="bg-[#F8F9FA]">
-      <CreatorProfileWizard error={error} next={safeNext} initialProfile={initialProfile} />
+      <CreatorProfileWizard error={error} message={message} next={safeNext} initialProfile={initialProfile} />
     </main>
   );
 }

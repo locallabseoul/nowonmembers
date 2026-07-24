@@ -22,15 +22,15 @@ export default async function AuthPage({ searchParams }: { searchParams: Promise
             <LogIn size={22} />
           </div>
           <h1 className="text-2xl font-black text-charcoal">로그인</h1>
-          <p className="mt-2 text-sm text-gray-500">가입한 이메일로 캠페인과 프로필을 관리합니다.</p>
+          <p className="mt-2 text-sm text-gray-500">가입한 전화번호로 캠페인과 프로필을 관리합니다.</p>
         </div>
         {error ? <p className="mt-4 rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
         {message ? <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{message}</p> : null}
         <form action={signIn} className="mt-6 space-y-4">
           <input type="hidden" name="next" value={safeNext} />
           <label className="block">
-            <span className="mb-2 block text-sm font-black text-charcoal">이메일</span>
-            <input name="email" type="email" required className="w-full rounded-lg border border-line px-4 py-3 text-sm focus-ring" placeholder="you@example.com" />
+            <span className="mb-2 block text-sm font-black text-charcoal">전화번호</span>
+            <input name="phone" type="tel" inputMode="numeric" autoComplete="tel" required className="w-full rounded-lg border border-line px-4 py-3 text-sm focus-ring" placeholder="010-0000-0000" />
           </label>
           <label className="block">
             <span className="mb-2 block text-sm font-black text-charcoal">비밀번호</span>
