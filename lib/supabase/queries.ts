@@ -31,7 +31,14 @@ type CampaignRow = {
   reference_image_urls: string[] | null;
   beginner_friendly: boolean;
   operator_recommended: boolean;
-  business_profiles?: { business_name: string | null } | null;
+  business_profiles?: {
+    business_name?: string | null;
+    category?: string | null;
+    business_hours?: unknown;
+    cover_image_url?: string | null;
+    address?: string | null;
+    address_detail?: string | null;
+  } | null;
   campaign_applications?: { count: number }[];
 };
 
@@ -486,6 +493,29 @@ function asStringArray(value: unknown) {
   return Array.isArray(value) ? value.map(String) : [];
 }
 
+function getCampaignRequirementData(value: unknown) {
+  if (Array.isArray(value)) {
+    const values = value.map(String).filter(Boolean);
+    return {
+      requirements: values.filter((item) => !item.trim().startsWith("#")),
+      keywords: values.filter((item) => item.trim().startsWith("#"))
+    };
+  }
+
+  if (!value || typeof value !== "object") {
+    return {
+      requirements: [],
+      keywords: []
+    };
+  }
+
+  const data = value as { requirements?: unknown; keywords?: unknown };
+  return {
+    requirements: asStringArray(data.requirements).filter(Boolean),
+    keywords: asStringArray(data.keywords).filter(Boolean)
+  };
+}
+
 function asRelation<T>(value: Relation<T>) {
   return Array.isArray(value) ? value[0] : value ?? null;
 }
@@ -763,10 +793,16 @@ const dashboardSubmissionSelect = `
 `;
 
 function mapCampaign(row: CampaignRow): Campaign {
+  const requirementData = getCampaignRequirementData(row.content_requirements);
   return {
     id: row.id,
     businessId: row.business_id,
     businessName: row.business_profiles?.business_name ?? undefined,
+    businessCategory: row.business_profiles?.category ?? undefined,
+    businessHours: getBusinessHoursText(row.business_profiles?.business_hours as BusinessHoursValue, "summary"),
+    businessCoverImage: row.business_profiles?.cover_image_url ?? undefined,
+    businessAddress: row.business_profiles?.address ?? undefined,
+    businessAddressDetail: row.business_profiles?.address_detail ?? undefined,
     title: row.title,
     description: row.description ?? "",
     campaignType: row.campaign_type === "shortform" ? "shortform" : row.campaign_type === "interview" ? "interview" : "visit",
@@ -786,7 +822,8 @@ function mapCampaign(row: CampaignRow): Campaign {
     benefitType: row.benefit_type ?? "",
     benefitValue: row.benefit_value ?? "",
     fee: row.fee ? `${row.fee.toLocaleString("ko-KR")}원` : undefined,
-    contentRequirements: asStringArray(row.content_requirements),
+    contentRequirements: requirementData.requirements,
+    requiredKeywords: requirementData.keywords,
     usageRights: row.usage_rights ?? "",
     status: row.status,
     coverImage: row.cover_image_url ?? "https://storage.googleapis.com/uxpilot-auth.appspot.com/default-placeholder.png",
@@ -845,7 +882,7 @@ export async function getPublicCampaigns(): Promise<Campaign[]> {
   await syncExpiredCampaigns(supabase);
   const { data, error } = await supabase
     .from("campaigns")
-    .select("*, business_profiles(business_name), campaign_applications(count)")
+    .select("*, business_profiles(business_name,category,business_hours,cover_image_url,address,address_detail), campaign_applications(count)")
     .in("status", ["recruiting", "selecting", "in_progress", "submission_review", "completed", "cancelled", "failed"])
     .order("recruit_end", { ascending: true });
 
@@ -858,7 +895,7 @@ export async function getPublicCampaign(id: string): Promise<Campaign | undefine
   await syncExpiredCampaigns(supabase);
   const { data, error } = await supabase
     .from("campaigns")
-    .select("*, business_profiles(business_name), campaign_applications(count)")
+    .select("*, business_profiles(business_name,category,business_hours,cover_image_url,address,address_detail), campaign_applications(count)")
     .eq("id", id)
     .maybeSingle();
 

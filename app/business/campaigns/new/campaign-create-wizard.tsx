@@ -600,6 +600,10 @@ export function CampaignCreateWizard({
     return true;
   }
 
+  function syncKeywordHiddenInput() {
+    if (keywordHiddenInputRef.current) keywordHiddenInputRef.current.value = keywordTagsRef.current.join(",");
+  }
+
   function clearKeywordInput() {
     setKeywordInputValue("");
   }
@@ -608,6 +612,7 @@ export function CampaignCreateWizard({
     if (!value.trim()) return false;
     const committed = addKeywordTags(value);
     if (committed) clearKeywordInput();
+    syncKeywordHiddenInput();
 
     return committed;
   }
@@ -865,7 +870,7 @@ export function CampaignCreateWizard({
                     className="min-w-[160px] flex-1 border-none bg-transparent p-1 text-sm outline-none placeholder:text-slate-400"
                     placeholder={keywordTags.length ? "키워드 추가..." : "예: 노원맛집 입력 후 Tab 또는 쉼표"}
                   />
-                  <input ref={keywordHiddenInputRef} type="hidden" name="keywords" value={keywordTags.join(",")} readOnly />
+                  <input ref={keywordHiddenInputRef} type="hidden" name="keywords" defaultValue="" />
                 </div>
               </section>
 

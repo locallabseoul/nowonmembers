@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth/guards";
 import { getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getPublicCampaign } from "@/lib/supabase/queries";
+import { ApplicationDatePicker } from "./application-date-picker";
 import { applyCampaign } from "./actions";
 
 export default async function CampaignApplyPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
@@ -32,7 +33,7 @@ export default async function CampaignApplyPage({ params, searchParams }: { para
         <input type="hidden" name="campaign_id" value={campaign.id} />
         <Field name="applicant_name" label="신청자 이름" placeholder="김노원" defaultValue={defaults.applicantName} />
         <Field name="channel_url" label="운영 채널 URL" placeholder="https://blog.naver.com/..." defaultValue={defaults.channelUrl} />
-        <Field name="available_dates" label="방문 가능한 날짜" placeholder="예: 7월 24일 오후, 7월 27일 오전" defaultValue={defaults.availableDates} />
+        <ApplicationDatePicker minDate={campaign.selectionDate} maxDate={campaign.submissionDue} defaultValue={defaults.availableDates} />
         <label className="block">
           <span className="mb-2 block text-sm font-black text-charcoal">제작하려는 콘텐츠 형식</span>
           <select name="proposed_content_type" defaultValue={defaults.proposedContentType} className="w-full rounded-lg border border-line px-4 py-3 text-sm focus-ring">

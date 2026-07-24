@@ -21,8 +21,12 @@ function getContentRequirements(formData: FormData) {
     ...formData.getAll("mission_options").map((value) => String(value).trim()).filter(Boolean),
     ...splitLines(formData.get("content_requirements"))
   ];
+  const keywords = splitLines(formData.get("keywords"));
 
-  return Array.from(new Set(requirements));
+  return {
+    keywords: Array.from(new Set(keywords)),
+    requirements: Array.from(new Set(requirements))
+  };
 }
 
 function toNullableNumber(value: FormDataEntryValue | null) {

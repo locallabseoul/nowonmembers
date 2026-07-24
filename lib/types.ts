@@ -63,6 +63,11 @@ export type Campaign = {
   id: string;
   businessId: string;
   businessName?: string;
+  businessCategory?: string;
+  businessHours?: string;
+  businessCoverImage?: string;
+  businessAddress?: string;
+  businessAddressDetail?: string | null;
   title: string;
   description: string;
   campaignType: "visit" | "shortform" | "interview";
@@ -83,6 +88,7 @@ export type Campaign = {
   benefitValue: string;
   fee?: string;
   contentRequirements: string[];
+  requiredKeywords: string[];
   usageRights: string;
   status: CampaignStatus;
   coverImage: string;

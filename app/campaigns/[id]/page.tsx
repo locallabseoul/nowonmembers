@@ -4,8 +4,9 @@ import { Check, ChevronRight, Gift, Heart, ListChecks, MapPin, MessageCircle, St
 import { RoleAwareActionLink } from "@/app/components/role-aware-action-link";
 import { getCurrentSessionProfile } from "@/lib/auth/guards";
 import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
-import { getDisplayBusiness, getPublicCampaign } from "@/lib/supabase/queries";
+import { getPublicCampaign } from "@/lib/supabase/queries";
 import type { Campaign } from "@/lib/types";
+import { CampaignMap } from "./campaign-map";
 
 function formatShortDate(value: string) {
   if (!value) return "-";
@@ -24,15 +25,6 @@ function channelLabel(campaign: Campaign) {
   return "블로그";
 }
 
-function keywordTags(campaign: Campaign, businessName: string) {
-  return [
-    `#${campaign.region.replace(/\s/g, "")}`,
-    `#${campaign.category.replace(/[·\s]/g, "")}`,
-    `#${businessName.replace(/\s/g, "")}`,
-    "#NOWONMEMBERS"
-  ];
-}
-
 export default async function CampaignDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
   const { error } = await searchParams;
@@ -43,25 +35,20 @@ export default async function CampaignDetailPage({ params, searchParams }: { par
   const lifecycle = getCampaignLifecycle(campaign);
   const applyHref = `/campaigns/${campaign.id}/apply`;
   const applyAlertMessage = "캠페인 신청은 크리에이터 계정으로만 이용할 수 있습니다.";
-  const business = getDisplayBusiness(campaign.businessId);
-  const businessName = campaign.businessName ?? business.businessName;
+  const businessName = campaign.businessName ?? "매장명 미등록";
   const displayAddress = [campaign.region, campaign.regionDetail].filter(Boolean).join(" ");
   const businessDetails = {
-    category: "노원 지역 파트너",
-    businessHours: "방문 전 확인",
-    address: displayAddress || campaign.region,
-    coverImage: campaign.coverImage,
-    ...business
+    category: campaign.businessCategory || "업종 미등록",
+    businessHours: campaign.businessHours || "영업시간 미등록",
+    address: displayAddress || campaign.businessAddress || campaign.region,
+    businessName,
+    coverImage: campaign.businessCoverImage || campaign.coverImage
   };
   const hasCoordinates = typeof campaign.latitude === "number" && typeof campaign.longitude === "number";
-  const mapImageUrl = hasCoordinates ? `/api/maps/static?lat=${campaign.latitude}&lng=${campaign.longitude}` : "";
-  const naverMapUrl = hasCoordinates
-    ? `https://map.naver.com/p/search/${encodeURIComponent(campaign.region)}?c=${campaign.longitude},${campaign.latitude},16,0,0,0,dh`
-    : `https://map.naver.com/p/search/${encodeURIComponent(campaign.region)}`;
+  const naverMapsClientId = process.env.NAVER_MAPS_CLIENT_ID ?? process.env.NAVER_CLOUD_MAPS_CLIENT_ID;
   const progress = Math.min(100, Math.round((campaign.appliedCount / Math.max(campaign.recruitCount, 1)) * 100));
-  const requirements = campaign.contentRequirements.length
-    ? campaign.contentRequirements
-    : ["제공 사실 표시", "대표 메뉴 또는 공간 사진 3장 이상", "방문 일정 준수"];
+  const requirements = campaign.contentRequirements;
+  const requiredKeywords = campaign.requiredKeywords;
   const referenceImages = campaign.referenceImages.filter(Boolean);
   const noticeSectionNumber = referenceImages.length ? 4 : 3;
 
@@ -140,22 +127,30 @@ export default async function CampaignDetailPage({ params, searchParams }: { par
                 <div className="border-b border-gray-100 pb-6">
                   <h3 className="mb-3 font-black text-charcoal">1. 필수 키워드</h3>
                   <div className="flex flex-wrap gap-2">
-                    {keywordTags(campaign, businessName).map((tag) => (
-                      <span key={tag} className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm text-gray-700">{tag}</span>
-                    ))}
+                    {requiredKeywords.length ? (
+                      requiredKeywords.map((tag) => (
+                        <span key={tag} className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm text-gray-700">{tag}</span>
+                      ))
+                    ) : (
+                      <span className="text-sm font-bold text-gray-400">등록된 필수 키워드가 없습니다.</span>
+                    )}
                   </div>
-                  <p className="mt-2 text-sm text-gray-500">본문 안에 캠페인과 지역 키워드를 자연스럽게 포함해주세요.</p>
+                  {requiredKeywords.length ? <p className="mt-2 text-sm text-gray-500">본문 안에 필수 키워드를 자연스럽게 포함해주세요.</p> : null}
                 </div>
 
                 <div className="border-b border-gray-100 pb-6">
                   <h3 className="mb-3 font-black text-charcoal">2. 사진 및 콘텐츠 가이드</h3>
                   <ul className="space-y-2 text-sm text-gray-600">
-                    {requirements.map((requirement) => (
-                      <li key={requirement} className="flex items-start gap-2">
-                        <Check size={16} className="mt-0.5 shrink-0 text-primary" />
-                        {requirement}
-                      </li>
-                    ))}
+                    {requirements.length ? (
+                      requirements.map((requirement) => (
+                        <li key={requirement} className="flex items-start gap-2">
+                          <Check size={16} className="mt-0.5 shrink-0 text-primary" />
+                          {requirement}
+                        </li>
+                      ))
+                    ) : (
+                      <li className="text-sm font-bold text-gray-400">등록된 콘텐츠 조건이 없습니다.</li>
+                    )}
                   </ul>
                 </div>
 
@@ -209,26 +204,19 @@ export default async function CampaignDetailPage({ params, searchParams }: { par
                   </div>
                 </div>
 
-                <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-100 md:w-1/2">
+                <div className="md:w-1/2">
                   {hasCoordinates ? (
-                    <img
-                      src={mapImageUrl}
-                      alt={`${businessDetails.address} 지도`}
-                      className="h-48 w-full object-cover"
+                    <CampaignMap
+                      latitude={campaign.latitude as number}
+                      longitude={campaign.longitude as number}
+                      address={businessDetails.address}
+                      clientId={naverMapsClientId}
                     />
                   ) : (
-                    <div className="flex h-48 items-center justify-center px-4 text-center text-sm font-bold text-gray-400">
+                    <div className="flex h-56 items-center justify-center rounded-xl border border-gray-200 bg-gray-100 px-4 text-center text-sm font-bold text-gray-400">
                       지도 표시용 좌표가 아직 등록되지 않았습니다.
                     </div>
                   )}
-                  <a
-                    href={naverMapUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block border-t border-gray-200 bg-white px-4 py-3 text-center text-sm font-black text-primary transition-colors hover:bg-primary/5"
-                  >
-                    네이버 지도에서 보기
-                  </a>
                 </div>
               </div>
             </div>
@@ -298,7 +286,7 @@ export default async function CampaignDetailPage({ params, searchParams }: { par
                   <img src={businessDetails.coverImage} alt="" className="h-full w-full object-cover" />
                 </div>
                 <div>
-                  <p className="mb-0.5 text-xs text-gray-500">캠페인 운영자</p>
+                  <p className="mb-0.5 text-xs text-gray-500">제공 매장</p>
                   <p className="text-sm font-black text-charcoal">{businessName}</p>
                 </div>
                 <button className="ml-auto inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-500 transition-colors hover:border-primary hover:text-primary">
