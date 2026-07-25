@@ -86,15 +86,30 @@ export async function createNotice(formData: FormData) {
   const body = String(formData.get("body") ?? "").trim();
   const rawStatus = String(formData.get("status") ?? "draft");
   const status = rawStatus === "published" ? "published" : "draft";
+  const isPinned = formData.get("is_pinned") === "on";
 
   if (!title || !body) {
     redirect(`/admin?error=${encodeURIComponent("공지 제목과 본문을 입력해주세요.")}`);
+  }
+
+  if (isPinned && status !== "published") {
+    redirect(`/admin?error=${encodeURIComponent("상단 고정 공지는 공개 상태로 등록해주세요.")}`);
+  }
+
+  if (isPinned) {
+    const { error: unpinError } = await supabase
+      .from("notices")
+      .update({ is_pinned: false })
+      .eq("is_pinned", true);
+
+    if (unpinError) redirect(`/admin?error=${encodeURIComponent(unpinError.message)}`);
   }
 
   const { error } = await supabase.from("notices").insert({
     title,
     body,
     status,
+    is_pinned: isPinned,
     published_at: status === "published" ? new Date().toISOString() : null
   });
 
@@ -102,7 +117,66 @@ export async function createNotice(formData: FormData) {
 
   revalidatePath("/admin");
   revalidatePath("/notices");
+  revalidatePath("/", "layout");
   redirect("/admin?noticeCreated=1");
+}
+
+export async function updateNotice(formData: FormData) {
+  const supabase = await requireAdmin();
+  const id = String(formData.get("notice_id") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const rawStatus = String(formData.get("status") ?? "draft");
+  const status = rawStatus === "published" ? "published" : "draft";
+  const isPinned = formData.get("is_pinned") === "on";
+
+  if (!id || !title || !body) {
+    redirect(`/admin?error=${encodeURIComponent("공지 제목과 본문을 입력해주세요.")}`);
+  }
+
+  if (isPinned && status !== "published") {
+    redirect(`/admin?error=${encodeURIComponent("상단 고정 공지는 공개 상태로 저장해주세요.")}`);
+  }
+
+  const { data: notice, error: noticeError } = await supabase
+    .from("notices")
+    .select("id,published_at")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (noticeError || !notice) {
+    redirect(`/admin?error=${encodeURIComponent(noticeError?.message ?? "수정할 공지를 찾을 수 없습니다.")}`);
+  }
+
+  if (isPinned) {
+    const { error: unpinError } = await supabase
+      .from("notices")
+      .update({ is_pinned: false })
+      .eq("is_pinned", true)
+      .neq("id", id);
+
+    if (unpinError) redirect(`/admin?error=${encodeURIComponent(unpinError.message)}`);
+  }
+
+  const { error } = await supabase
+    .from("notices")
+    .update({
+      title,
+      body,
+      status,
+      is_pinned: isPinned,
+      published_at: status === "published" ? notice.published_at ?? new Date().toISOString() : null,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", id);
+
+  if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
+
+  revalidatePath("/admin");
+  revalidatePath("/notices");
+  revalidatePath(`/notices/${id}`);
+  revalidatePath("/", "layout");
+  redirect("/admin?noticeUpdated=1");
 }
 
 export async function recommendApplication(formData: FormData) {

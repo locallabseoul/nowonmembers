@@ -3,7 +3,7 @@ import { Badge, StatCard } from "@/app/components/ui";
 import { getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import { getAdminDashboard, getAdminNotices, type DashboardApplication, type DashboardCampaign, type DashboardSubmission } from "@/lib/supabase/queries";
 import { CheckCircle2, ClipboardCheck, ExternalLink, ImageIcon, Send, Users, X } from "lucide-react";
-import { approveCampaign, approveSubmission, createNotice, publishLocalStory, recommendApplication, requestCampaignRevision, requestSubmissionRevision, unrecommendApplication } from "./actions";
+import { approveCampaign, approveSubmission, createNotice, publishLocalStory, recommendApplication, requestCampaignRevision, requestSubmissionRevision, unrecommendApplication, updateNotice } from "./actions";
 import { NoticeManagementSection } from "./notice-management-section";
 
 const applicationStatusTabs = [
@@ -392,8 +392,8 @@ function ApplicantModal({
   );
 }
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ error?: string; noticeCreated?: string; campaign?: string; appStatus?: string; tab?: string }> }) {
-  const { error, noticeCreated, campaign, appStatus, tab } = await searchParams;
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ error?: string; noticeCreated?: string; noticeUpdated?: string; campaign?: string; appStatus?: string; tab?: string }> }) {
+  const { error, noticeCreated, noticeUpdated, campaign, appStatus, tab } = await searchParams;
   const statusFilter = normalizeApplicationStatusFilter(appStatus);
   const activeModalTab = normalizeModalTab(tab);
   const [{ stats, campaigns, selectedCampaign, selectedCampaignApplications, selectedCampaignSubmissions, submissions, isAdmin }, notices] = await Promise.all([
@@ -412,6 +412,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </div>
       {error ? <p className="mb-6 rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
       {noticeCreated ? <p className="mb-6 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">공지가 등록되었습니다.</p> : null}
+      {noticeUpdated ? <p className="mb-6 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">공지가 수정되었습니다.</p> : null}
       {!isAdmin ? (
         <section className="rounded-lg border border-line bg-white p-6 shadow-sm">
           <h2 className="text-xl font-black text-charcoal">관리자 권한이 필요합니다</h2>
@@ -425,7 +426,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <StatCard label="제출 승인율" value={`${completionRate}%`} icon={<Send size={20} />} />
       </div>
 
-      {isAdmin ? <NoticeManagementSection notices={notices} action={createNotice} /> : null}
+      {isAdmin ? <NoticeManagementSection notices={notices} createAction={createNotice} updateAction={updateNotice} /> : null}
 
       <section className="overflow-hidden rounded-lg border border-line bg-white shadow-sm">
         <div className="border-b border-line p-5">

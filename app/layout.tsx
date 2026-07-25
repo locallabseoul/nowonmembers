@@ -5,8 +5,9 @@ import { signOut } from "@/app/auth/actions";
 import { AccountMenu } from "@/app/components/account-menu";
 import { HeaderNav } from "@/app/components/header-nav";
 import { NoticeMenu } from "@/app/components/notice-menu";
+import { PinnedNoticeBar } from "@/app/components/pinned-notice-bar";
 import { getAccountPath, getCurrentSessionProfile } from "@/lib/auth/guards";
-import { getHeaderNoticeData } from "@/lib/supabase/queries";
+import { getHeaderNoticeData, getPinnedNotice } from "@/lib/supabase/queries";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -36,10 +37,14 @@ async function Header() {
   const accountPath = getAccountPath(role);
   const profileEditPath = getProfileEditPath(role);
   const avatarUrl = isLoggedIn ? await getHeaderAvatarUrl(role, user?.id) : "";
-  const noticeData = isLoggedIn && user ? await getHeaderNoticeData(user.id) : { notices: [], unreadCount: 0 };
+  const [noticeData, pinnedNotice] = await Promise.all([
+    isLoggedIn && user ? getHeaderNoticeData(user.id) : Promise.resolve({ notices: [], unreadCount: 0 }),
+    getPinnedNotice()
+  ]);
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/80 backdrop-blur-md">
+      {pinnedNotice ? <PinnedNoticeBar notice={pinnedNotice} /> : null}
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-8">
           <Link href="/" className="flex items-center">

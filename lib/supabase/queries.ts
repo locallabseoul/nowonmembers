@@ -60,6 +60,7 @@ type NoticeRow = {
   title: string;
   body: string | null;
   status: "draft" | "published";
+  is_pinned: boolean;
   published_at: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -875,6 +876,7 @@ function mapNotice(row: NoticeRow): Notice {
     title: row.title,
     body: row.body ?? "",
     status: row.status,
+    isPinned: row.is_pinned,
     publishedAt: row.published_at ?? "",
     createdAt: row.created_at ?? "",
     updatedAt: row.updated_at ?? ""
@@ -976,6 +978,19 @@ export async function getPublishedNotice(id: string): Promise<Notice | undefined
     .select("*")
     .eq("id", id)
     .eq("status", "published")
+    .maybeSingle();
+
+  if (error || !data) return undefined;
+  return mapNotice(data as NoticeRow);
+}
+
+export async function getPinnedNotice(): Promise<Notice | undefined> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("notices")
+    .select("*")
+    .eq("status", "published")
+    .eq("is_pinned", true)
     .maybeSingle();
 
   if (error || !data) return undefined;

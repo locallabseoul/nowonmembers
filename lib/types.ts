@@ -148,6 +148,7 @@ export type Notice = {
   title: string;
   body: string;
   status: NoticeStatus;
+  isPinned: boolean;
   publishedAt: string;
   createdAt: string;
   updatedAt: string;
