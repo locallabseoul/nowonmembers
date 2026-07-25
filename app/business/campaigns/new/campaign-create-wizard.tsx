@@ -657,7 +657,7 @@ export function CampaignCreateWizard({
   }
 
   return (
-    <main className="min-h-screen bg-surface">
+    <main className="bg-surface">
       <div className={`mx-auto px-4 py-8 pb-28 sm:px-6 md:py-12 lg:px-8 ${isLastStep ? "max-w-6xl" : "max-w-4xl"}`}>
         <div className={isLastStep ? "mx-auto mb-8 max-w-4xl" : "mb-8"}>
           <div className="mb-2 flex items-center justify-between">

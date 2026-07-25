@@ -47,7 +47,7 @@ export default async function SignupPage({
   const safeRole = normalizeRole(role);
 
   return (
-    <main className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-[#F8F9FA] px-4 py-12 sm:px-6 lg:px-8">
+    <main className="flex items-center justify-center bg-[#F8F9FA] px-4 py-12 sm:px-6 lg:px-8">
       {verify === "phone" ? (
         <SignupPhoneVerification role={safeRole} phone={phone} error={error} message={message} />
       ) : (

@@ -15,9 +15,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko">
-      <body className="min-h-screen bg-white antialiased">
+      <body className="flex min-h-dvh flex-col bg-white antialiased">
         <Header />
-        {children}
+        <div className="site-content">
+          {children}
+        </div>
         <Footer />
       </body>
     </html>
@@ -106,49 +108,29 @@ async function getHeaderAvatarUrl(role?: string | null, userId?: string) {
   return "";
 }
 
-async function Footer() {
-  const { profile } = await getCurrentSessionProfile();
-  const role = profile?.role;
-  const serviceLinks: [string, string][] = [["/campaigns", "캠페인 목록"], ["/stories", "완료 콘텐츠"]];
-  if (role === "business") serviceLinks.push(["/business/campaigns/new", "캠페인 만들기"]);
-
+function Footer() {
   return (
-    <footer className="bg-charcoal pb-8 pt-14 text-white">
+    <footer className="bg-charcoal py-8 text-white">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-10 flex flex-col justify-between gap-10 lg:flex-row">
-          <div className="max-w-xs">
-            <div className="mb-4 flex items-center">
-              <span className="text-xl font-black tracking-tight">NOWON<span className="text-primary">MEMBERS</span></span>
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <span className="text-lg font-black tracking-tight">NOWON<span className="text-primary">MEMBERS</span></span>
+            <p className="mt-3 max-w-lg text-sm leading-6 text-slate-400">노원 지역 소상공인과 크리에이터를 연결하는 로컬 콘텐츠 캠페인 플랫폼입니다.</p>
+            <div className="mt-3 flex max-w-2xl flex-wrap gap-x-3 gap-y-1 text-xs leading-5 text-gray-500">
+              <span>상호: (주)로컬랩커뮤니티</span>
+              <span>대표: 김동환</span>
+              <span>사업자등록번호: 809-81-01399</span>
+              <span>주소: 서울시 노원구 동일로183길 29, 1층 102호</span>
+              <span>문의: locallab.seoul@gmail.com</span>
             </div>
-            <p className="mb-4 text-sm leading-relaxed text-slate-400">노원 지역 소상공인과 크리에이터를 연결하는 로컬 콘텐츠 캠페인 플랫폼입니다.</p>
-            <div className="text-xs font-medium text-gray-500">A service by <span className="font-bold text-primary">Local Lab Community</span></div>
           </div>
-          <div className="grid grid-cols-2 gap-8 md:grid-cols-3 lg:gap-16">
-            <FooterColumn title="서비스" links={serviceLinks} />
-            <FooterColumn title="마이페이지" links={[["/creator/dashboard", "크리에이터 마이페이지"], ["/business/dashboard", "운영자 마이페이지"], ["/auth", "콘텐츠 제출"]]} />
-            <FooterColumn title="정보" links={[["/terms", "이용약관"], ["/privacy", "개인정보처리방침"], ["/auth", "고객센터"]]} />
+          <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-bold text-gray-400">
+            <Link href="/terms" className="transition-colors hover:text-white">이용약관</Link>
+            <Link href="/privacy" className="transition-colors hover:text-white">개인정보처리방침</Link>
           </div>
         </div>
-        <div className="flex flex-col items-center justify-between gap-3 border-t border-white/10 pt-6 sm:flex-row">
-          <p className="text-xs text-gray-500">&copy; 2026 NOWON MEMBERS. All rights reserved.</p>
-          <p className="text-xs text-gray-500">A service by <span className="font-semibold text-primary">Local Lab Community</span></p>
-        </div>
+        <p className="mt-6 border-t border-white/10 pt-5 text-xs text-gray-500">&copy; 2026 NOWON MEMBERS. All rights reserved.</p>
       </div>
     </footer>
-  );
-}
-
-function FooterColumn({ title, links }: { title: string; links: [string, string][] }) {
-  return (
-    <div>
-      <h4 className="mb-4 text-sm font-black uppercase tracking-wide text-white">{title}</h4>
-      <ul className="space-y-2.5">
-        {links.map(([href, label]) => (
-          <li key={label}>
-            <Link href={href} className="text-sm text-gray-400 transition-colors hover:text-white">{label}</Link>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }

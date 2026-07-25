@@ -12,6 +12,16 @@ body {
   font-family: Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
 }
 
+.site-content {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
+.site-content > main {
+  flex: 1 0 auto;
+}
+
 button,
 a,
 input,

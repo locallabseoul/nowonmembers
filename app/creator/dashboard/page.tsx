@@ -269,7 +269,7 @@ export default async function CreatorDashboardPage({ searchParams }: { searchPar
   const completedCount = completedCollaborations.length;
 
   return (
-    <main className="min-h-screen bg-[#F8F9FA]">
+    <main className="bg-[#F8F9FA]">
       <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 md:py-10 lg:px-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-charcoal sm:text-3xl">마이페이지</h1>
