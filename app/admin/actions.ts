@@ -80,6 +80,31 @@ export async function requestCampaignRevision(formData: FormData) {
   revalidatePath("/admin");
 }
 
+export async function createNotice(formData: FormData) {
+  const supabase = await requireAdmin();
+  const title = String(formData.get("title") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const rawStatus = String(formData.get("status") ?? "draft");
+  const status = rawStatus === "published" ? "published" : "draft";
+
+  if (!title || !body) {
+    redirect(`/admin?error=${encodeURIComponent("공지 제목과 본문을 입력해주세요.")}`);
+  }
+
+  const { error } = await supabase.from("notices").insert({
+    title,
+    body,
+    status,
+    published_at: status === "published" ? new Date().toISOString() : null
+  });
+
+  if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
+
+  revalidatePath("/admin");
+  revalidatePath("/notices");
+  redirect("/admin?noticeCreated=1");
+}
+
 export async function recommendApplication(formData: FormData) {
   const supabase = await requireAdmin();
   const id = String(formData.get("application_id") ?? "");

@@ -25,6 +25,7 @@ export type CollaborationStatus =
   | "no_show"
   | "cancelled";
 export type SubmissionStatus = "submitted" | "needs_revision" | "approved" | "rejected";
+export type NoticeStatus = "draft" | "published";
 
 export type BusinessProfile = {
   id: string;
@@ -140,4 +141,15 @@ export type LocalStory = {
   campaignId: string;
   category: string;
   publishedAt: string;
+};
+
+export type Notice = {
+  id: string;
+  title: string;
+  body: string;
+  status: NoticeStatus;
+  publishedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  isRead?: boolean;
 };

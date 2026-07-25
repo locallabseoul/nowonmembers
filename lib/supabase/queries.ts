@@ -1,6 +1,6 @@
 import { stories as fallbackStories, getBusiness as getFallbackBusiness, getCreator as getFallbackCreator } from "@/lib/data";
 import { normalizeKoreanAuthPhone } from "@/lib/auth/phone";
-import type { Campaign, LocalStory } from "@/lib/types";
+import type { Campaign, LocalStory, Notice } from "@/lib/types";
 import { createSupabaseServerClient } from "./server";
 
 type CampaignRow = {
@@ -53,6 +53,16 @@ type StoryRow = {
   campaign_id: string | null;
   category: string | null;
   published_at: string | null;
+};
+
+type NoticeRow = {
+  id: string;
+  title: string;
+  body: string | null;
+  status: "draft" | "published";
+  published_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 type CountRelation = { count: number }[] | null | undefined;
@@ -859,6 +869,18 @@ function removeStoryContentUrlLine(body: string) {
   return body.replace(/(?:^|\n)\s*콘텐츠 URL:\s*https?:\/\/\S+\s*$/m, "").trim();
 }
 
+function mapNotice(row: NoticeRow): Notice {
+  return {
+    id: row.id,
+    title: row.title,
+    body: row.body ?? "",
+    status: row.status,
+    publishedAt: row.published_at ?? "",
+    createdAt: row.created_at ?? "",
+    updatedAt: row.updated_at ?? ""
+  };
+}
+
 async function syncExpiredCampaigns(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
   await supabase.rpc("sync_expired_campaigns");
 }
@@ -932,6 +954,70 @@ export async function getPublicStory(id: string): Promise<LocalStory | undefined
 
   if (error || !data) return fallbackStories.find((story) => story.id === id);
   return mapStory(data as StoryRow);
+}
+
+export async function getPublishedNotices(): Promise<Notice[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("notices")
+    .select("*")
+    .eq("status", "published")
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return (data as NoticeRow[]).map(mapNotice);
+}
+
+export async function getPublishedNotice(id: string): Promise<Notice | undefined> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("notices")
+    .select("*")
+    .eq("id", id)
+    .eq("status", "published")
+    .maybeSingle();
+
+  if (error || !data) return undefined;
+  return mapNotice(data as NoticeRow);
+}
+
+export async function getHeaderNoticeData(userId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("notices")
+    .select("*")
+    .eq("status", "published")
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false });
+
+  if (error || !data?.length) return { notices: [], unreadCount: 0 };
+
+  const notices = (data as NoticeRow[]).map(mapNotice);
+  const noticeIds = notices.map((notice) => notice.id);
+  const { data: readRows } = await supabase
+    .from("notice_reads")
+    .select("notice_id")
+    .eq("user_id", userId)
+    .in("notice_id", noticeIds);
+  const readNoticeIds = new Set((readRows ?? []).map((row) => row.notice_id as string));
+
+  return {
+    notices: notices.slice(0, 5).map((notice) => ({ ...notice, isRead: readNoticeIds.has(notice.id) })),
+    unreadCount: notices.filter((notice) => !readNoticeIds.has(notice.id)).length
+  };
+}
+
+export async function getAdminNotices(): Promise<Notice[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("notices")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  if (error || !data) return [];
+  return (data as NoticeRow[]).map(mapNotice);
 }
 
 export async function getPublicHomeStats() {

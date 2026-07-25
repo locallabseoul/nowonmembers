@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { Badge, StatCard } from "@/app/components/ui";
 import { getCampaignLifecycle } from "@/lib/campaign-lifecycle";
-import { getAdminDashboard, type DashboardApplication, type DashboardCampaign, type DashboardSubmission } from "@/lib/supabase/queries";
+import { getAdminDashboard, getAdminNotices, type DashboardApplication, type DashboardCampaign, type DashboardSubmission } from "@/lib/supabase/queries";
 import { CheckCircle2, ClipboardCheck, ExternalLink, ImageIcon, Send, Users, X } from "lucide-react";
-import { approveCampaign, approveSubmission, publishLocalStory, recommendApplication, requestCampaignRevision, requestSubmissionRevision, unrecommendApplication } from "./actions";
+import { approveCampaign, approveSubmission, createNotice, publishLocalStory, recommendApplication, requestCampaignRevision, requestSubmissionRevision, unrecommendApplication } from "./actions";
+import { NoticeManagementSection } from "./notice-management-section";
 
 const applicationStatusTabs = [
   ["", "전체"],
@@ -391,11 +392,14 @@ function ApplicantModal({
   );
 }
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ error?: string; campaign?: string; appStatus?: string; tab?: string }> }) {
-  const { error, campaign, appStatus, tab } = await searchParams;
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ error?: string; noticeCreated?: string; campaign?: string; appStatus?: string; tab?: string }> }) {
+  const { error, noticeCreated, campaign, appStatus, tab } = await searchParams;
   const statusFilter = normalizeApplicationStatusFilter(appStatus);
   const activeModalTab = normalizeModalTab(tab);
-  const { stats, campaigns, selectedCampaign, selectedCampaignApplications, selectedCampaignSubmissions, submissions, isAdmin } = await getAdminDashboard(campaign);
+  const [{ stats, campaigns, selectedCampaign, selectedCampaignApplications, selectedCampaignSubmissions, submissions, isAdmin }, notices] = await Promise.all([
+    getAdminDashboard(campaign),
+    getAdminNotices()
+  ]);
   const filteredApplications = filterApplications(selectedCampaignApplications, statusFilter);
   const completionRate = Math.round((stats.approvedSubmissions / Math.max(stats.totalSubmissions, 1)) * 100);
 
@@ -407,6 +411,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <p className="mt-2 text-gray-500">캠페인별 지원자 검토, 추천 표시, 제출 확인, 로컬 스토리 발행을 관리합니다.</p>
       </div>
       {error ? <p className="mb-6 rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
+      {noticeCreated ? <p className="mb-6 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">공지가 등록되었습니다.</p> : null}
       {!isAdmin ? (
         <section className="rounded-lg border border-line bg-white p-6 shadow-sm">
           <h2 className="text-xl font-black text-charcoal">관리자 권한이 필요합니다</h2>
@@ -419,6 +424,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <StatCard label="모집 중 캠페인" value={`${stats.recruitingCampaigns}`} icon={<ClipboardCheck size={20} />} />
         <StatCard label="제출 승인율" value={`${completionRate}%`} icon={<Send size={20} />} />
       </div>
+
+      {isAdmin ? <NoticeManagementSection notices={notices} action={createNotice} /> : null}
 
       <section className="overflow-hidden rounded-lg border border-line bg-white shadow-sm">
         <div className="border-b border-line p-5">

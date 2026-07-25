@@ -4,7 +4,9 @@ import { Menu, Plus, UserRound } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import { AccountMenu } from "@/app/components/account-menu";
 import { HeaderNav } from "@/app/components/header-nav";
+import { NoticeMenu } from "@/app/components/notice-menu";
 import { getAccountPath, getCurrentSessionProfile } from "@/lib/auth/guards";
+import { getHeaderNoticeData } from "@/lib/supabase/queries";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -34,6 +36,7 @@ async function Header() {
   const accountPath = getAccountPath(role);
   const profileEditPath = getProfileEditPath(role);
   const avatarUrl = isLoggedIn ? await getHeaderAvatarUrl(role, user?.id) : "";
+  const noticeData = isLoggedIn && user ? await getHeaderNoticeData(user.id) : { notices: [], unreadCount: 0 };
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/80 backdrop-blur-md">
@@ -55,6 +58,7 @@ async function Header() {
                   <Plus size={13} /> 캠페인 만들기
                 </Link>
               ) : null}
+              <NoticeMenu notices={noticeData.notices} unreadCount={noticeData.unreadCount} />
               <AccountMenu displayName={displayName} role={role} accountPath={accountPath} profileEditPath={profileEditPath} avatarUrl={avatarUrl} signOutAction={signOut} />
             </>
           ) : (
