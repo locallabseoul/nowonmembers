@@ -18,6 +18,7 @@ import {
   Ticket,
   Utensils
 } from "lucide-react";
+import { POINTS_PER_RECRUIT, campaignPointCost, formatPoints } from "@/lib/points";
 
 type CampaignCreateWizardProps = {
   action: (formData: FormData) => void | Promise<void>;
@@ -27,6 +28,7 @@ type CampaignCreateWizardProps = {
   businessAddressDetail?: string;
   businessLatitude?: string;
   businessLongitude?: string;
+  availablePoints?: number;
 };
 
 const steps = [
@@ -48,7 +50,7 @@ const steps = [
   {
     label: "최종 검토 및 발행",
     title: "캠페인 내용을 최종 확인해주세요",
-    description: "발행 후에는 일부 내용을 수정하기 어려울 수 있습니다. 꼼꼼히 확인해주세요."
+    description: "검수 요청 후에는 일부 내용을 수정하기 어려울 수 있습니다. 포인트와 캠페인 내용을 꼼꼼히 확인해주세요."
   }
 ];
 
@@ -260,7 +262,8 @@ export function CampaignCreateWizard({
   businessAddress = "",
   businessAddressDetail = "",
   businessLatitude = "",
-  businessLongitude = ""
+  businessLongitude = "",
+  availablePoints = 0
 }: CampaignCreateWizardProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const regionInputRef = useRef<HTMLInputElement>(null);
@@ -302,6 +305,8 @@ export function CampaignCreateWizard({
   const cardBenefit = campaignDraft.benefitValue ? `제공: ${campaignDraft.benefitValue}` : "제공 내역 미입력";
   const selectionDateMin = campaignDraft.recruitEnd || defaultSchedule.today;
   const submissionDueMin = campaignDraft.selectionDate || selectionDateMin;
+  const expectedPointCost = campaignPointCost(Number(campaignDraft.recruitCount));
+  const remainingPoints = availablePoints - expectedPointCost;
 
   useEffect(() => {
     return () => {
@@ -775,7 +780,24 @@ export function CampaignCreateWizard({
               <Divider />
 
               <section className="space-y-6">
-                <TextField name="recruit_count" label="선정 인원" placeholder="예: 5" suffix="명" type="number" min={1} requiredMark />
+                <TextField name="recruit_count" label="선정 인원" placeholder="예: 5" suffix="명" type="number" min={1} max={100} requiredMark />
+                <div className="grid gap-3 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm sm:grid-cols-3">
+                  <div>
+                    <p className="text-xs font-bold text-slate-500">1명당 이용 포인트</p>
+                    <p className="mt-1 font-black text-charcoal">{formatPoints(POINTS_PER_RECRUIT)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-500">예약 예정</p>
+                    <p className="mt-1 font-black text-primary">{formatPoints(expectedPointCost)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-500">현재 사용 가능</p>
+                    <p className={`mt-1 font-black ${remainingPoints < 0 ? "text-red-600" : "text-charcoal"}`}>{formatPoints(availablePoints)}</p>
+                  </div>
+                  <p className="sm:col-span-3 text-xs leading-5 text-slate-500">
+                    모집 마감 후 유효 신청자가 정원보다 적으면 부족한 인원만큼 포인트를 반환합니다.
+                  </p>
+                </div>
                 <div>
                   <FieldLabel>캠페인 일정 설정 <Required /></FieldLabel>
                   <div className="grid gap-4 sm:grid-cols-3">
@@ -956,7 +978,23 @@ export function CampaignCreateWizard({
               </div>
 
               <aside className="lg:col-span-4">
-                <div className="sticky top-24 rounded-[20px] border border-slate-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                <div className="sticky top-24 space-y-4">
+                  <div className="rounded-[20px] border border-primary/15 bg-primary/5 p-6">
+                    <h3 className="font-black text-charcoal">포인트 사용 예정</h3>
+                    <div className="mt-4 space-y-2 text-sm">
+                      <div className="flex justify-between text-slate-600">
+                        <span>{campaignDraft.recruitCount || 0}명 × {formatPoints(POINTS_PER_RECRUIT)}</span>
+                        <strong className="text-primary">{formatPoints(expectedPointCost)}</strong>
+                      </div>
+                      <div className="flex justify-between border-t border-primary/10 pt-2 text-slate-600">
+                        <span>사용 후 잔액</span>
+                        <strong className={remainingPoints < 0 ? "text-red-600" : "text-charcoal"}>
+                          {remainingPoints < 0 ? `${formatPoints(Math.abs(remainingPoints))} 부족` : formatPoints(remainingPoints)}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-[20px] border border-slate-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="font-black text-charcoal">카드 미리보기</h3>
                     <span className="text-xs text-slate-400">앱/웹 노출 화면</span>
@@ -980,6 +1018,7 @@ export function CampaignCreateWizard({
                     </div>
                   </div>
                 </div>
+                </div>
               </aside>
             </div>
 
@@ -988,7 +1027,16 @@ export function CampaignCreateWizard({
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded border-2 border-slate-300 bg-white transition-colors group-hover:border-primary group-has-[:checked]:border-primary group-has-[:checked]:bg-primary">
                 <Check size={15} className="text-white opacity-0 transition-opacity group-has-[:checked]:opacity-100" strokeWidth={3} />
               </span>
-              <span className="text-sm font-black text-charcoal sm:text-base">작성된 내용을 모두 확인하였으며, 위 내용으로 캠페인을 발행합니다.</span>
+              <span className="text-sm font-black text-charcoal sm:text-base">작성된 내용을 모두 확인하였으며, 위 내용으로 캠페인 검수를 요청합니다.</span>
+            </label>
+            <label className="group mx-auto mt-4 flex w-full cursor-pointer items-start gap-3 rounded-xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm font-bold text-slate-600 sm:w-fit sm:max-w-3xl">
+              <input type="checkbox" name="point_policy_agree" required className="sr-only" />
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-slate-300 bg-white transition-colors group-hover:border-primary group-has-[:checked]:border-primary group-has-[:checked]:bg-primary">
+                <Check size={13} className="text-white opacity-0 transition-opacity group-has-[:checked]:opacity-100" strokeWidth={3} />
+              </span>
+              <span>
+                모집 정원 기준으로 {formatPoints(expectedPointCost)}가 예약되며, 모집 미달은 유효 신청자 수를 기준으로 반환되는 포인트 정책에 동의합니다.
+              </span>
             </label>
             <label className="group mx-auto mt-4 flex w-full cursor-pointer items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600 sm:w-fit">
               <input type="checkbox" name="beginner_friendly" className="sr-only" />
@@ -1014,7 +1062,7 @@ export function CampaignCreateWizard({
               </button>
               {isLastStep ? (
                 <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-10 py-3.5 font-black text-white shadow-md shadow-primary/30 transition-all hover:-translate-y-0.5 hover:bg-primaryHover sm:w-auto">
-                  캠페인 발행하기
+                  포인트 예약하고 검수 요청
                   <Check size={16} />
                 </button>
               ) : (
@@ -1088,6 +1136,7 @@ function TextField({
   suffix,
   type = "text",
   min,
+  max,
   defaultValue,
   requiredMark = false
 }: {
@@ -1099,6 +1148,7 @@ function TextField({
   suffix?: string;
   type?: string;
   min?: number | string;
+  max?: number | string;
   defaultValue?: string;
   requiredMark?: boolean;
 }) {
@@ -1111,6 +1161,7 @@ function TextField({
           name={name}
           type={type}
           min={min}
+          max={max}
           defaultValue={defaultValue}
           required={requiredMark}
           className={`w-full rounded-xl border border-slate-200 px-4 py-3.5 text-sm text-charcoal outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary ${icon ? "pl-10" : ""} ${suffix ? "pr-12" : ""}`}

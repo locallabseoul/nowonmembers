@@ -291,3 +291,32 @@ export async function approveRecommendedApplication(formData: FormData) {
   revalidatePath("/campaigns");
   redirect("/business/dashboard");
 }
+
+export async function finalizeCampaignSelection(formData: FormData) {
+  const campaignId = String(formData.get("campaign_id") ?? "");
+  const { supabase } = await requireRole("business", "/business/dashboard");
+  const { error } = await supabase.rpc("finalize_campaign_selection", {
+    target_campaign_id: campaignId
+  });
+
+  if (error) redirect(`/business/dashboard?campaign=${campaignId}&error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/business/dashboard");
+  revalidatePath("/admin");
+  revalidatePath("/creator/dashboard");
+  revalidatePath("/campaigns");
+  redirect(`/business/dashboard?campaign=${campaignId}&message=${encodeURIComponent("크리에이터 선정을 완료했습니다.")}`);
+}
+
+export async function cancelCampaignBeforePublish(formData: FormData) {
+  const campaignId = String(formData.get("campaign_id") ?? "");
+  const { supabase } = await requireRole("business", "/business/dashboard");
+  const { error } = await supabase.rpc("cancel_campaign_before_publish", {
+    target_campaign_id: campaignId,
+    target_idempotency_key: `campaign_cancel:${campaignId}`
+  });
+
+  if (error) redirect(`/business/dashboard?campaign=${campaignId}&error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/business/dashboard");
+  revalidatePath("/admin");
+  redirect(`/business/dashboard?message=${encodeURIComponent("캠페인을 취소하고 예약 포인트를 반환했습니다.")}`);
+}

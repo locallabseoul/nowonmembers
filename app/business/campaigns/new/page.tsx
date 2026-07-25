@@ -17,6 +17,9 @@ export default async function NewCampaignPage({ searchParams }: { searchParams: 
     redirect(`/business/dashboard?next=${encodeURIComponent("/business/campaigns/new")}&error=${encodeURIComponent("캠페인 생성 전 가게 프로필을 먼저 등록해주세요.")}`);
   }
 
+  const { data: walletRows } = await supabase.rpc("get_my_point_wallet");
+  const wallet = Array.isArray(walletRows) ? walletRows[0] : walletRows;
+
   return (
     <CampaignCreateWizard
       action={createCampaign}
@@ -26,6 +29,7 @@ export default async function NewCampaignPage({ searchParams }: { searchParams: 
       businessAddressDetail={business.address_detail ?? ""}
       businessLatitude={business.latitude === null ? "" : String(business.latitude)}
       businessLongitude={business.longitude === null ? "" : String(business.longitude)}
+      availablePoints={Number(wallet?.available_points ?? 0)}
     />
   );
 }

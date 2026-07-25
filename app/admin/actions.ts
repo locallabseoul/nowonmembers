@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
@@ -41,7 +42,7 @@ export async function approveCampaign(formData: FormData) {
 
   const { data: campaign, error: campaignError } = await supabase
     .from("campaigns")
-    .select("id,status,recruit_start,recruit_end")
+    .select("id,status,recruit_start,recruit_end,billing_mode,campaign_point_reservations(status)")
     .eq("id", id)
     .maybeSingle();
 
@@ -58,6 +59,13 @@ export async function approveCampaign(formData: FormData) {
     redirect(`/admin?error=${encodeURIComponent("모집 마감일이 지난 캠페인은 승인할 수 없습니다.")}`);
   }
 
+  const reservation = Array.isArray(campaign.campaign_point_reservations)
+    ? campaign.campaign_point_reservations[0]
+    : campaign.campaign_point_reservations;
+  if (campaign.billing_mode === "points_v1" && reservation?.status !== "reserved") {
+    redirect(`/admin?error=${encodeURIComponent("활성 포인트 예약이 없는 캠페인은 승인할 수 없습니다.")}`);
+  }
+
   const { error } = await supabase
     .from("campaigns")
     .update({ status: "recruiting", recruit_start: campaign.recruit_start ?? today })
@@ -67,6 +75,46 @@ export async function approveCampaign(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/campaigns");
   revalidatePath(`/campaigns/${id}`);
+}
+
+export async function rejectCampaign(formData: FormData) {
+  const supabase = await requireAdmin();
+  const id = String(formData.get("campaign_id") ?? "");
+  const reason = String(formData.get("admin_memo") ?? "관리자 검수 반려").trim();
+  const { error } = await supabase.rpc("admin_reject_campaign", {
+    target_campaign_id: id,
+    target_reason: reason,
+    target_idempotency_key: `admin_reject:${id}`
+  });
+
+  if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/admin");
+  revalidatePath("/business/dashboard");
+  redirect(`/admin?message=${encodeURIComponent("캠페인을 반려하고 예약 포인트를 반환했습니다.")}`);
+}
+
+export async function adjustBusinessPoints(formData: FormData) {
+  const supabase = await requireAdmin();
+  const businessId = String(formData.get("business_id") ?? "");
+  const points = Number(formData.get("points") ?? 0);
+  const reason = String(formData.get("reason") ?? "").trim();
+
+  if (!Number.isInteger(points) || points === 0 || Math.abs(points) > 500_000 || Math.abs(points) % 5_000 !== 0 || !reason) {
+    redirect(`/admin?error=${encodeURIComponent("조정 포인트와 사유를 정확히 입력해주세요.")}`);
+  }
+
+  const { error } = await supabase.rpc("admin_adjust_business_points", {
+    target_business_id: businessId,
+    target_points: points,
+    target_reason: reason,
+    target_idempotency_key: `admin_adjust:${randomUUID()}`
+  });
+
+  if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/admin");
+  revalidatePath("/business/dashboard");
+  revalidatePath("/business/points");
+  redirect(`/admin?message=${encodeURIComponent("가게 포인트를 조정했습니다.")}`);
 }
 
 export async function requestCampaignRevision(formData: FormData) {

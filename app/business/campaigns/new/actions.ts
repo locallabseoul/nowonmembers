@@ -110,9 +110,19 @@ export async function createCampaign(formData: FormData) {
   const longitude = toCoordinate(formData.get("longitude"));
   const coverImage = getImageFile(formData, "cover_image");
   const referenceImages = getImageFiles(formData, "reference_images").slice(0, 6);
+  const agreedToCampaign = formData.get("final_agree") === "on";
+  const agreedToPointPolicy = formData.get("point_policy_agree") === "on";
 
   if (!title || !region || !description || !benefitValue || !recruitCount || !recruitEnd) {
     redirectWithError("캠페인 제목, 주소, 선정 인원, 모집 마감일, 제공 내역, 상세 설명을 입력해주세요.");
+  }
+
+  if (!Number.isInteger(recruitCount) || recruitCount < 1 || recruitCount > 100) {
+    redirectWithError("선정 인원은 1명 이상 100명 이하 정수로 입력해주세요.");
+  }
+
+  if (!agreedToCampaign || !agreedToPointPolicy) {
+    redirectWithError("캠페인 내용과 포인트 이용 정책을 확인하고 동의해주세요.");
   }
 
   if (latitude === null || longitude === null) {
@@ -173,7 +183,7 @@ export async function createCampaign(formData: FormData) {
     redirectWithError(message);
   }
 
-  const { error } = await supabase.from("campaigns").insert({
+  const { data: createdCampaign, error } = await supabase.from("campaigns").insert({
     business_id: business.id,
     title,
     description,
@@ -195,15 +205,35 @@ export async function createCampaign(formData: FormData) {
     fee: toNullableNumber(formData.get("fee")),
     content_requirements: getContentRequirements(formData),
     usage_rights: String(formData.get("usage_rights") ?? ""),
-    status: "in_review",
+    status: "draft",
+    billing_mode: "points_v1",
     cover_image_url: coverImageUrl,
     reference_image_urls: referenceImageUrls,
     beginner_friendly: formData.get("beginner_friendly") === "on"
+  }).select("id").single();
+
+  if (error || !createdCampaign) {
+    if (uploadedPaths.length) await supabase.storage.from(CAMPAIGN_IMAGE_BUCKET).remove(uploadedPaths);
+    redirectWithError(error?.message ?? "캠페인 초안을 저장하지 못했습니다.");
+  }
+
+  const { data: submissionResult, error: submissionError } = await supabase.rpc("submit_campaign_for_review", {
+    target_campaign_id: createdCampaign.id,
+    target_idempotency_key: `campaign_reserve:${createdCampaign.id}`
   });
 
-  if (error) {
-    if (uploadedPaths.length) await supabase.storage.from(CAMPAIGN_IMAGE_BUCKET).remove(uploadedPaths);
-    redirectWithError(error.message);
+  if (submissionError) {
+    redirect(`/business/dashboard?campaign=${createdCampaign.id}&error=${encodeURIComponent(submissionError.message)}`);
+  }
+
+  const result = Array.isArray(submissionResult) ? submissionResult[0] : submissionResult;
+  if (!result?.submitted) {
+    const params = new URLSearchParams({
+      campaign: createdCampaign.id,
+      required: String(result?.required_points ?? recruitCount * 5000),
+      shortfall: String(result?.shortfall_points ?? recruitCount * 5000)
+    });
+    redirect(`/business/points?${params.toString()}`);
   }
 
   redirect("/business/dashboard");

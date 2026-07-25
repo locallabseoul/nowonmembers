@@ -3,9 +3,10 @@ import { ChevronLeft, ChevronRight, ExternalLink, ImageIcon, Plus, Search, X } f
 import { Badge } from "@/app/components/ui";
 import { OperatorSidebar } from "@/app/business/components/operator-sidebar";
 import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
+import { formatPoints } from "@/lib/points";
 import { getBusinessDashboard, type DashboardApplication, type DashboardCampaign, type DashboardSubmission } from "@/lib/supabase/queries";
 import { requireRole } from "@/lib/auth/guards";
-import { approveRecommendedApplication, saveBusinessProfile } from "./actions";
+import { approveRecommendedApplication, cancelCampaignBeforePublish, finalizeCampaignSelection, saveBusinessProfile } from "./actions";
 import { BusinessProfileWizard } from "./business-profile-wizard";
 
 const applicationStatusTabs = [
@@ -293,6 +294,7 @@ function campaignSubmissionText(campaign: DashboardCampaign) {
 }
 
 function campaignActionLabel(campaign: DashboardCampaign) {
+  if (campaign.status === "draft") return "충전 후 제출";
   if (campaign.status === "selecting") return "선정하기";
   if (campaign.status === "submission_review") return "리뷰 검토";
   if (campaign.status === "completed") return "결과 리포트";
@@ -313,6 +315,9 @@ function CampaignManagementRow({
   const submissionText = campaignSubmissionText(campaign);
   const actionIsPrimary = campaign.status === "selecting";
   const actionTab: ModalTab = campaign.status === "submission_review" || campaign.status === "completed" ? "submissions" : "applications";
+  const actionHref = campaign.status === "draft"
+    ? `/business/points?campaign=${campaign.id}&required=${campaign.recruitCount * 5000}`
+    : dashboardHref("/business/dashboard", campaign.id, statusFilter, actionTab);
 
   return (
     <tr className={`group transition-colors hover:bg-gray-50 ${selected ? "bg-primary/5" : ""} ${campaign.status === "completed" ? "opacity-75" : ""}`}>
@@ -338,6 +343,13 @@ function CampaignManagementRow({
             {campaignStatusText(campaign)}
           </span>
           {selected ? <Badge tone="green">선택됨</Badge> : null}
+          {campaign.pointReservation ? (
+            <Badge tone={campaign.pointReservation.status === "reserved" ? "amber" : "green"}>
+              {campaign.pointReservation.status === "reserved"
+                ? `${formatPoints(campaign.pointReservation.reservedPoints)} 예약`
+                : `${formatPoints(campaign.pointReservation.consumedPoints)} 확정`}
+            </Badge>
+          ) : null}
         </div>
       </td>
       <td className="px-6 py-5">
@@ -353,7 +365,7 @@ function CampaignManagementRow({
       <td className="px-6 py-5 text-sm text-gray-600">{campaignPeriodText(campaign)}</td>
       <td className="px-6 py-5 text-right">
         <Link
-          href={dashboardHref("/business/dashboard", campaign.id, statusFilter, actionTab)}
+          href={actionHref}
           className={`inline-flex rounded-lg px-3 py-1.5 text-sm shadow-sm transition-colors ${
             actionIsPrimary
               ? "bg-primary font-bold text-white hover:bg-primaryHover"
@@ -474,6 +486,14 @@ function ApplicantModal({
             </div>
             <h2 id="business-applicant-modal-title" className="text-xl font-black text-charcoal">{campaign.title}</h2>
             <p className="mt-1 text-sm text-gray-500">캠페인 지원자와 제출 콘텐츠</p>
+            {campaign.pointReservation ? (
+              <p className="mt-2 text-xs font-bold text-primary">
+                예약 {formatPoints(campaign.pointReservation.reservedPoints)}
+                {campaign.pointReservation.status === "settled"
+                  ? ` · 확정 ${formatPoints(campaign.pointReservation.consumedPoints)} · 반환 ${formatPoints(campaign.pointReservation.returnedPoints)}`
+                  : ""}
+              </p>
+            ) : null}
           </div>
           <Link href="/business/dashboard" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100" aria-label="닫기">
             <X size={20} />
@@ -507,6 +527,19 @@ function ApplicantModal({
               <p className="text-xs font-bold text-gray-500">선정된 협업 {submissions.length}건의 제출 현황입니다.</p>
             )}
           </div>
+          {campaign.status === "selecting" && campaign.selectedCount > 0 ? (
+            <form action={finalizeCampaignSelection} className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-4">
+              <input type="hidden" name="campaign_id" value={campaign.id} />
+              <p className="mb-3 text-xs leading-5 text-gray-600">현재 선정 인원으로 마감하면 남은 지원자는 미선정 처리되고 캠페인이 진행 상태로 전환됩니다.</p>
+              <button className="rounded-lg bg-primary px-4 py-2 text-sm font-black text-white hover:bg-primaryHover">현재 {campaign.selectedCount}명으로 선정 완료</button>
+            </form>
+          ) : null}
+          {["draft", "in_review", "revision_requested", "approved", "scheduled"].includes(campaign.status) ? (
+            <form action={cancelCampaignBeforePublish} className="mt-4">
+              <input type="hidden" name="campaign_id" value={campaign.id} />
+              <button className="rounded-lg border border-red-200 px-4 py-2 text-xs font-black text-red-600 hover:bg-red-50">공개 전 취소 및 포인트 반환</button>
+            </form>
+          ) : null}
         </div>
         <div className="overflow-y-auto p-5">
           {activeTab === "applications" ? (
@@ -600,8 +633,12 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
   const campaignFilter = normalizeCampaignListFilter(status);
   const sortOrder = normalizeCampaignSort(sort);
   const searchQuery = q?.trim() ?? "";
-  await requireRole("business", "/business/dashboard");
-  const { business, businessProfileDefaults, campaigns, selectedCampaign, selectedCampaignApplications, selectedCampaignSubmissions } = await getBusinessDashboard(campaign);
+  const { supabase } = await requireRole("business", "/business/dashboard");
+  const [{ business, businessProfileDefaults, campaigns, selectedCampaign, selectedCampaignApplications, selectedCampaignSubmissions }, { data: walletRows }] = await Promise.all([
+    getBusinessDashboard(campaign),
+    supabase.rpc("get_my_point_wallet")
+  ]);
+  const wallet = Array.isArray(walletRows) ? walletRows[0] : walletRows;
   const filteredApplications = filterApplications(selectedCampaignApplications, statusFilter);
   const visibleCampaigns = getFilteredCampaigns(campaigns, campaignFilter, searchQuery, sortOrder);
   const totalPages = Math.max(Math.ceil(visibleCampaigns.length / CAMPAIGNS_PER_PAGE), 1);
@@ -642,6 +679,7 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
 
         <div className="min-w-0 flex-grow space-y-8">
           {error ? <p className="rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
+          {message ? <p className="rounded-lg bg-green-50 p-3 text-sm font-bold text-green-700">{message}</p> : null}
 
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
@@ -652,6 +690,17 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
               <Plus size={17} /> 새 캠페인 만들기
             </Link>
           </div>
+
+          <Link href="/business/points" className="flex flex-col justify-between gap-3 rounded-[20px] border border-primary/15 bg-primary/5 p-5 transition-colors hover:bg-primary/10 sm:flex-row sm:items-center">
+            <div>
+              <p className="text-sm font-black text-charcoal">캠페인 포인트</p>
+              <p className="mt-1 text-xs text-gray-500">첫 캠페인 2건 무료 · 최대 10명 모집 가능한 50,000P 출시 혜택</p>
+            </div>
+            <div className="text-left sm:text-right">
+              <p className="text-xl font-black text-primary">{formatPoints(Number(wallet?.available_points ?? 0))}</p>
+              <p className="text-xs text-gray-500">예약 {formatPoints(Number(wallet?.reserved_points ?? 0))}</p>
+            </div>
+          </Link>
 
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <StatusSummaryCard label="모집중" count={summary.recruiting} dotClassName="bg-[#4338CA]" />

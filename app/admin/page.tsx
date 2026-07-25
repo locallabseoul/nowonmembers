@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { Badge, StatCard } from "@/app/components/ui";
 import { getCampaignLifecycle } from "@/lib/campaign-lifecycle";
+import { formatPoints } from "@/lib/points";
 import { getAdminDashboard, getAdminNotices, type DashboardApplication, type DashboardCampaign, type DashboardSubmission } from "@/lib/supabase/queries";
 import { CheckCircle2, ClipboardCheck, ExternalLink, ImageIcon, Send, Users, X } from "lucide-react";
-import { approveCampaign, approveSubmission, createNotice, publishLocalStory, recommendApplication, requestCampaignRevision, requestSubmissionRevision, unrecommendApplication, updateNotice } from "./actions";
+import { adjustBusinessPoints, approveCampaign, approveSubmission, createNotice, publishLocalStory, recommendApplication, rejectCampaign, requestCampaignRevision, requestSubmissionRevision, unrecommendApplication, updateNotice } from "./actions";
 import { NoticeManagementSection } from "./notice-management-section";
 
 const applicationStatusTabs = [
@@ -178,6 +179,13 @@ function CampaignManagementRow({
           <Badge tone={lifecycle.badgeTone}>{lifecycle.label}</Badge>
           <Badge>{campaign.campaignType}</Badge>
           {selected ? <Badge tone="green">선택됨</Badge> : null}
+          {campaign.pointReservation ? (
+            <Badge tone={campaign.pointReservation.status === "reserved" ? "amber" : "green"}>
+              {campaign.pointReservation.status === "reserved"
+                ? `${formatPoints(campaign.pointReservation.reservedPoints)} 예약`
+                : `${formatPoints(campaign.pointReservation.consumedPoints)} 확정`}
+            </Badge>
+          ) : campaign.billingMode === "points_v1" ? <Badge tone="red">예약 없음</Badge> : null}
         </div>
         <h3 className="font-black text-charcoal">{campaign.title}</h3>
         <p className="mt-2 text-sm text-gray-500">{campaign.businessName ?? "가게명 미등록"} · 모집 {campaign.recruitStart || "승인 시 시작"} - {campaign.recruitEnd || "미정"}</p>
@@ -198,6 +206,11 @@ function CampaignManagementRow({
             <input type="hidden" name="campaign_id" value={campaign.id} />
             <input type="hidden" name="admin_memo" value="운영자 수정 요청" />
             <button className="rounded-lg border border-line px-4 py-2 text-sm font-black text-charcoal">수정 요청</button>
+          </form>
+          <form action={rejectCampaign}>
+            <input type="hidden" name="campaign_id" value={campaign.id} />
+            <input type="hidden" name="admin_memo" value="관리자 검수 반려" />
+            <button className="rounded-lg border border-red-200 px-4 py-2 text-sm font-black text-red-600">반려·반환</button>
           </form>
           <form action={approveCampaign}>
             <input type="hidden" name="campaign_id" value={campaign.id} />
@@ -341,6 +354,24 @@ function ApplicantModal({
             <X size={20} />
           </Link>
         </div>
+        <form action={adjustBusinessPoints} className="grid gap-3 border-b border-line bg-amber-50/60 p-5 sm:grid-cols-[140px_1fr_auto]">
+          <input type="hidden" name="business_id" value={campaign.businessId} />
+          <input
+            type="number"
+            name="points"
+            step="5000"
+            placeholder="+/- 포인트"
+            required
+            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-primary"
+          />
+          <input
+            name="reason"
+            placeholder="수동 지급·차감 사유"
+            required
+            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-primary"
+          />
+          <button className="rounded-lg bg-charcoal px-4 py-2 text-sm font-black text-white">포인트 조정</button>
+        </form>
         <div className="border-b border-line p-5">
           <div className="mb-4 flex flex-wrap gap-2">
             <Link
@@ -392,8 +423,8 @@ function ApplicantModal({
   );
 }
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ error?: string; noticeCreated?: string; noticeUpdated?: string; campaign?: string; appStatus?: string; tab?: string }> }) {
-  const { error, noticeCreated, noticeUpdated, campaign, appStatus, tab } = await searchParams;
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ error?: string; message?: string; noticeCreated?: string; noticeUpdated?: string; campaign?: string; appStatus?: string; tab?: string }> }) {
+  const { error, message, noticeCreated, noticeUpdated, campaign, appStatus, tab } = await searchParams;
   const statusFilter = normalizeApplicationStatusFilter(appStatus);
   const activeModalTab = normalizeModalTab(tab);
   const [{ stats, campaigns, selectedCampaign, selectedCampaignApplications, selectedCampaignSubmissions, submissions, isAdmin }, notices] = await Promise.all([
@@ -411,6 +442,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <p className="mt-2 text-gray-500">캠페인별 지원자 검토, 추천 표시, 제출 확인, 로컬 스토리 발행을 관리합니다.</p>
       </div>
       {error ? <p className="mb-6 rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
+      {message ? <p className="mb-6 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{message}</p> : null}
       {noticeCreated ? <p className="mb-6 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">공지가 등록되었습니다.</p> : null}
       {noticeUpdated ? <p className="mb-6 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">공지가 수정되었습니다.</p> : null}
       {!isAdmin ? (

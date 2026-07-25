@@ -31,6 +31,7 @@ type CampaignRow = {
   reference_image_urls: string[] | null;
   beginner_friendly: boolean;
   operator_recommended: boolean;
+  billing_mode?: "legacy_free" | "points_v1";
   business_profiles?: {
     business_name?: string | null;
     category?: string | null;
@@ -40,6 +41,14 @@ type CampaignRow = {
     address_detail?: string | null;
   } | null;
   campaign_applications?: { count: number }[];
+  campaign_point_reservations?: Relation<{
+    requested_headcount: number;
+    reserved_points: number;
+    billable_headcount: number | null;
+    consumed_points: number;
+    returned_points: number;
+    status: string;
+  }>;
 };
 
 type StoryRow = {
@@ -211,7 +220,17 @@ type CampaignApplicationStats = {
   approvedSubmissionCount: number;
 };
 
-export type DashboardCampaign = Campaign & CampaignApplicationStats;
+export type DashboardCampaign = Campaign & CampaignApplicationStats & {
+  billingMode: "legacy_free" | "points_v1";
+  pointReservation: {
+    requestedHeadcount: number;
+    reservedPoints: number;
+    billableHeadcount: number | null;
+    consumedPoints: number;
+    returnedPoints: number;
+    status: string;
+  } | null;
+};
 
 export type DashboardApplication = {
   id: string;
@@ -731,6 +750,7 @@ function buildCampaignApplicationStats(applications: ApplicationSummaryRow[], co
 
 function mapDashboardCampaign(row: CampaignRow, stats?: CampaignApplicationStats): DashboardCampaign {
   const campaign = mapCampaign(row);
+  const reservation = asRelation(row.campaign_point_reservations);
 
   return {
     ...campaign,
@@ -741,7 +761,16 @@ function mapDashboardCampaign(row: CampaignRow, stats?: CampaignApplicationStats
     pendingSubmissionCount: stats?.pendingSubmissionCount ?? 0,
     pendingReviewCount: stats?.pendingReviewCount ?? 0,
     revisionRequestedCount: stats?.revisionRequestedCount ?? 0,
-    approvedSubmissionCount: stats?.approvedSubmissionCount ?? 0
+    approvedSubmissionCount: stats?.approvedSubmissionCount ?? 0,
+    billingMode: row.billing_mode ?? "legacy_free",
+    pointReservation: reservation ? {
+      requestedHeadcount: reservation.requested_headcount,
+      reservedPoints: reservation.reserved_points,
+      billableHeadcount: reservation.billable_headcount,
+      consumedPoints: reservation.consumed_points,
+      returnedPoints: reservation.returned_points,
+      status: reservation.status
+    } : null
   };
 }
 
@@ -1088,7 +1117,7 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
 
   const { data: campaignRows } = await supabase
     .from("campaigns")
-    .select("*, business_profiles(business_name), campaign_applications(count)")
+    .select("*, business_profiles(business_name), campaign_applications(count), campaign_point_reservations(requested_headcount,reserved_points,billable_headcount,consumed_points,returned_points,status)")
     .eq("business_id", business.id)
     .order("created_at", { ascending: false });
 
@@ -1403,7 +1432,7 @@ export async function getAdminDashboard(selectedCampaignId?: string): Promise<Ad
     supabase.from("content_submissions").select("id", { count: "exact", head: true }),
     supabase
       .from("campaigns")
-      .select("*, business_profiles(business_name), campaign_applications(count)")
+      .select("*, business_profiles(business_name), campaign_applications(count), campaign_point_reservations(requested_headcount,reserved_points,billable_headcount,consumed_points,returned_points,status)")
       .in("status", ["draft", "in_review", "revision_requested", "approved", "scheduled", "recruiting", "selecting", "in_progress", "submission_review", "completed", "cancelled", "failed"])
       .order("created_at", { ascending: false }),
     supabase.from("campaign_applications").select("id,campaign_id,status"),
