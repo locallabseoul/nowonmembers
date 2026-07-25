@@ -126,7 +126,7 @@ async function Footer() {
           <div className="grid grid-cols-2 gap-8 md:grid-cols-3 lg:gap-16">
             <FooterColumn title="서비스" links={serviceLinks} />
             <FooterColumn title="마이페이지" links={[["/creator/dashboard", "크리에이터 마이페이지"], ["/business/dashboard", "운영자 마이페이지"], ["/auth", "콘텐츠 제출"]]} />
-            <FooterColumn title="정보" links={[["/auth", "이용약관"], ["/auth", "개인정보처리방침"], ["/auth", "고객센터"]]} />
+            <FooterColumn title="정보" links={[["/terms", "이용약관"], ["/privacy", "개인정보처리방침"], ["/auth", "고객센터"]]} />
           </div>
         </div>
         <div className="flex flex-col items-center justify-between gap-3 border-t border-white/10 pt-6 sm:flex-row">

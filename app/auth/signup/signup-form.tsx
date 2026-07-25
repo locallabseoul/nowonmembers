@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
-import { BriefcaseBusiness, Camera, CheckCircle2, UserPlus } from "lucide-react";
+import { BriefcaseBusiness, Camera, CheckCircle2, UserPlus, X } from "lucide-react";
+import { LEGAL_EFFECTIVE_DATE, privacySections, termsSections, type LegalSection } from "@/lib/legal";
 
 type SignupRole = "creator" | "business";
 type SignupAction = (formData: FormData) => void | Promise<void>;
 type NicknameCheckStatus = "idle" | "checking" | "available" | "unavailable" | "error";
+type LegalModalType = "terms" | "privacy";
 
 function Field({
   label,
@@ -198,6 +200,84 @@ function SectionTitle({ number, children }: { number: number; children: ReactNod
   );
 }
 
+function LegalAgreementModal({
+  type,
+  onClose
+}: {
+  type: LegalModalType;
+  onClose: () => void;
+}) {
+  const isTerms = type === "terms";
+  const title = isTerms ? "서비스 이용약관" : "개인정보 수집 및 이용";
+  const sections: LegalSection[] = isTerms ? termsSections : privacySections;
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6">
+      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-[20px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
+        <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4 sm:px-6">
+          <div>
+            <p className="text-xs font-black text-primary">시행일: {LEGAL_EFFECTIVE_DATE}</p>
+            <h2 className="mt-1 text-xl font-black text-charcoal">{title}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-charcoal"
+            aria-label="닫기"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-5 py-5 sm:px-6">
+          <div className="space-y-6">
+            {sections.map((section) => (
+              <section key={section.title} className="space-y-2">
+                <h3 className="text-base font-black text-charcoal">{section.title}</h3>
+                {section.body ? <p className="text-sm leading-7 text-gray-600">{section.body}</p> : null}
+                {section.items ? (
+                  <ul className="space-y-2 text-sm leading-7 text-gray-600">
+                    {section.items.map((item) => (
+                      <li key={item} className="flex gap-2">
+                        <span className="mt-3 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </section>
+            ))}
+          </div>
+        </div>
+
+        <div className="border-t border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-xl bg-primary px-5 py-3 text-sm font-black text-white transition-colors hover:bg-primaryHover"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SignupForm({
   action,
   error,
@@ -228,6 +308,7 @@ export function SignupForm({
   const [phone, setPhone] = useState(initialValues?.phone ?? "");
   const [nicknameStatus, setNicknameStatus] = useState<NicknameCheckStatus>("idle");
   const [nicknameMessage, setNicknameMessage] = useState("");
+  const [legalModal, setLegalModal] = useState<LegalModalType | null>(null);
   const activeNickname = useMemo(
     () => (role === "business" ? businessName : creatorNickname).trim(),
     [businessName, creatorNickname, role]
@@ -282,6 +363,8 @@ export function SignupForm({
 
   return (
     <div className="w-full max-w-2xl rounded-[20px] border border-gray-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:p-10">
+      {legalModal ? <LegalAgreementModal type={legalModal} onClose={() => setLegalModal(null)} /> : null}
+
       <div className="mb-10 text-center">
         <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
           <UserPlus size={22} />
@@ -376,11 +459,15 @@ export function SignupForm({
         <section className="space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-5">
           <label className="flex cursor-pointer items-start gap-3">
             <input name="agreement_terms" type="checkbox" required defaultChecked={initialValues?.agreedTerms} className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
-            <span className="text-sm font-bold text-charcoal">(필수) 서비스 이용약관 동의</span>
+            <span className="text-sm font-bold text-charcoal">
+              (필수) <button type="button" onClick={(event) => { event.preventDefault(); setLegalModal("terms"); }} className="text-primary underline underline-offset-2">서비스 이용약관</button> 동의
+            </span>
           </label>
           <label className="flex cursor-pointer items-start gap-3">
             <input name="agreement_privacy" type="checkbox" required defaultChecked={initialValues?.agreedPrivacy} className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
-            <span className="text-sm font-bold text-charcoal">(필수) 개인정보 수집 및 이용 동의</span>
+            <span className="text-sm font-bold text-charcoal">
+              (필수) <button type="button" onClick={(event) => { event.preventDefault(); setLegalModal("privacy"); }} className="text-primary underline underline-offset-2">개인정보 수집 및 이용</button> 동의
+            </span>
           </label>
           <label className="flex cursor-pointer items-start gap-3">
             <input name="agreement_marketing" type="checkbox" defaultChecked={initialValues?.agreedMarketing} className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
