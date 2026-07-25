@@ -834,11 +834,14 @@ function mapCampaign(row: CampaignRow): Campaign {
 }
 
 function mapStory(row: StoryRow): LocalStory {
+  const body = row.body ?? "";
+
   return {
     id: row.id,
     title: row.title,
     summary: row.summary ?? "",
-    body: row.body ?? "",
+    body: removeStoryContentUrlLine(body),
+    contentUrl: extractStoryContentUrl(body),
     coverImage: row.cover_image_url ?? "https://storage.googleapis.com/uxpilot-auth.appspot.com/default-placeholder.png",
     businessId: row.business_id ?? "",
     creatorId: row.creator_id ?? "",
@@ -846,6 +849,14 @@ function mapStory(row: StoryRow): LocalStory {
     category: row.category ?? "로컬 스토리",
     publishedAt: row.published_at ?? ""
   };
+}
+
+function extractStoryContentUrl(body: string) {
+  return body.match(/(?:^|\n)\s*콘텐츠 URL:\s*(https?:\/\/\S+)/)?.[1] ?? "";
+}
+
+function removeStoryContentUrlLine(body: string) {
+  return body.replace(/(?:^|\n)\s*콘텐츠 URL:\s*https?:\/\/\S+\s*$/m, "").trim();
 }
 
 async function syncExpiredCampaigns(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) {

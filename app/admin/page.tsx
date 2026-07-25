@@ -452,26 +452,41 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <div className="p-4">
                 <Badge tone="green">{submission.reviewStatus}</Badge>
                 <p className="mt-2 text-xs font-bold text-gray-400">{submission.platform}{submission.publishedAt ? ` · ${submission.publishedAt}` : ""}</p>
-                <p className="mt-3 break-all text-gray-600">{submission.contentUrl}</p>
-              {submission.reviewStatus === "submitted" ? (
-                <div className="mt-3 flex gap-2">
-                  <form action={approveSubmission}>
+                {submission.contentUrl ? (
+                  <div className="mt-3 space-y-2">
+                    <p className="break-all text-gray-600">{submission.contentUrl}</p>
+                    <a
+                      href={submission.contentUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-black text-primary ring-1 ring-primary/20 transition-colors hover:bg-primary/5"
+                    >
+                      콘텐츠 바로가기
+                      <ExternalLink size={13} />
+                    </a>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-gray-500">콘텐츠 URL이 없습니다.</p>
+                )}
+                {submission.reviewStatus === "submitted" ? (
+                  <div className="mt-3 flex gap-2">
+                    <form action={approveSubmission}>
+                      <input type="hidden" name="submission_id" value={submission.id} />
+                      <button className="rounded-lg bg-primary px-3 py-2 text-xs font-black text-white">승인</button>
+                    </form>
+                    <form action={requestSubmissionRevision}>
+                      <input type="hidden" name="submission_id" value={submission.id} />
+                      <input type="hidden" name="admin_memo" value="제출 콘텐츠 수정 요청" />
+                      <button className="rounded-lg bg-white px-3 py-2 text-xs font-black text-charcoal ring-1 ring-line">수정 요청</button>
+                    </form>
+                  </div>
+                ) : null}
+                {submission.reviewStatus === "approved" ? (
+                  <form action={publishLocalStory} className="mt-3">
                     <input type="hidden" name="submission_id" value={submission.id} />
-                    <button className="rounded-lg bg-primary px-3 py-2 text-xs font-black text-white">승인</button>
+                    <button className="rounded-lg bg-white px-3 py-2 text-xs font-black text-primary ring-1 ring-primary/20">로컬 스토리 발행</button>
                   </form>
-                  <form action={requestSubmissionRevision}>
-                    <input type="hidden" name="submission_id" value={submission.id} />
-                    <input type="hidden" name="admin_memo" value="제출 콘텐츠 수정 요청" />
-                    <button className="rounded-lg bg-white px-3 py-2 text-xs font-black text-charcoal ring-1 ring-line">수정 요청</button>
-                  </form>
-                </div>
-              ) : null}
-              {submission.reviewStatus === "approved" ? (
-                <form action={publishLocalStory} className="mt-3">
-                  <input type="hidden" name="submission_id" value={submission.id} />
-                  <button className="rounded-lg bg-white px-3 py-2 text-xs font-black text-primary ring-1 ring-primary/20">로컬 스토리 발행</button>
-                </form>
-              ) : null}
+                ) : null}
               </div>
             </div>
           ))}

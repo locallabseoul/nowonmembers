@@ -198,6 +198,7 @@ export const stories: LocalStory[] = [
     title: "공릉동 골목에서 만난 계절 디저트",
     summary: "카페 오디너리와 지역 크리에이터가 함께 기록한 여름 디저트 이야기",
     body: "직접 구운 디저트와 작은 골목의 분위기를 중심으로 노원의 일상적인 장면을 기록했습니다.",
+    contentUrl: "https://blog.example.com/ordinary-dessert",
     coverImage: "https://images.unsplash.com/photo-1464306076886-da185f6a9d05?auto=format&fit=crop&w=1400&q=80",
     businessId: "ordinary-cafe",
     creatorId: "creator-kim",

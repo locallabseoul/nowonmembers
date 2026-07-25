@@ -133,6 +133,7 @@ export type LocalStory = {
   title: string;
   summary: string;
   body: string;
+  contentUrl?: string;
   coverImage: string;
   businessId: string;
   creatorId: string;
