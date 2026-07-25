@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { href: "/campaigns", label: "캠페인", match: (pathname: string) => pathname.startsWith("/campaigns") },
-  { href: "/stories", label: "완료 콘텐츠", match: (pathname: string) => pathname.startsWith("/stories") }
+  { href: "/stories", label: "노원스토리", match: (pathname: string) => pathname.startsWith("/stories") }
 ];
 
 export function HeaderNav() {

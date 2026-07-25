@@ -934,6 +934,21 @@ export async function getPublicStory(id: string): Promise<LocalStory | undefined
   return mapStory(data as StoryRow);
 }
 
+export async function getPublicHomeStats() {
+  const supabase = await createSupabaseServerClient();
+  const [campaignCount, creatorCount, businessCount] = await Promise.all([
+    supabase.from("campaigns").select("id", { count: "exact", head: true }),
+    supabase.from("creator_profiles").select("id", { count: "exact", head: true }),
+    supabase.from("business_profiles").select("id", { count: "exact", head: true })
+  ]);
+
+  return {
+    campaigns: campaignCount.count ?? 0,
+    creators: creatorCount.count ?? 0,
+    businesses: businessCount.count ?? 0
+  };
+}
+
 export function getDisplayBusiness(id: string) {
   return getFallbackBusiness(id) ?? { businessName: "노원멤버스 파트너" };
 }

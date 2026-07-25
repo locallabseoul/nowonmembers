@@ -5,8 +5,14 @@ import { RoleAwareActionLink } from "@/app/components/role-aware-action-link";
 import { getCurrentSessionProfile } from "@/lib/auth/guards";
 import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import { getBusiness, stories } from "@/lib/data";
-import { getPublicCampaigns, getPublicStories } from "@/lib/supabase/queries";
+import { getPublicCampaigns, getPublicHomeStats, getPublicStories } from "@/lib/supabase/queries";
 import type { Campaign, LocalStory } from "@/lib/types";
+
+const numberFormatter = new Intl.NumberFormat("ko-KR");
+
+function formatStat(value: number) {
+  return numberFormatter.format(value);
+}
 
 function campaignChannel(campaign: Campaign) {
   if (campaign.campaignType === "shortform") return { icon: <Clapperboard size={13} className="text-purple-600" />, label: "인스타 릴스" };
@@ -257,7 +263,7 @@ function CampaignMakersSection() {
 }
 
 export default async function HomePage() {
-  const [campaigns, remoteStories, session] = await Promise.all([getPublicCampaigns(), getPublicStories(), getCurrentSessionProfile()]);
+  const [campaigns, remoteStories, session, stats] = await Promise.all([getPublicCampaigns(), getPublicStories(), getCurrentSessionProfile(), getPublicHomeStats()]);
   const role = session.profile?.role;
   const featuredCampaigns = campaigns.filter((campaign) => getCampaignLifecycle(campaign).canApply).slice(0, 3);
   const contentStories = (remoteStories.length ? remoteStories : stories).slice(0, 4);
@@ -301,16 +307,16 @@ export default async function HomePage() {
               <div className="mt-10 flex justify-center lg:justify-start">
                 <dl className="grid w-full max-w-[360px] grid-cols-3 divide-x divide-slate-200 sm:max-w-[420px]">
                   <div className="px-4 text-left sm:px-6">
-                    <dt className="text-3xl font-black tracking-tight text-charcoal">127</dt>
+                    <dt className="text-3xl font-black tracking-tight text-charcoal">{formatStat(stats.campaigns)}</dt>
                     <dd className="mt-1 text-xs font-medium text-slate-400">누적 캠페인</dd>
                   </div>
                   <div className="px-4 text-left sm:px-6">
-                    <dt className="text-3xl font-black tracking-tight text-charcoal">340+</dt>
+                    <dt className="text-3xl font-black tracking-tight text-charcoal">{formatStat(stats.creators)}</dt>
                     <dd className="mt-1 text-xs font-medium text-slate-400">참여 크리에이터</dd>
                   </div>
                   <div className="px-4 text-left sm:px-6">
-                    <dt className="text-3xl font-black tracking-tight text-charcoal">58</dt>
-                    <dd className="mt-1 text-xs font-medium text-slate-400">협력 가게</dd>
+                    <dt className="text-3xl font-black tracking-tight text-charcoal">{formatStat(stats.businesses)}</dt>
+                    <dd className="mt-1 text-xs font-medium text-slate-400">등록 매장</dd>
                   </div>
                 </dl>
               </div>

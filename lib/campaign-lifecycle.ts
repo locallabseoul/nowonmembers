@@ -142,7 +142,7 @@ export function getCampaignLifecycle(campaign: CampaignGate, today = getKoreaTod
   if (campaign.status === "completed") {
     return {
       label: "완료",
-      description: "완료된 캠페인입니다. 완료 콘텐츠는 스토리에서 확인할 수 있습니다.",
+      description: "완료된 캠페인입니다. 노원스토리에서 확인할 수 있습니다.",
       visibilityLabel: "완료",
       actionLabel: "완료된 캠페인입니다.",
       canApply: false,

@@ -7,7 +7,7 @@ export default async function StoriesPage() {
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <SectionHeader title="완료된 콘텐츠 아카이브" description="크리에이터와 가게가 함께 만든 로컬 스토리를 확인하세요." />
+      <SectionHeader title="노원스토리" description="크리에이터와 가게가 함께 만든 로컬 스토리를 확인하세요." />
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {stories.map((story) => {
           const business = getDisplayBusiness(story.businessId);
