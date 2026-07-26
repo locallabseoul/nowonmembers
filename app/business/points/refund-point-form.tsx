@@ -10,7 +10,7 @@ export function RefundPointForm({ orderId, refundablePoints }: { orderId: string
       action={refundPointOrder}
       onSubmit={(event) => {
         const confirmed = window.confirm(
-          `${formatPoints(refundablePoints)}를 원결제수단으로 환불할까요? 환불 접수 후 해당 포인트는 즉시 사용할 수 없습니다.`
+          `${formatPoints(refundablePoints)}를 원결제수단으로 환불할까요? 환불 접수 후 해당 포인트는 즉시 사용할 수 없으며, 이 결제에서 남은 충전 보너스도 함께 회수됩니다.`
         );
         if (!confirmed) event.preventDefault();
       }}

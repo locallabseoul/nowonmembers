@@ -49,7 +49,7 @@ export default async function BusinessPointsPage({
           </div>
 
           {params.error ? <p className="rounded-xl bg-red-50 p-4 text-sm font-bold text-red-700">{params.error}</p> : null}
-          {params.charged ? <p className="rounded-xl bg-green-50 p-4 text-sm font-bold text-green-700">50,000P 충전이 완료되었습니다.</p> : null}
+          {params.charged ? <p className="rounded-xl bg-green-50 p-4 text-sm font-bold text-green-700">포인트 충전이 완료되었습니다.</p> : null}
           {params.refunded ? <p className="rounded-xl bg-green-50 p-4 text-sm font-bold text-green-700">남은 유상 포인트를 원결제수단으로 환불했습니다.</p> : null}
           {params.campaign ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -60,11 +60,12 @@ export default async function BusinessPointsPage({
             </div>
           ) : null}
 
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <SummaryCard icon={<Coins size={20} />} label="사용 가능" value={formatPoints(overview.wallet.availablePoints)} />
             <SummaryCard icon={<ShieldCheck size={20} />} label="예약 중" value={formatPoints(overview.wallet.reservedPoints)} />
-            <SummaryCard icon={<CalendarClock size={20} />} label="무료 포인트" value={formatPoints(overview.wallet.promotionalPoints)} detail={`다음 만료 ${formatDate(overview.wallet.nextExpirationAt)}`} />
+            <SummaryCard icon={<CalendarClock size={20} />} label="출시 무료" value={formatPoints(overview.wallet.promotionalPoints)} detail={`다음 만료 ${formatDate(overview.wallet.nextExpirationAt)}`} />
             <SummaryCard icon={<CreditIcon />} label="유상 포인트" value={formatPoints(overview.wallet.paidPoints)} />
+            <SummaryCard icon={<Coins size={20} />} label="충전 보너스" value={formatPoints(overview.wallet.bonusPoints)} detail={`다음 만료 ${formatDate(overview.wallet.nextBonusExpirationAt)}`} />
           </section>
 
           <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -98,17 +99,14 @@ export default async function BusinessPointsPage({
 
             <aside className="space-y-5">
               <section className="rounded-[20px] border border-primary/15 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">기본 충전</span>
-                <h2 className="mt-4 text-2xl font-black text-charcoal">50,000P</h2>
-                <dl className="mt-5 space-y-2 text-sm">
-                  <div className="flex justify-between"><dt className="text-gray-500">공급가</dt><dd>50,000원</dd></div>
-                  <div className="flex justify-between"><dt className="text-gray-500">VAT</dt><dd>5,000원</dd></div>
-                  <div className="flex justify-between border-t border-gray-100 pt-2 font-black"><dt>총 결제금액</dt><dd>55,000원</dd></div>
-                </dl>
-                <div className="mt-6">
+                <h2 className="text-xl font-black text-charcoal">충전 금액 선택</h2>
+                <p className="mt-2 text-sm leading-5 text-gray-500">필요한 모집 인원에 맞춰 결제할 금액을 선택해주세요.</p>
+                <div className="mt-5">
                   <PointChargeButton campaignId={params.campaign} />
                 </div>
-                <p className="mt-4 text-xs leading-5 text-gray-500">유상 포인트는 5년간 유효하며, 예약되지 않은 잔여분은 원결제수단으로 환불할 수 있습니다.</p>
+                <p className="mt-4 text-xs leading-5 text-gray-500">
+                  유상 포인트는 5년간 유효하며 미사용분은 환불할 수 있습니다. 충전 보너스는 1년간 유효하고 현금 환불되지 않으며, 연결된 유상 포인트 환불 시 남은 보너스가 회수됩니다.
+                </p>
               </section>
             </aside>
           </section>
@@ -120,13 +118,16 @@ export default async function BusinessPointsPage({
             <div className="overflow-x-auto">
               <table className="w-full min-w-[700px] text-left text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500">
-                  <tr><th className="px-6 py-3">주문일</th><th className="px-6 py-3">상품</th><th className="px-6 py-3">결제금액</th><th className="px-6 py-3">상태</th><th className="px-6 py-3 text-right">환불</th></tr>
+                  <tr><th className="px-6 py-3">주문일</th><th className="px-6 py-3">지급 포인트</th><th className="px-6 py-3">결제금액</th><th className="px-6 py-3">상태</th><th className="px-6 py-3 text-right">환불</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {overview.orders.map((order) => (
                     <tr key={order.id}>
                       <td className="px-6 py-4 text-gray-500">{formatDate(order.paidAt || order.createdAt)}</td>
-                      <td className="px-6 py-4 font-bold">{formatPoints(order.pointAmount)} 충전</td>
+                      <td className="px-6 py-4">
+                        <p className="font-bold">{formatPoints(order.pointAmount + order.bonusPoints)}</p>
+                        {order.bonusPoints > 0 ? <p className="mt-1 text-xs text-green-600">보너스 {formatPoints(order.bonusPoints)} 포함</p> : null}
+                      </td>
                       <td className="px-6 py-4">{order.totalAmount.toLocaleString("ko-KR")}원</td>
                       <td className="px-6 py-4">{orderStatusLabel(order.status)}</td>
                       <td className="px-6 py-4 text-right">

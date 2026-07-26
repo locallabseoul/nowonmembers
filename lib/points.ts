@@ -1,9 +1,33 @@
 export const POINTS_PER_RECRUIT = 5_000;
-export const POINT_PACK_POINTS = 50_000;
-export const POINT_PACK_SUPPLY_AMOUNT = 50_000;
-export const POINT_PACK_VAT_AMOUNT = 5_000;
-export const POINT_PACK_TOTAL_AMOUNT = 55_000;
-export const POINT_TERMS_VERSION = "2026-07-26";
+export const POINT_CHARGE_OPTIONS = [
+  {
+    paidPoints: 25_000,
+    bonusPoints: 0,
+    supplyAmount: 25_000,
+    vatAmount: 2_500,
+    totalAmount: 27_500
+  },
+  {
+    paidPoints: 50_000,
+    bonusPoints: 5_000,
+    supplyAmount: 50_000,
+    vatAmount: 5_000,
+    totalAmount: 55_000
+  },
+  {
+    paidPoints: 100_000,
+    bonusPoints: 10_000,
+    supplyAmount: 100_000,
+    vatAmount: 10_000,
+    totalAmount: 110_000
+  }
+] as const;
+export const DEFAULT_POINT_CHARGE_POINTS = 50_000;
+export const POINT_TERMS_VERSION = "2026-07-26-v2";
+
+export function getPointChargeOption(paidPoints: number) {
+  return POINT_CHARGE_OPTIONS.find((option) => option.paidPoints === paidPoints);
+}
 
 export type PointWalletSummary = {
   businessId: string;
@@ -11,7 +35,9 @@ export type PointWalletSummary = {
   reservedPoints: number;
   promotionalPoints: number;
   paidPoints: number;
+  bonusPoints: number;
   nextExpirationAt: string | null;
+  nextBonusExpirationAt: string | null;
 };
 
 export type PointLedgerItem = {
@@ -28,6 +54,7 @@ export type PointPaymentOrder = {
   id: string;
   orderId: string;
   pointAmount: number;
+  bonusPoints: number;
   totalAmount: number;
   refundedPoints: number;
   status: string;
@@ -58,6 +85,8 @@ export function campaignPointCost(recruitCount: number) {
 export function pointEventLabel(eventType: string) {
   if (eventType === "promotional_credit") return "출시 혜택";
   if (eventType === "paid_credit") return "포인트 충전";
+  if (eventType === "bonus_credit") return "충전 보너스";
+  if (eventType === "bonus_revoke") return "환불 보너스 회수";
   if (eventType === "admin_credit") return "운영자 지급";
   if (eventType === "admin_debit") return "운영자 차감";
   if (eventType === "campaign_reserve") return "캠페인 예약";

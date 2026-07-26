@@ -76,5 +76,5 @@ export default async function PointPaymentSuccessPage({
     redirect(`/business/points?${retryParams.toString()}`);
   }
 
-  redirect("/business/points?charged=1");
+  redirect(`/business/points?charged=${orderId}`);
 }

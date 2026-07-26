@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { POINT_TERMS_VERSION } from "@/lib/points";
+import { getPointChargeOption, POINT_TERMS_VERSION } from "@/lib/points";
 import { requireRole } from "@/lib/auth/guards";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { cancelTossPayment } from "@/lib/toss-payments";
@@ -12,16 +12,21 @@ export type PointChargeOrder = {
   orderId: string;
   amount: number;
   points: number;
+  bonusPoints: number;
   customerKey: string;
   clientKey: string;
 };
 
-export async function createPointChargeOrder(): Promise<PointChargeOrder> {
+export async function createPointChargeOrder(pointAmount: number): Promise<PointChargeOrder> {
+  const chargeOption = getPointChargeOption(pointAmount);
+  if (!chargeOption) throw new Error("충전 금액을 확인해주세요.");
+
   const { supabase } = await requireRole("business", "/business/points");
   const orderId = `points_${randomUUID().replaceAll("-", "")}`;
   const { data, error } = await supabase.rpc("create_point_payment_order", {
     target_order_id: orderId,
-    target_terms_version: POINT_TERMS_VERSION
+    target_terms_version: POINT_TERMS_VERSION,
+    target_point_amount: chargeOption.paidPoints
   });
 
   if (error) throw new Error(error.message);
@@ -33,6 +38,7 @@ export async function createPointChargeOrder(): Promise<PointChargeOrder> {
     orderId: order.order_id,
     amount: Number(order.total_amount),
     points: Number(order.point_amount),
+    bonusPoints: Number(order.bonus_points),
     customerKey: `customer_${randomUUID()}`,
     clientKey
   };

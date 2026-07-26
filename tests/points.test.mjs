@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  POINT_PACK_POINTS,
-  POINT_PACK_TOTAL_AMOUNT,
+  getPointChargeOption,
+  POINT_CHARGE_OPTIONS,
   campaignPointCost,
   formatPoints
 } from "../lib/points.ts";
@@ -11,13 +11,29 @@ import { cancelTossPayment, confirmTossPayment } from "../lib/toss-payments.ts";
 test("campaign cost uses 5,000P per recruit", () => {
   assert.equal(campaignPointCost(1), 5_000);
   assert.equal(campaignPointCost(5), 25_000);
-  assert.equal(campaignPointCost(10), POINT_PACK_POINTS);
+  assert.equal(campaignPointCost(10), 50_000);
   assert.equal(formatPoints(25_000), "25,000P");
 });
 
-test("point pack total includes ten percent VAT", () => {
-  assert.equal(POINT_PACK_TOTAL_AMOUNT, 55_000);
-  assert.equal(POINT_PACK_TOTAL_AMOUNT, Math.round(POINT_PACK_POINTS * 1.1));
+test("point charge options include VAT and higher amounts grant a bonus", () => {
+  assert.deepEqual(
+    POINT_CHARGE_OPTIONS.map(({ paidPoints, bonusPoints, totalAmount }) => ({
+      paidPoints,
+      bonusPoints,
+      totalAmount
+    })),
+    [
+      { paidPoints: 25_000, bonusPoints: 0, totalAmount: 27_500 },
+      { paidPoints: 50_000, bonusPoints: 5_000, totalAmount: 55_000 },
+      { paidPoints: 100_000, bonusPoints: 10_000, totalAmount: 110_000 }
+    ]
+  );
+
+  for (const option of POINT_CHARGE_OPTIONS) {
+    assert.equal(option.totalAmount, Math.round(option.paidPoints * 1.1));
+  }
+
+  assert.equal(getPointChargeOption(75_000), undefined);
 });
 
 test("Toss confirmation sends the server-owned amount and idempotency key", async () => {

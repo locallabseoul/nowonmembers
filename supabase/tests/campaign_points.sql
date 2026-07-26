@@ -1,6 +1,6 @@
 begin;
 
-select plan(16);
+select plan(21);
 
 insert into auth.users (
   id,
@@ -304,6 +304,16 @@ set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-000000000001","role":"authenticated"}';
 
 select is(
+  (public.create_point_payment_order(
+    'points_test_basic',
+    '2026-07-26-v2',
+    50000
+  )).bonus_points,
+  5000,
+  '50,000P order grants a 5,000P bonus'
+);
+
+select is(
   (select available_points from public.get_my_point_wallet()),
   0,
   'expired promotional points are removed from the available balance'
@@ -318,6 +328,52 @@ select throws_ok(
   '42501',
   null,
   'business cannot mutate the wallet directly'
+);
+
+reset role;
+
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-000000000001","role":"authenticated"}';
+
+select is(
+  (public.create_point_payment_order(
+    'points_test_growth',
+    '2026-07-26-v2',
+    100000
+  )).total_amount,
+  110000,
+  '100,000P order uses the server-owned VAT-inclusive amount'
+);
+
+reset role;
+
+select ok(
+  public.credit_point_payment(
+    'points_test_growth',
+    'test_payment_key_growth',
+    'CARD',
+    '{"status":"DONE"}'::jsonb
+  ),
+  'paid order credits points once'
+);
+
+select is(
+  (select available_points from public.point_wallets where business_id = '90000000-0000-4000-8000-000000000002'),
+  110000,
+  'growth charge credits 100,000 paid points and 10,000 bonus points'
+);
+
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-000000000001","role":"authenticated"}';
+
+select is(
+  (public.create_point_refund_request(
+    'points_test_growth',
+    '90000000-0000-4000-8000-000000000090',
+    'test:refund:growth'
+  )).refund_amount,
+  110000,
+  'refund locks the paid balance and revokes the linked unused bonus'
 );
 
 select * from finish();
