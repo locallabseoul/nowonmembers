@@ -292,6 +292,34 @@ export async function approveRecommendedApplication(formData: FormData) {
   redirect("/business/dashboard");
 }
 
+export async function submitDraftCampaignForReview(formData: FormData) {
+  const campaignId = String(formData.get("campaign_id") ?? "");
+  const { supabase } = await requireRole("business", "/business/dashboard");
+
+  const { data, error } = await supabase.rpc("submit_campaign_for_review", {
+    target_campaign_id: campaignId,
+    target_idempotency_key: `campaign_reserve:${campaignId}`
+  });
+
+  if (error) {
+    redirect(`/business/dashboard?campaign=${campaignId}&error=${encodeURIComponent(error.message)}`);
+  }
+
+  const result = Array.isArray(data) ? data[0] : data;
+  if (!result?.submitted) {
+    const params = new URLSearchParams({
+      campaign: campaignId,
+      required: String(result?.required_points ?? 0),
+      shortfall: String(result?.shortfall_points ?? 0)
+    });
+    redirect(`/business/points?${params.toString()}`);
+  }
+
+  revalidatePath("/business/dashboard");
+  revalidatePath("/admin");
+  redirect(`/business/dashboard?campaign=${campaignId}&message=${encodeURIComponent("포인트를 예약하고 캠페인 검수를 요청했습니다.")}`);
+}
+
 export async function finalizeCampaignSelection(formData: FormData) {
   const campaignId = String(formData.get("campaign_id") ?? "");
   const { supabase } = await requireRole("business", "/business/dashboard");

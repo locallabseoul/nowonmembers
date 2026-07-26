@@ -6,7 +6,7 @@ import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-l
 import { formatPoints } from "@/lib/points";
 import { getBusinessDashboard, type DashboardApplication, type DashboardCampaign, type DashboardSubmission } from "@/lib/supabase/queries";
 import { requireRole } from "@/lib/auth/guards";
-import { approveRecommendedApplication, cancelCampaignBeforePublish, finalizeCampaignSelection, saveBusinessProfile } from "./actions";
+import { approveRecommendedApplication, cancelCampaignBeforePublish, finalizeCampaignSelection, saveBusinessProfile, submitDraftCampaignForReview } from "./actions";
 import { BusinessProfileWizard } from "./business-profile-wizard";
 
 const applicationStatusTabs = [
@@ -294,7 +294,7 @@ function campaignSubmissionText(campaign: DashboardCampaign) {
 }
 
 function campaignActionLabel(campaign: DashboardCampaign) {
-  if (campaign.status === "draft") return "충전 후 제출";
+  if (campaign.status === "draft") return "검수 제출";
   if (campaign.status === "selecting") return "선정하기";
   if (campaign.status === "submission_review") return "리뷰 검토";
   if (campaign.status === "completed") return "결과 리포트";
@@ -315,9 +315,7 @@ function CampaignManagementRow({
   const submissionText = campaignSubmissionText(campaign);
   const actionIsPrimary = campaign.status === "selecting";
   const actionTab: ModalTab = campaign.status === "submission_review" || campaign.status === "completed" ? "submissions" : "applications";
-  const actionHref = campaign.status === "draft"
-    ? `/business/points?campaign=${campaign.id}&required=${campaign.recruitCount * 5000}`
-    : dashboardHref("/business/dashboard", campaign.id, statusFilter, actionTab);
+  const actionHref = dashboardHref("/business/dashboard", campaign.id, statusFilter, actionTab);
 
   return (
     <tr className={`group transition-colors hover:bg-gray-50 ${selected ? "bg-primary/5" : ""} ${campaign.status === "completed" ? "opacity-75" : ""}`}>
@@ -364,16 +362,25 @@ function CampaignManagementRow({
       </td>
       <td className="px-6 py-5 text-sm text-gray-600">{campaignPeriodText(campaign)}</td>
       <td className="px-6 py-5 text-right">
-        <Link
-          href={actionHref}
-          className={`inline-flex rounded-lg px-3 py-1.5 text-sm shadow-sm transition-colors ${
-            actionIsPrimary
-              ? "bg-primary font-bold text-white hover:bg-primaryHover"
-              : "border border-gray-200 bg-white font-medium text-charcoal hover:bg-gray-50 hover:text-primary"
-          }`}
-        >
-          {campaignActionLabel(campaign)}
-        </Link>
+        {campaign.status === "draft" ? (
+          <form action={submitDraftCampaignForReview}>
+            <input type="hidden" name="campaign_id" value={campaign.id} />
+            <button className="inline-flex rounded-lg bg-primary px-3 py-1.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primaryHover">
+              {campaignActionLabel(campaign)}
+            </button>
+          </form>
+        ) : (
+          <Link
+            href={actionHref}
+            className={`inline-flex rounded-lg px-3 py-1.5 text-sm shadow-sm transition-colors ${
+              actionIsPrimary
+                ? "bg-primary font-bold text-white hover:bg-primaryHover"
+                : "border border-gray-200 bg-white font-medium text-charcoal hover:bg-gray-50 hover:text-primary"
+            }`}
+          >
+            {campaignActionLabel(campaign)}
+          </Link>
+        )}
       </td>
     </tr>
   );
