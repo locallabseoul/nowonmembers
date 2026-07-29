@@ -3,7 +3,7 @@ import { LegalPage } from "@/app/components/legal-page";
 import { LEGAL_EFFECTIVE_DATE, termsSections } from "@/lib/legal";
 
 export const metadata: Metadata = {
-  title: "이용약관 | 노원멤버스",
+  title: "이용약관",
   description: "노원멤버스 서비스 이용약관"
 };
 

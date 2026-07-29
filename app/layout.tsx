@@ -12,9 +12,22 @@ import { COMPANY_INFO } from "@/lib/legal";
 import { getHeaderNoticeData, getPinnedNotice } from "@/lib/supabase/queries";
 import "./globals.css";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3003";
+
 export const metadata: Metadata = {
-  title: "노원멤버스",
-  description: "노원의 가게와 지역 크리에이터를 연결하는 로컬 콘텐츠 협업 플랫폼"
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "노원멤버스",
+    template: "%s | 노원멤버스"
+  },
+  description: "노원의 가게와 지역 크리에이터를 연결하는 로컬 콘텐츠 협업 플랫폼",
+  openGraph: {
+    type: "website",
+    locale: "ko_KR",
+    siteName: "노원멤버스",
+    title: "노원멤버스",
+    description: "노원의 가게와 지역 크리에이터를 연결하는 로컬 콘텐츠 협업 플랫폼"
+  }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

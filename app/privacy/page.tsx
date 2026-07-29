@@ -3,7 +3,7 @@ import { LegalPage } from "@/app/components/legal-page";
 import { LEGAL_EFFECTIVE_DATE, privacySections } from "@/lib/legal";
 
 export const metadata: Metadata = {
-  title: "개인정보처리방침 | 노원멤버스",
+  title: "개인정보처리방침",
   description: "노원멤버스 개인정보처리방침"
 };
 
