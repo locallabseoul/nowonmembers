@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Menu, Plus, UserRound } from "lucide-react";
+import { Plus, UserRound } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import { AccountMenu } from "@/app/components/account-menu";
 import { HeaderNav } from "@/app/components/header-nav";
+import { MobileNav } from "@/app/components/mobile-nav";
 import { NoticeMenu } from "@/app/components/notice-menu";
 import { PinnedNoticeBar } from "@/app/components/pinned-notice-bar";
 import { getAccountPath, getCurrentSessionProfile } from "@/lib/auth/guards";
@@ -46,7 +47,8 @@ async function Header() {
     <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/80 backdrop-blur-md">
       {pinnedNotice ? <PinnedNoticeBar notice={pinnedNotice} /> : null}
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-8">
+        <div className="flex items-center gap-3 md:gap-8">
+          <MobileNav isBusiness={role === "business"} />
           <Link href="/" className="flex items-center">
             <span className="text-lg font-black tracking-tight text-charcoal">NOWON<span className="text-primary">MEMBERS</span></span>
           </Link>
@@ -67,15 +69,10 @@ async function Header() {
               <AccountMenu displayName={displayName} role={role} accountPath={accountPath} profileEditPath={profileEditPath} avatarUrl={avatarUrl} signOutAction={signOut} />
             </>
           ) : (
-            <>
-              <Link href="/auth" className="flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-primary hover:text-primary">
-                <UserRound size={15} />
-                <span className="hidden sm:inline">로그인</span>
-              </Link>
-              <button className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 md:hidden" aria-label="메뉴">
-                <Menu size={19} />
-              </button>
-            </>
+            <Link href="/auth" className="flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-primary hover:text-primary">
+              <UserRound size={15} />
+              <span className="hidden sm:inline">로그인</span>
+            </Link>
           )}
         </div>
       </div>
