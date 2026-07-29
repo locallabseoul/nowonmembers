@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 같은 브랜치에 연달아 push하면 이전 실행은 취소한다.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # tests/*.test.mjs가 lib/*.ts를 직접 import한다. Node 22의 타입 스트리핑이
+      # 필요하므로 22 미만으로 내리지 않는다.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      # npm run build는 넣지 않는다. 루트 레이아웃이 정적 생성 중 Supabase
+      # 클라이언트를 만들어 환경변수가 필요하고, 빌드 검증은 Vercel 배포가 이미 한다.
+      - run: npm test
