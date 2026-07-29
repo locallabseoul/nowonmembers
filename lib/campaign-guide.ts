@@ -1,3 +1,12 @@
+// 숫자와 조건은 supabase/migrations/20260726120000_create_campaign_points.sql의
+// grant_launch_point_bonus를 따른다. 지급 시점은 가게 프로필 등록, 유효기간 30일,
+// 대상은 2026-12-31까지 등록한 가게다. 바뀌면 여기도 함께 고쳐야 한다.
+export const LAUNCH_EVENT_BANNER = {
+  badge: "2026 오픈 이벤트",
+  headline: "가게 프로필만 등록해도 50,000P",
+  terms: "지급일로부터 30일간 사용 가능"
+};
+
 export const CAMPAIGN_GUIDE_HERO = {
   eyebrow: "NOWON MEMBERS",
   headingLead: "우리 동네를 가장 잘 아는 사람이,",

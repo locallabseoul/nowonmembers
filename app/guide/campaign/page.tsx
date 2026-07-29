@@ -1,8 +1,9 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowRight, Check, MapPin, Store, Users, X } from "lucide-react";
+import { ArrowRight, Check, Gift, MapPin, Store, Users, X } from "lucide-react";
 import {
   CAMPAIGN_GUIDE_CLOSING,
+  LAUNCH_EVENT_BANNER,
   CAMPAIGN_GUIDE_HERO,
   CAMPAIGN_GUIDE_META,
   COMPARISON_SECTION,
@@ -25,6 +26,7 @@ export const metadata: Metadata = {
 export default function CampaignGuidePage() {
   return (
     <main className="bg-white">
+      <LaunchEventBanner />
       <Hero />
       <LocalValue />
       <Comparison />
@@ -35,12 +37,29 @@ export default function CampaignGuidePage() {
   );
 }
 
+function LaunchEventBanner() {
+  return (
+    <section className="bg-charcoal">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-4 sm:px-6 lg:px-8">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+          <Gift size={16} />
+        </span>
+        <span className="inline-flex shrink-0 rounded-full bg-primary px-2.5 py-1 text-[11px] font-black text-white">
+          {LAUNCH_EVENT_BANNER.badge}
+        </span>
+        <p className="break-keep font-black leading-6 text-white">{LAUNCH_EVENT_BANNER.headline}</p>
+        <span className="break-keep text-xs leading-5 text-slate-500">{LAUNCH_EVENT_BANNER.terms}</span>
+      </div>
+    </section>
+  );
+}
+
 function Hero() {
   return (
     <section className="border-b border-gray-100 bg-gradient-to-b from-primaryLight to-white">
       <div className="mx-auto w-full max-w-6xl px-4 pb-14 pt-14 sm:px-6 sm:pt-20 lg:px-8">
         <p className="text-sm font-black tracking-wide text-primary">{CAMPAIGN_GUIDE_HERO.eyebrow}</p>
-        <h1 className="mt-4 text-[28px] font-black leading-[1.4] tracking-tight text-charcoal sm:text-[42px] sm:leading-[1.32]">
+        <h1 className="mt-4 break-keep text-[28px] font-black leading-[1.4] tracking-tight text-charcoal sm:text-[42px] sm:leading-[1.32]">
           {CAMPAIGN_GUIDE_HERO.headingLead}
           <br />
           <span className="text-primary">{CAMPAIGN_GUIDE_HERO.headingHighlight}</span>
@@ -82,7 +101,7 @@ function LocalValue() {
   return (
     <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
       <SectionBadge>{LOCAL_VALUE_SECTION.badge}</SectionBadge>
-      <h2 className="mt-5 max-w-3xl text-2xl font-black leading-[1.45] text-charcoal sm:text-[32px]">
+      <h2 className="mt-5 max-w-3xl break-keep text-2xl font-black leading-[1.45] text-charcoal sm:text-[32px]">
         {LOCAL_VALUE_SECTION.heading}
         <span className="text-primary">{LOCAL_VALUE_SECTION.highlight}</span>
       </h2>
@@ -149,7 +168,7 @@ function Comparison() {
     <section className="bg-[#F5F6F8]">
       <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
         <SectionBadge>{COMPARISON_SECTION.badge}</SectionBadge>
-        <h2 className="mt-5 max-w-3xl text-2xl font-black leading-[1.45] text-charcoal sm:text-[32px]">
+        <h2 className="mt-5 max-w-3xl break-keep text-2xl font-black leading-[1.45] text-charcoal sm:text-[32px]">
           {COMPARISON_SECTION.heading}
           <span className="text-primary">{COMPARISON_SECTION.highlight}</span>
         </h2>
@@ -193,7 +212,7 @@ function GuideSteps() {
   return (
     <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
       <SectionBadge>캠페인 작성 가이드</SectionBadge>
-      <h2 className="mt-5 max-w-3xl text-2xl font-black leading-[1.45] text-charcoal sm:text-[32px]">
+      <h2 className="mt-5 max-w-3xl break-keep text-2xl font-black leading-[1.45] text-charcoal sm:text-[32px]">
         같은 가게여도 어떻게 적었는지에 따라 <span className="text-primary">지원자 수가 달라집니다</span>
       </h2>
       <p className="mt-5 max-w-2xl text-sm leading-7 text-gray-600 sm:text-base">
@@ -218,7 +237,7 @@ function GuideSteps() {
                     </span>
                   </div>
 
-                  <h3 className="mt-5 text-xl font-black leading-[1.5] text-charcoal sm:text-2xl">
+                  <h3 className="mt-5 break-keep text-xl font-black leading-[1.5] text-charcoal sm:text-2xl">
                     {section.heading}
                     <span className="text-primary">{section.highlight}</span>
                     {section.headingTail}
@@ -287,7 +306,7 @@ function Closing() {
       <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
         <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center">
           <div>
-            <h2 className="text-2xl font-black leading-[1.45] text-white sm:text-[32px]">
+            <h2 className="break-keep text-2xl font-black leading-[1.45] text-white sm:text-[32px]">
               {CAMPAIGN_GUIDE_CLOSING.heading}
               <br />
               <span className="text-primary">{CAMPAIGN_GUIDE_CLOSING.headingHighlight}</span>
