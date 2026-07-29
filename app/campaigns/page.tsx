@@ -4,6 +4,7 @@ import { getBusiness } from "@/lib/data";
 import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import { getPublicCampaigns } from "@/lib/supabase/queries";
 import type { Campaign } from "@/lib/types";
+import { FormBanner } from "@/app/components/form-field";
 
 type CampaignFilter = {
   status?: string;
@@ -118,7 +119,7 @@ export default async function CampaignListPage({ searchParams }: { searchParams:
           <h1 className="mb-2 text-3xl font-black text-charcoal">캠페인 목록</h1>
           <p className="text-gray-500">노원 지역의 다양한 체험 캠페인을 찾아보세요.</p>
         </div>
-        {error ? <p className="rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
+        {error ? <FormBanner>{error}</FormBanner> : null}
 
         <form className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:flex-row">
           <label className="relative flex-grow md:max-w-md">

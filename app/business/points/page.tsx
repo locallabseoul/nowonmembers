@@ -6,6 +6,7 @@ import { getBusinessPointOverview } from "@/lib/supabase/point-queries";
 import { OperatorSidebar } from "@/app/business/components/operator-sidebar";
 import { PointChargeButton } from "./point-charge-button";
 import { RefundPointForm } from "./refund-point-form";
+import { FormBanner } from "@/app/components/form-field";
 
 function formatDate(value: string | null) {
   if (!value) return "없음";
@@ -48,7 +49,7 @@ export default async function BusinessPointsPage({
             <p className="mt-2 text-sm text-gray-500">캠페인 모집 1명당 5,000P가 예약됩니다.</p>
           </div>
 
-          {params.error ? <p className="rounded-xl bg-red-50 p-4 text-sm font-bold text-red-700">{params.error}</p> : null}
+          {params.error ? <FormBanner>{params.error}</FormBanner> : null}
           {params.charged ? <p className="rounded-xl bg-green-50 p-4 text-sm font-bold text-green-700">포인트 충전이 완료되었습니다.</p> : null}
           {params.refunded ? <p className="rounded-xl bg-green-50 p-4 text-sm font-bold text-green-700">남은 유상 포인트를 원결제수단으로 환불했습니다.</p> : null}
           {params.campaign ? (

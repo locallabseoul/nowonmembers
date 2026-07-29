@@ -7,6 +7,7 @@ import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-l
 import { getPublicCampaign } from "@/lib/supabase/queries";
 import type { Campaign } from "@/lib/types";
 import { CampaignMap } from "./campaign-map";
+import { FormBanner } from "@/app/components/form-field";
 
 function formatShortDate(value: string) {
   if (!value) return "-";
@@ -69,7 +70,7 @@ export default async function CampaignDetailPage({ params, searchParams }: { par
             </li>
           </ol>
         </nav>
-        {error ? <p className="mb-6 rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
+        {error ? <div className="mb-6"><FormBanner>{error}</FormBanner></div> : null}
 
         <div className="flex flex-col gap-8 lg:flex-row">
           <section className="flex flex-col gap-8 lg:w-2/3">

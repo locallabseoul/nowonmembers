@@ -16,6 +16,7 @@ import {
   UserRound,
   Video
 } from "lucide-react";
+import { FieldError, FieldLabel, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
 import { sendEmailVerification, sendPhoneVerification, verifyPhoneOtp } from "@/app/profile-verification-actions";
 import { saveCreatorProfile } from "./actions";
 
@@ -176,7 +177,7 @@ function CreatorProfileCreateWizard({
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState(() => createInitialDraft(initialProfile));
   const [avatarPreview, setAvatarPreview] = useState<ImagePreview | null>(null);
-  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [draftLoaded, setDraftLoaded] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const storageKey = `creator-profile-wizard:${initialProfile.id ?? "new"}`;
@@ -239,7 +240,7 @@ function CreatorProfileCreateWizard({
     const imageError = getImageValidationMessage(file);
     if (imageError) {
       if (avatarInputRef.current) avatarInputRef.current.value = "";
-      setValidationMessage(imageError);
+      setFieldErrors((current) => ({ ...current, avatar: imageError }));
       return;
     }
 
@@ -248,62 +249,78 @@ function CreatorProfileCreateWizard({
       url: URL.createObjectURL(file),
       name: file.name
     });
-    setValidationMessage(null);
+    setFieldErrors((current) => ({ ...current, avatar: "" }));
+  }
+
+  // 필드 이름과 함께 모아 각 입력창 아래에 표시한다.
+  function collectCreatorErrors(stepIndex?: number) {
+    const all: Record<string, string> = {
+      name: draft.name.trim() ? "" : "이름을 입력해주세요.",
+      phone: draft.phone.replace(/\D/g, "").length >= 10 ? "" : "전화번호를 정확히 입력해주세요.",
+      activity_areas: draft.activity_areas.length ? "" : "활동 지역을 1개 이상 선택해주세요.",
+      interests: draft.interests.length ? "" : "관심 분야를 1개 이상 선택해주세요.",
+      bio: draft.bio.trim() ? "" : "자기소개를 입력해주세요.",
+      content_types: draft.content_types.length ? "" : "콘텐츠 유형을 1개 이상 선택해주세요.",
+      channel_url: !draft.channel_url.trim()
+        ? "대표 채널 URL을 입력해주세요."
+        : !isValidUrl(draft.channel_url.trim())
+          ? "대표 채널 URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다."
+          : "",
+      portfolio_url:
+        draft.portfolio_url.trim() && !isValidUrl(draft.portfolio_url.trim())
+          ? "포트폴리오 URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다."
+          : ""
+    };
+
+    const byStep: Record<number, string[]> = {
+      0: ["name", "phone", "activity_areas", "interests", "bio"],
+      1: ["content_types", "channel_url"],
+      2: ["portfolio_url"]
+    };
+    const names = stepIndex === undefined ? Object.keys(all) : byStep[stepIndex] ?? [];
+
+    return Object.fromEntries(names.map((name) => [name, all[name]]).filter(([, message]) => message));
   }
 
   function validateStep(stepIndex: number) {
-    const requiredByStep = {
-      0: [
-        [draft.name.trim(), "이름을 입력해주세요."],
-        [draft.phone.replace(/\D/g, "").length >= 10, "전화번호를 정확히 입력해주세요."],
-        [draft.activity_areas.length, "활동 지역을 1개 이상 선택해주세요."],
-        [draft.interests.length, "관심 분야를 1개 이상 선택해주세요."],
-        [draft.bio.trim(), "자기소개를 입력해주세요."]
-      ],
-      1: [
-        [draft.content_types.length, "콘텐츠 유형을 1개 이상 선택해주세요."],
-        [draft.channel_url.trim(), "대표 채널 URL을 입력해주세요."]
-      ],
-      2: []
-    } as const;
+    return collectCreatorErrors(stepIndex);
+  }
 
-    const invalid = requiredByStep[stepIndex as 0 | 1 | 2].find(([value]) => !value);
-    if (invalid) return invalid[1];
 
-    if (stepIndex === 1 && draft.channel_url.trim() && !isValidUrl(draft.channel_url.trim())) {
-      return "대표 채널 URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다.";
-    }
+  function focusFirstError(errors: Record<string, string>) {
+    const [firstName] = Object.keys(errors);
+    if (!firstName) return;
 
-    if (stepIndex === 2 && draft.portfolio_url.trim() && !isValidUrl(draft.portfolio_url.trim())) {
-      return "포트폴리오 URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다.";
-    }
-
-    return "";
+    const control = document.querySelector<HTMLElement>(`[name="${firstName}"]`);
+    control?.focus();
+    control?.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
   function handleNextStep() {
-    const message = validateStep(step);
-    if (message) {
-      setValidationMessage(message);
+    const errors = validateStep(step);
+    setFieldErrors(errors);
+
+    if (Object.keys(errors).length) {
+      focusFirstError(errors);
       return;
     }
 
-    setValidationMessage(null);
     setStep((current) => Math.min(current + 1, steps.length - 1));
   }
 
   function handlePreviousStep() {
-    setValidationMessage(null);
+    setFieldErrors({});
     setStep((current) => Math.max(current - 1, 0));
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     for (let index = 0; index < steps.length; index += 1) {
-      const message = validateStep(index);
-      if (message) {
+      const errors = validateStep(index);
+      if (Object.keys(errors).length) {
         event.preventDefault();
         setStep(index);
-        setValidationMessage(message);
+        setFieldErrors(errors);
+        window.requestAnimationFrame(() => focusFirstError(errors));
         return;
       }
     }
@@ -355,8 +372,7 @@ function CreatorProfileCreateWizard({
         })}
       </ol>
 
-      {error ? <p className="mb-5 rounded-xl bg-primary/10 p-4 text-sm font-bold text-primary">{error}</p> : null}
-      {validationMessage ? <p className="mb-5 rounded-xl bg-amber-50 p-4 text-sm font-bold text-amber-700">{validationMessage}</p> : null}
+      {error ? <div className="mb-5"><FormBanner>{error}</FormBanner></div> : null}
 
       <form action={saveCreatorProfile} onSubmit={handleSubmit} className="space-y-8">
         <input type="hidden" name="next" value={next ?? ""} />
@@ -409,7 +425,8 @@ function CreatorProfileCreateWizard({
                     placeholder="홍길동"
                     icon={<UserRound size={17} />}
                     requiredMark
-                  />
+              error={fieldErrors.name}
+            />
                   <TextField
                     name="phone"
                     label="전화번호"
@@ -419,7 +436,8 @@ function CreatorProfileCreateWizard({
                     icon={<Phone size={17} />}
                     type="tel"
                     requiredMark
-                  />
+              error={fieldErrors.phone}
+            />
                 </div>
 
                 <ChipGroup
@@ -444,7 +462,8 @@ function CreatorProfileCreateWizard({
                   placeholder="노원에서 어떤 콘텐츠를 만들고 싶은지, 어떤 스타일의 리뷰를 잘 만드는지 적어주세요."
                   rows={6}
                   requiredMark
-                />
+              error={fieldErrors.bio}
+            />
               </div>
 
               <ProfilePreviewCard
@@ -475,14 +494,16 @@ function CreatorProfileCreateWizard({
                 value={draft.channel_platform}
                 onChange={(value) => updateDraftField("channel_platform", value)}
                 options={channelPlatformOptions}
-              />
+              error={fieldErrors.channel_platform}
+            />
               <TextField
                 name="channel_name"
                 label="채널명"
                 value={draft.channel_name}
                 onChange={(value) => updateDraftField("channel_name", value)}
                 placeholder="@nowon_creator"
-              />
+              error={fieldErrors.channel_name}
+            />
               <TextField
                 name="channel_url"
                 label="대표 채널 URL"
@@ -492,7 +513,8 @@ function CreatorProfileCreateWizard({
                 icon={<Link2 size={17} />}
                 type="url"
                 requiredMark
-              />
+              error={fieldErrors.channel_url}
+            />
               <div className="grid grid-cols-2 gap-3">
                 <TextField
                   name="follower_count"
@@ -501,7 +523,8 @@ function CreatorProfileCreateWizard({
                   onChange={(value) => updateDraftField("follower_count", numericInputValue(value))}
                   placeholder="1200"
                   type="text"
-                />
+              error={fieldErrors.follower_count}
+            />
                 <TextField
                   name="average_views"
                   label="평균 조회수"
@@ -509,7 +532,8 @@ function CreatorProfileCreateWizard({
                   onChange={(value) => updateDraftField("average_views", numericInputValue(value))}
                   placeholder="800"
                   type="text"
-                />
+              error={fieldErrors.average_views}
+            />
               </div>
             </div>
           </FormCard>
@@ -527,7 +551,8 @@ function CreatorProfileCreateWizard({
                   onChange={(value) => updateDraftField("portfolio_title", value)}
                   placeholder="대표 콘텐츠 모음"
                   icon={<FileText size={17} />}
-                />
+              error={fieldErrors.portfolio_title}
+            />
                 <TextField
                   name="portfolio_url"
                   label="포트폴리오 URL"
@@ -536,7 +561,8 @@ function CreatorProfileCreateWizard({
                   placeholder="https://..."
                   icon={<Link2 size={17} />}
                   type="url"
-                />
+              error={fieldErrors.portfolio_url}
+            />
               </div>
 
               <Divider />
@@ -613,7 +639,7 @@ function CreatorProfileEditForm({
 }: CreatorProfileWizardProps) {
   const [draft, setDraft] = useState(() => createInitialDraft(initialProfile));
   const [avatarPreview, setAvatarPreview] = useState<ImagePreview | null>(null);
-  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const displayAvatarUrl = avatarPreview?.url ?? initialProfile.avatarUrl;
 
@@ -642,7 +668,7 @@ function CreatorProfileEditForm({
     const imageError = getImageValidationMessage(file);
     if (imageError) {
       if (avatarInputRef.current) avatarInputRef.current.value = "";
-      setValidationMessage(imageError);
+      setFieldErrors((current) => ({ ...current, avatar: imageError }));
       return;
     }
 
@@ -651,36 +677,46 @@ function CreatorProfileEditForm({
       url: URL.createObjectURL(file),
       name: file.name
     });
-    setValidationMessage(null);
+    setFieldErrors((current) => ({ ...current, avatar: "" }));
   }
 
-  function validateEditForm() {
-    if (!draft.name.trim()) return "이름을 입력해주세요.";
-    if (draft.phone.replace(/\D/g, "").length < 10) return "전화번호를 정확히 입력해주세요.";
-    if (!draft.activity_areas.length) return "활동 지역을 1개 이상 선택해주세요.";
-    if (!draft.interests.length) return "관심 분야를 1개 이상 선택해주세요.";
-    if (!draft.bio.trim()) return "자기소개를 입력해주세요.";
-    if (!draft.content_types.length) return "콘텐츠 유형을 1개 이상 선택해주세요.";
-    if (!draft.channel_url.trim()) return "대표 채널 URL을 입력해주세요.";
-    if (draft.channel_url.trim() && !isValidUrl(draft.channel_url.trim())) {
-      return "대표 채널 URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다.";
-    }
-    if (draft.portfolio_url.trim() && !isValidUrl(draft.portfolio_url.trim())) {
-      return "포트폴리오 URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다.";
-    }
+  function collectEditErrors() {
+    const all: Record<string, string> = {
+      name: draft.name.trim() ? "" : "이름을 입력해주세요.",
+      phone: draft.phone.replace(/\D/g, "").length >= 10 ? "" : "전화번호를 정확히 입력해주세요.",
+      activity_areas: draft.activity_areas.length ? "" : "활동 지역을 1개 이상 선택해주세요.",
+      interests: draft.interests.length ? "" : "관심 분야를 1개 이상 선택해주세요.",
+      bio: draft.bio.trim() ? "" : "자기소개를 입력해주세요.",
+      content_types: draft.content_types.length ? "" : "콘텐츠 유형을 1개 이상 선택해주세요.",
+      channel_url: !draft.channel_url.trim()
+        ? "대표 채널 URL을 입력해주세요."
+        : !isValidUrl(draft.channel_url.trim())
+          ? "대표 채널 URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다."
+          : "",
+      portfolio_url:
+        draft.portfolio_url.trim() && !isValidUrl(draft.portfolio_url.trim())
+          ? "포트폴리오 URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다."
+          : ""
+    };
 
-    return "";
+    return Object.fromEntries(Object.entries(all).filter(([, message]) => message));
   }
+
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLElement | null;
     if (submitter?.dataset.skipProfileValidation === "true") return;
 
-    const message = validateEditForm();
-    if (!message) return;
+    const errors = collectEditErrors();
+    if (!Object.keys(errors).length) return;
 
     event.preventDefault();
-    setValidationMessage(message);
+    setFieldErrors(errors);
+
+    const [firstName] = Object.keys(errors);
+    const control = document.querySelector<HTMLElement>(`[name="${firstName}"]`);
+    control?.focus();
+    control?.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
   return (
@@ -701,9 +737,8 @@ function CreatorProfileEditForm({
         </Link>
       </div>
 
-      {error ? <p className="mb-5 rounded-xl bg-primary/10 p-4 text-sm font-bold text-primary">{error}</p> : null}
+      {error ? <div className="mb-5"><FormBanner>{error}</FormBanner></div> : null}
       {message ? <p className="mb-5 rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</p> : null}
-      {validationMessage ? <p className="mb-5 rounded-xl bg-amber-50 p-4 text-sm font-bold text-amber-700">{validationMessage}</p> : null}
 
       <form action={saveCreatorProfile} onSubmit={handleSubmit} className="space-y-6">
         <input type="hidden" name="next" value={next ?? ""} />
@@ -732,6 +767,7 @@ function CreatorProfileEditForm({
               placeholder="홍길동"
               icon={<UserRound size={17} />}
               requiredMark
+              error={fieldErrors.name}
             />
             <div className="space-y-3">
               <TextField
@@ -743,7 +779,8 @@ function CreatorProfileEditForm({
                 icon={<Phone size={17} />}
                 type="tel"
                 requiredMark
-              />
+              error={fieldErrors.phone}
+            />
               <PhoneVerificationControls verified={initialProfile.verification.phoneVerified} />
             </div>
           </div>
@@ -779,6 +816,7 @@ function CreatorProfileEditForm({
               placeholder="노원에서 어떤 콘텐츠를 만들고 싶은지, 어떤 스타일의 리뷰를 잘 만드는지 적어주세요."
               rows={7}
               requiredMark
+              error={fieldErrors.bio}
             />
           </div>
         </FormCard>
@@ -801,12 +839,22 @@ function CreatorProfileEditForm({
         <FormCard>
           <SectionHeading title="대표 채널" description="캠페인 신청서의 기본 채널 정보로 사용됩니다." />
           <div className="grid gap-5 sm:grid-cols-2">
-            <SelectField name="channel_platform" label="채널 플랫폼" value={draft.channel_platform} onChange={(value) => updateDraftField("channel_platform", value)} options={channelPlatformOptions} />
-            <TextField name="channel_name" label="채널명" value={draft.channel_name} onChange={(value) => updateDraftField("channel_name", value)} placeholder="@nowon_creator" />
-            <TextField name="channel_url" label="대표 채널 URL" value={draft.channel_url} onChange={(value) => updateDraftField("channel_url", value)} placeholder="https://blog.naver.com/..." icon={<Link2 size={17} />} type="url" requiredMark />
+            <SelectField name="channel_platform" label="채널 플랫폼" value={draft.channel_platform} onChange={(value) => updateDraftField("channel_platform", value)} options={channelPlatformOptions}
+              error={fieldErrors.channel_platform}
+            />
+            <TextField name="channel_name" label="채널명" value={draft.channel_name} onChange={(value) => updateDraftField("channel_name", value)} placeholder="@nowon_creator"
+              error={fieldErrors.channel_name}
+            />
+            <TextField name="channel_url" label="대표 채널 URL" value={draft.channel_url} onChange={(value) => updateDraftField("channel_url", value)} placeholder="https://blog.naver.com/..." icon={<Link2 size={17} />} type="url" requiredMark
+              error={fieldErrors.channel_url}
+            />
             <div className="grid grid-cols-2 gap-3">
-              <TextField name="follower_count" label="팔로워 수" value={draft.follower_count} onChange={(value) => updateDraftField("follower_count", numericInputValue(value))} placeholder="1200" />
-              <TextField name="average_views" label="평균 조회수" value={draft.average_views} onChange={(value) => updateDraftField("average_views", numericInputValue(value))} placeholder="800" />
+              <TextField name="follower_count" label="팔로워 수" value={draft.follower_count} onChange={(value) => updateDraftField("follower_count", numericInputValue(value))} placeholder="1200"
+              error={fieldErrors.follower_count}
+            />
+              <TextField name="average_views" label="평균 조회수" value={draft.average_views} onChange={(value) => updateDraftField("average_views", numericInputValue(value))} placeholder="800"
+              error={fieldErrors.average_views}
+            />
             </div>
           </div>
         </FormCard>
@@ -814,8 +862,12 @@ function CreatorProfileEditForm({
         <FormCard>
           <SectionHeading title="포트폴리오" description="대표 콘텐츠 모음이 있다면 선택적으로 등록합니다." />
           <div className="grid gap-5 sm:grid-cols-2">
-            <TextField name="portfolio_title" label="포트폴리오 제목" value={draft.portfolio_title} onChange={(value) => updateDraftField("portfolio_title", value)} placeholder="대표 콘텐츠 모음" icon={<FileText size={17} />} />
-            <TextField name="portfolio_url" label="포트폴리오 URL" value={draft.portfolio_url} onChange={(value) => updateDraftField("portfolio_url", value)} placeholder="https://..." icon={<Link2 size={17} />} type="url" />
+            <TextField name="portfolio_title" label="포트폴리오 제목" value={draft.portfolio_title} onChange={(value) => updateDraftField("portfolio_title", value)} placeholder="대표 콘텐츠 모음" icon={<FileText size={17} />}
+              error={fieldErrors.portfolio_title}
+            />
+            <TextField name="portfolio_url" label="포트폴리오 URL" value={draft.portfolio_url} onChange={(value) => updateDraftField("portfolio_url", value)} placeholder="https://..." icon={<Link2 size={17} />} type="url"
+              error={fieldErrors.portfolio_url}
+            />
           </div>
         </FormCard>
 
@@ -956,9 +1008,6 @@ function PhoneVerificationControls({ verified }: { verified: boolean }) {
   );
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <span className="mb-2 block text-sm font-black text-charcoal">{children}</span>;
-}
 
 function Required() {
   return <span className="text-primary">*</span>;
@@ -1012,7 +1061,8 @@ function TextField({
   placeholder,
   icon,
   type = "text",
-  requiredMark = false
+  requiredMark = false,
+  error
 }: {
   name: string;
   label: string;
@@ -1022,23 +1072,20 @@ function TextField({
   icon?: React.ReactNode;
   type?: string;
   requiredMark?: boolean;
+  error?: string;
 }) {
   return (
-    <label className="block">
-      <FieldLabel>{label} {requiredMark ? <Required /> : null}</FieldLabel>
-      <div className="relative">
-        {icon ? <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">{icon}</span> : null}
-        <input
-          name={name}
-          type={type}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className={`w-full rounded-xl border border-slate-200 px-4 py-3.5 text-sm text-charcoal outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary ${icon ? "pl-10" : ""}`}
-          placeholder={placeholder}
-          aria-required={requiredMark}
-        />
-      </div>
-    </label>
+    <FormField
+      name={name}
+      label={label}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      icon={icon}
+      type={type}
+      required={requiredMark}
+      error={error}
+    />
   );
 }
 
@@ -1047,13 +1094,15 @@ function SelectField({
   label,
   value,
   onChange,
-  options
+  options,
+  error
 }: {
   name: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: string[];
+  error?: string;
 }) {
   const normalizedOptions = value && !options.includes(value) ? [value, ...options] : options;
 
@@ -1064,12 +1113,14 @@ function SelectField({
         name={name}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm text-charcoal outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+        aria-invalid={error ? true : undefined}
+        className={fieldControlClassName(error, "bg-white")}
       >
         {normalizedOptions.map((option) => (
           <option key={option} value={option}>{option}</option>
         ))}
       </select>
+      <FieldError>{error}</FieldError>
     </label>
   );
 }
@@ -1081,7 +1132,8 @@ function TextArea({
   onChange,
   placeholder,
   rows = 4,
-  requiredMark = false
+  requiredMark = false,
+  error
 }: {
   name: string;
   label: string;
@@ -1090,19 +1142,22 @@ function TextArea({
   placeholder?: string;
   rows?: number;
   requiredMark?: boolean;
+  error?: string;
 }) {
   return (
     <label className="block">
-      <FieldLabel>{label} {requiredMark ? <Required /> : null}</FieldLabel>
+      <FieldLabel required={requiredMark}>{label}</FieldLabel>
       <textarea
         name={name}
         value={value}
         rows={rows}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-slate-200 px-4 py-3.5 text-sm leading-6 text-charcoal outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary"
+        aria-invalid={error ? true : undefined}
+        className={fieldControlClassName(error, "leading-6 resize-y")}
         placeholder={placeholder}
         aria-required={requiredMark}
       />
+      <FieldError>{error}</FieldError>
     </label>
   );
 }

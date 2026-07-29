@@ -19,6 +19,7 @@ import {
   Utensils
 } from "lucide-react";
 import { POINTS_PER_RECRUIT, campaignPointCost, formatPoints } from "@/lib/points";
+import { FieldError, FieldLabel, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
 
 type CampaignCreateWizardProps = {
   action: (formData: FormData) => void | Promise<void>;
@@ -275,7 +276,7 @@ export function CampaignCreateWizard({
   const previewUrlsRef = useRef<string[]>([]);
   const [defaultSchedule] = useState(getDefaultCampaignSchedule);
   const [step, setStep] = useState(0);
-  const [validationMessage, setValidationMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [addressSearchMessage, setAddressSearchMessage] = useState("");
   const [addressQuery, setAddressQuery] = useState(businessAddress);
   const [selectedAddress, setSelectedAddress] = useState(businessAddress);
@@ -292,7 +293,6 @@ export function CampaignCreateWizard({
   const progress = ((step + 1) / steps.length) * 100;
   const isLastStep = step === steps.length - 1;
   const current = steps[step];
-  const requiredMessage = "현재 단계의 필수 입력 항목을 모두 작성해주세요.";
   const keywordRequiredMessage = "필수 삽입 키워드를 하나 이상 추가해주세요.";
   const reviewTitle = displayOrPending(campaignDraft.title, "캠페인 제목 미입력");
   const reviewChannel = contentTypeLabel(campaignDraft.campaignType);
@@ -390,7 +390,7 @@ export function CampaignCreateWizard({
     setSelectedCoordinates({ latitude: result.latitude, longitude: result.longitude });
     setAddressResults([]);
     setAddressSearchMessage("주소와 좌표가 선택되었습니다.");
-    setValidationMessage("");
+    setFieldErrors({});
   }
 
   function getStepControls(stepIndex: number) {
@@ -400,39 +400,71 @@ export function CampaignCreateWizard({
     return Array.from(panel.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select")).filter((control) => !control.disabled);
   }
 
-  function validateStep(stepIndex: number, report = true) {
-    const invalidControl = getStepControls(stepIndex).find((control) => !control.checkValidity());
+  // 입력창마다 어떤 검사에 걸렸는지 알려준다. 라벨이 바로 위에 있으므로 항목명을
+  // 반복하지 않는다.
+  function getControlMessage(control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) {
+    const validity = control.validity;
 
-    if (invalidControl) {
-      if (report) {
-        setValidationMessage(requiredMessage);
-        invalidControl.focus();
-        invalidControl.reportValidity();
+    if (validity.valueMissing) return "필수 입력 항목입니다.";
+    if (validity.typeMismatch) return "형식을 확인해주세요.";
+    if (validity.rangeUnderflow) return `${(control as HTMLInputElement).min} 이상으로 입력해주세요.`;
+    if (validity.rangeOverflow) return `${(control as HTMLInputElement).max} 이하로 입력해주세요.`;
+    if (validity.tooShort) return `${(control as HTMLInputElement).minLength}자 이상 입력해주세요.`;
+    if (validity.tooLong) return `${(control as HTMLInputElement).maxLength}자 이하로 입력해주세요.`;
+
+    return "입력값을 확인해주세요.";
+  }
+
+  // 첫 번째 오류에서 멈추지 않고 전부 모은다. 하나씩 알려주면 고칠 때마다 다음
+  // 오류를 새로 만나게 된다.
+  function collectStepErrors(stepIndex: number) {
+    const errors: Record<string, string> = {};
+
+    for (const control of getStepControls(stepIndex)) {
+      if (control.name && !control.checkValidity()) {
+        errors[control.name] = getControlMessage(control);
       }
-
-      return false;
     }
 
     if (stepIndex === 0 && !selectedCoordinates) {
-      if (report) {
-        setValidationMessage("주소 검색 결과에서 캠페인 위치를 선택해주세요.");
-        regionInputRef.current?.focus();
-      }
-
-      return false;
+      errors.region = "주소 검색 결과에서 캠페인 위치를 선택해주세요.";
     }
 
     if (stepIndex === 2 && keywordTagsRef.current.length === 0 && !normalizeKeywordTag(getKeywordInputValue())) {
-      if (report) {
-        setValidationMessage(keywordRequiredMessage);
-        keywordInputRef.current?.focus();
-      }
-
-      return false;
+      errors.keywords = keywordRequiredMessage;
     }
 
-    if (report) setValidationMessage("");
-    return true;
+    return errors;
+  }
+
+  function focusFirstError(errors: Record<string, string>) {
+    const [firstName] = Object.keys(errors);
+    if (!firstName) return;
+
+    if (firstName === "region") {
+      regionInputRef.current?.focus();
+      return;
+    }
+
+    if (firstName === "keywords") {
+      keywordInputRef.current?.focus();
+      return;
+    }
+
+    const control = formRef.current?.querySelector<HTMLElement>(`[name="${firstName}"]`);
+    control?.focus();
+    control?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+
+  function validateStep(stepIndex: number, report = true) {
+    const errors = collectStepErrors(stepIndex);
+
+    if (report) {
+      setFieldErrors(errors);
+      focusFirstError(errors);
+    }
+
+    return Object.keys(errors).length === 0;
   }
 
   function handleNextStep() {
@@ -443,7 +475,7 @@ export function CampaignCreateWizard({
   }
 
   function handlePreviousStep() {
-    setValidationMessage("");
+    setFieldErrors({});
     if (step === 0) {
       history.back();
       return;
@@ -457,13 +489,12 @@ export function CampaignCreateWizard({
     refreshCampaignDraft();
     const firstInvalidStep = steps.findIndex((_, stepIndex) => !validateStep(stepIndex, false));
     if (firstInvalidStep === -1) {
-      setValidationMessage("");
+      setFieldErrors({});
       return;
     }
 
     event.preventDefault();
     setStep(firstInvalidStep);
-    setValidationMessage(requiredMessage);
     window.requestAnimationFrame(() => validateStep(firstInvalidStep));
   }
 
@@ -515,14 +546,14 @@ export function CampaignCreateWizard({
     const imageError = getImageValidationMessage(file);
     if (imageError) {
       event.currentTarget.value = "";
-      setValidationMessage(imageError);
+      setFieldErrors((current) => ({ ...current, cover_image: imageError }));
       return;
     }
 
     const nextPreview = createImagePreview(file);
     if (coverImagePreview) revokeImagePreview(coverImagePreview);
     setCoverImagePreview(nextPreview);
-    setValidationMessage("");
+    setFieldErrors((current) => ({ ...current, cover_image: "" }));
   }
 
   function handleReferenceImagesChange(event: ChangeEvent<HTMLInputElement>) {
@@ -537,7 +568,7 @@ export function CampaignCreateWizard({
         return false;
       }
 
-      setValidationMessage(imageError);
+      setFieldErrors((current) => ({ ...current, reference_images: imageError }));
       return true;
     });
 
@@ -551,11 +582,13 @@ export function CampaignCreateWizard({
     const nextFiles = validFiles.slice(0, Math.max(remainingSlots, 0));
     const nextPreviews = [...referenceImagePreviews, ...nextFiles.map(createImagePreview)];
 
-    if (validFiles.length > remainingSlots) {
-      setValidationMessage(`참고 사진은 최대 ${maxReferenceImageCount}장까지 등록할 수 있습니다.`);
-    } else {
-      setValidationMessage("");
-    }
+    setFieldErrors((current) => ({
+      ...current,
+      reference_images:
+        validFiles.length > remainingSlots
+          ? `참고 사진은 최대 ${maxReferenceImageCount}장까지 등록할 수 있습니다.`
+          : ""
+    }));
 
     syncReferenceImageInput(nextPreviews);
     setReferenceImagePreviews(nextPreviews);
@@ -677,8 +710,7 @@ export function CampaignCreateWizard({
         <div className={`mb-8 ${isLastStep ? "mx-auto max-w-4xl text-center" : "text-center sm:text-left"}`}>
           <h1 className="mb-2 text-2xl font-black text-charcoal sm:text-3xl">{current.title}</h1>
           <p className="text-slate-500">{current.description}</p>
-          {error ? <p className="mt-4 rounded-xl bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
-          {validationMessage ? <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-700">{validationMessage}</p> : null}
+          {error ? <div className="mt-4"><FormBanner>{error}</FormBanner></div> : null}
         </div>
 
         <form ref={formRef} action={action} noValidate onInput={handleFormDraftChange} onChange={handleFormDraftChange} onSubmit={handleSubmit}>
@@ -705,9 +737,10 @@ export function CampaignCreateWizard({
                   placeholder="예: [노원/공릉] 분위기 좋은 감성 카페 오디너리 디저트 세트 체험단"
                   helper="크리에이터의 시선을 끌 수 있는 매력적인 제목을 작성해주세요. 지역명 포함을 권장합니다."
                   requiredMark
+                  error={fieldErrors.title}
                 />
                 <div className="grid gap-6 sm:grid-cols-2">
-                  <TextField name="operator_name" label="상호명 (제공처)" placeholder="상호명을 입력해주세요" defaultValue={businessName} requiredMark />
+                  <TextField name="operator_name" label="상호명 (제공처)" placeholder="상호명을 입력해주세요" defaultValue={businessName} requiredMark error={fieldErrors.operator_name} />
                   <AddressSearchField
                     inputRef={regionInputRef}
                     value={addressQuery}
@@ -717,6 +750,7 @@ export function CampaignCreateWizard({
                     selectedAddress={selectedAddress}
                     selectedCoordinates={selectedCoordinates}
                     message={addressSearchMessage}
+                    error={fieldErrors.region}
                     onChange={handleAddressInputChange}
                     onDetailChange={handleAddressDetailChange}
                     onSelect={selectAddressResult}
@@ -756,6 +790,7 @@ export function CampaignCreateWizard({
                   )}
                   <input name="cover_image" type="file" accept={campaignImageAccept} required onChange={handleCoverImageChange} className="sr-only" />
                 </label>
+                <FieldError>{fieldErrors.cover_image}</FieldError>
               </section>
             </FormCard>
           </StepPanel>
@@ -780,7 +815,7 @@ export function CampaignCreateWizard({
               <Divider />
 
               <section className="space-y-6">
-                <TextField name="recruit_count" label="선정 인원" placeholder="예: 5" suffix="명" type="number" min={1} max={100} requiredMark />
+                <TextField name="recruit_count" label="선정 인원" placeholder="예: 5" suffix="명" type="number" min={1} max={100} requiredMark error={fieldErrors.recruit_count} />
                 <div className="grid gap-3 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm sm:grid-cols-3">
                   <div>
                     <p className="text-xs font-bold text-slate-500">1명당 이용 포인트</p>
@@ -801,9 +836,9 @@ export function CampaignCreateWizard({
                 <div>
                   <FieldLabel>캠페인 일정 설정 <Required /></FieldLabel>
                   <div className="grid gap-4 sm:grid-cols-3">
-                    <TextField name="recruit_end" label="모집 마감일" type="date" min={defaultSchedule.today} defaultValue={defaultSchedule.recruitEnd} requiredMark />
-                    <TextField name="selection_date" label="크리에이터 선정 발표일" type="date" min={selectionDateMin} defaultValue={defaultSchedule.selectionDate} />
-                    <TextField name="submission_due" label="콘텐츠 등록 마감일" type="date" min={submissionDueMin} defaultValue={defaultSchedule.submissionDue} />
+                    <TextField name="recruit_end" label="모집 마감일" type="date" min={defaultSchedule.today} defaultValue={defaultSchedule.recruitEnd} requiredMark error={fieldErrors.recruit_end} />
+                    <TextField name="selection_date" label="크리에이터 선정 발표일" type="date" min={selectionDateMin} defaultValue={defaultSchedule.selectionDate} error={fieldErrors.selection_date} />
+                    <TextField name="submission_due" label="콘텐츠 등록 마감일" type="date" min={submissionDueMin} defaultValue={defaultSchedule.submissionDue} error={fieldErrors.submission_due} />
                   </div>
                   <p className="mt-2 text-xs text-slate-400">선정 발표일은 모집 마감일 이후, 콘텐츠 등록 마감일은 선정 발표일 이후로 설정해주세요.</p>
                 </div>
@@ -813,11 +848,11 @@ export function CampaignCreateWizard({
 
               <section className="space-y-6">
                 <div className="grid gap-4 sm:grid-cols-3">
-                  <SelectField name="benefit_type" label="혜택 유형" options={benefitTypeOptions} defaultValue="방문 체험 제공" />
-                  <TextField name="benefit_value" label="제공 내역 (혜택)" placeholder="디저트 2종 + 음료 2잔" requiredMark />
-                  <TextField name="fee" label="활동비 또는 제작비" placeholder="선택 입력" />
+                  <SelectField name="benefit_type" label="혜택 유형" options={benefitTypeOptions} defaultValue="방문 체험 제공" error={fieldErrors.benefit_type} />
+                  <TextField name="benefit_value" label="제공 내역 (혜택)" placeholder="디저트 2종 + 음료 2잔" requiredMark error={fieldErrors.benefit_value} />
+                  <TextField name="fee" label="활동비 또는 제작비" placeholder="선택 입력" error={fieldErrors.fee} />
                 </div>
-                <TextArea name="usage_rights" label="방문 및 사용 안내사항" placeholder="예: 주말 방문 불가, 최소 2일 전 예약 필수, 가게 SNS 리그램 가능" />
+                <TextArea name="usage_rights" label="방문 및 사용 안내사항" placeholder="예: 주말 방문 불가, 최소 2일 전 예약 필수, 가게 SNS 리그램 가능" error={fieldErrors.usage_rights} />
               </section>
             </FormCard>
           </StepPanel>
@@ -831,6 +866,7 @@ export function CampaignCreateWizard({
                 rows={5}
                 helper="매장의 특장점, 캠페인의 목적, 강조하고 싶은 포인트를 자유롭게 적어주세요."
                 requiredMark
+                error={fieldErrors.description}
               />
 
               <Divider />
@@ -867,6 +903,7 @@ export function CampaignCreateWizard({
                   ) : null}
                   <input id="reference-images" ref={referenceImagesInputRef} name="reference_images" type="file" className="sr-only" multiple accept={campaignImageAccept} onChange={handleReferenceImagesChange} />
                 </div>
+                <FieldError>{fieldErrors.reference_images}</FieldError>
               </section>
 
               <Divider />
@@ -894,6 +931,7 @@ export function CampaignCreateWizard({
                   />
                   <input ref={keywordHiddenInputRef} type="hidden" name="keywords" defaultValue="" />
                 </div>
+                <FieldError>{fieldErrors.keywords}</FieldError>
               </section>
 
               <Divider />
@@ -920,6 +958,7 @@ export function CampaignCreateWizard({
                   rows={4}
                   helper="번호를 매겨 구체적으로 지시해주시면 크리에이터가 가이드에 맞춰 더 좋은 콘텐츠를 제작할 수 있습니다."
                   requiredMark
+                  error={fieldErrors.content_requirements}
                 />
               </section>
             </FormCard>
@@ -1095,9 +1134,6 @@ function FormCard({ children }: { children: React.ReactNode }) {
   );
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="mb-3 block text-sm font-black text-charcoal">{children}</label>;
-}
 
 function Required() {
   return <span className="text-primary">*</span>;
@@ -1138,7 +1174,8 @@ function TextField({
   min,
   max,
   defaultValue,
-  requiredMark = false
+  requiredMark = false,
+  error
 }: {
   name: string;
   label: string;
@@ -1151,26 +1188,23 @@ function TextField({
   max?: number | string;
   defaultValue?: string;
   requiredMark?: boolean;
+  error?: string;
 }) {
   return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-black text-charcoal">{label} {requiredMark ? <Required /> : null}</span>
-      <div className="relative">
-        {icon ? <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">{icon}</span> : null}
-        <input
-          name={name}
-          type={type}
-          min={min}
-          max={max}
-          defaultValue={defaultValue}
-          required={requiredMark}
-          className={`w-full rounded-xl border border-slate-200 px-4 py-3.5 text-sm text-charcoal outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary ${icon ? "pl-10" : ""} ${suffix ? "pr-12" : ""}`}
-          placeholder={placeholder}
-        />
-        {suffix ? <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">{suffix}</span> : null}
-      </div>
-      {helper ? <p className="mt-2 text-xs text-slate-500">{helper}</p> : null}
-    </label>
+    <FormField
+      name={name}
+      label={label}
+      placeholder={placeholder}
+      helper={helper}
+      icon={icon}
+      suffix={suffix}
+      type={type}
+      min={min}
+      max={max}
+      defaultValue={defaultValue}
+      required={requiredMark}
+      error={error}
+    />
   );
 }
 
@@ -1183,6 +1217,7 @@ function AddressSearchField({
   selectedAddress,
   selectedCoordinates,
   message,
+  error,
   onChange,
   onDetailChange,
   onSelect
@@ -1195,6 +1230,7 @@ function AddressSearchField({
   selectedAddress: string;
   selectedCoordinates: { latitude: string; longitude: string } | null;
   message?: string;
+  error?: string;
   onChange: (value: string) => void;
   onDetailChange: (value: string) => void;
   onSelect: (result: AddressSearchResult) => void;
@@ -1203,7 +1239,7 @@ function AddressSearchField({
 
   return (
     <div className="sm:col-span-1">
-      <span className="mb-2 block text-sm font-black text-charcoal">캠페인 주소 <Required /></span>
+      <FieldLabel required>캠페인 주소</FieldLabel>
       <input type="hidden" name="region" value={(selectedAddress || value).trim()} />
       <input type="hidden" name="region_detail" value={detailValue.trim()} />
       <input type="hidden" name="latitude" value={selectedCoordinates?.latitude ?? ""} />
@@ -1222,7 +1258,8 @@ function AddressSearchField({
               }
             }}
             required
-            className="w-full rounded-xl border border-slate-200 px-4 py-3.5 pl-10 text-sm text-charcoal outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary"
+            aria-invalid={error ? true : undefined}
+            className={fieldControlClassName(error, "pl-10")}
             placeholder="도로명 주소는 건물번호까지 입력해주세요"
           />
           {isSearching ? (
@@ -1260,9 +1297,15 @@ function AddressSearchField({
           placeholder="상세 주소를 입력해주세요 (예: 2층, 201호)"
         />
       </div>
-      <p className={`mt-2 text-xs ${isErrorMessage ? "font-bold text-primary" : "text-slate-500"}`}>
-        {message || "예: 서울특별시 노원구 동일로183길 10. 후보 주소를 선택하면 지도 표시용 좌표가 함께 저장됩니다."}
-      </p>
+      {error ? (
+        <FieldError>{error}</FieldError>
+      ) : isErrorMessage && message ? (
+        <FieldError>{message}</FieldError>
+      ) : (
+        <p className="mt-2 text-xs text-slate-500">
+          {message || "예: 서울특별시 노원구 동일로183길 10. 후보 주소를 선택하면 지도 표시용 좌표가 함께 저장됩니다."}
+        </p>
+      )}
     </div>
   );
 }
@@ -1272,27 +1315,30 @@ function SelectField({
   label,
   options,
   defaultValue,
-  requiredMark = false
+  requiredMark = false,
+  error
 }: {
   name: string;
   label: string;
   options: string[];
   defaultValue?: string;
   requiredMark?: boolean;
+  error?: string;
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-black text-charcoal">{label} {requiredMark ? <Required /> : null}</span>
+      <FieldLabel required={requiredMark}>{label}</FieldLabel>
       <select
         name={name}
         defaultValue={defaultValue ?? options[0]}
         required={requiredMark}
-        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm text-charcoal outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+        className={fieldControlClassName(error, "bg-white")}
       >
         {options.map((option) => (
           <option key={option} value={option}>{option}</option>
         ))}
       </select>
+      <FieldError>{error}</FieldError>
     </label>
   );
 }
@@ -1303,7 +1349,8 @@ function TextArea({
   placeholder,
   helper,
   rows = 3,
-  requiredMark = false
+  requiredMark = false,
+  error
 }: {
   name: string;
   label: string;
@@ -1311,18 +1358,19 @@ function TextArea({
   helper?: string;
   rows?: number;
   requiredMark?: boolean;
+  error?: string;
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-black text-charcoal">{label} {requiredMark ? <Required /> : null}</span>
+      <FieldLabel required={requiredMark}>{label}</FieldLabel>
       <textarea
         name={name}
         required={requiredMark}
         rows={rows}
-        className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3.5 text-sm text-charcoal outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary"
+        className={fieldControlClassName(error, "resize-y")}
         placeholder={placeholder}
       />
-      {helper ? <p className="mt-2 text-xs text-slate-500">{helper}</p> : null}
+      {error ? <FieldError>{error}</FieldError> : helper ? <p className="mt-2 text-xs text-slate-500">{helper}</p> : null}
     </label>
   );
 }

@@ -18,6 +18,7 @@ import {
   Tag,
   X
 } from "lucide-react";
+import { FieldError, FieldLabel, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
 import { sendEmailVerification, sendPhoneVerification, verifyPhoneOtp } from "@/app/profile-verification-actions";
 import type { BusinessDashboardData } from "@/lib/supabase/queries";
 
@@ -256,7 +257,7 @@ function BusinessProfileCreateWizard({
   const [draft, setDraft] = useState(() => createInitialDraft(initialBusiness));
   const [coverImagePreview, setCoverImagePreview] = useState<ImagePreview | null>(null);
   const [socialInput, setSocialInput] = useState("");
-  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [draftLoaded, setDraftLoaded] = useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const isEditMode = mode === "edit";
@@ -315,37 +316,43 @@ function BusinessProfileCreateWizard({
     }));
   }
 
-  function validateStep(stepIndex: number) {
+  // 어떤 항목이 걸렸는지 필드 이름과 함께 모은다. 첫 항목에서 멈추지 않는다.
+  function collectProfileErrors(stepIndex?: number) {
     const hasCoverImage = Boolean(coverImagePreview || initialBusiness?.coverImage);
-    const requiredByStep = {
-      0: [
-        [hasCoverImage, "대표 이미지를 등록해주세요."],
-        [draft.business_name.trim(), "가게명을 입력해주세요."],
-        [draft.category.trim(), "업종을 선택해주세요."],
-        [draft.district.trim(), "소재지을 입력해주세요."],
-        [draft.short_intro.trim(), "한 줄 소개를 입력해주세요."]
-      ],
-      1: [
-        [draft.address.trim(), "주소를 입력해주세요."],
-        [draft.latitude.trim() && draft.longitude.trim(), "주소 검색 결과에서 매장 위치를 선택해주세요."],
-        [draft.contact.replace(/\D/g, "").length >= 8, "매장 연락처를 정확히 입력해주세요."],
-        [draft.manager_name.trim(), "담당자명을 입력해주세요."],
-        [draft.manager_phone.replace(/\D/g, "").length >= 10, "담당자 전화번호를 정확히 입력해주세요."],
-        [draft.business_registration_number.replace(/\D/g, "").length === 10, "사업자등록번호를 정확히 입력해주세요."],
-        [businessHoursSummary, "영업시간을 입력해주세요."]
-      ],
-      2: []
-    } as const;
+    const stepZero: Record<string, string> = {
+      cover_image: hasCoverImage ? "" : "대표 이미지를 등록해주세요.",
+      business_name: draft.business_name.trim() ? "" : "가게명을 입력해주세요.",
+      category: draft.category.trim() ? "" : "업종을 선택해주세요.",
+      district: draft.district.trim() ? "" : "소재지를 선택해주세요.",
+      short_intro: draft.short_intro.trim() ? "" : "한 줄 소개를 입력해주세요."
+    };
+    const stepOne: Record<string, string> = {
+      address: !draft.address.trim()
+        ? "주소를 입력해주세요."
+        : !draft.latitude.trim() || !draft.longitude.trim()
+          ? "주소 검색 결과에서 매장 위치를 선택해주세요."
+          : "",
+      contact: draft.contact.replace(/\D/g, "").length >= 8 ? "" : "매장 연락처를 정확히 입력해주세요.",
+      manager_name: draft.manager_name.trim() ? "" : "담당자명을 입력해주세요.",
+      manager_phone: draft.manager_phone.replace(/\D/g, "").length >= 10 ? "" : "담당자 전화번호를 정확히 입력해주세요.",
+      business_registration_number:
+        draft.business_registration_number.replace(/\D/g, "").length === 10 ? "" : "사업자등록번호를 정확히 입력해주세요.",
+      business_hours_summary: businessHoursSummary ? "" : "영업시간을 입력해주세요.",
+      website_url:
+        draft.website_url.trim() && !isValidUrl(draft.website_url.trim())
+          ? "웹사이트는 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다."
+          : ""
+    };
 
-    const invalid = requiredByStep[stepIndex as 0 | 1 | 2].find(([value]) => !value);
-    if (invalid) return invalid[1];
+    const source = stepIndex === 0 ? stepZero : stepIndex === 1 ? stepOne : stepIndex === 2 ? {} : { ...stepZero, ...stepOne };
 
-    if (stepIndex === 1 && draft.website_url.trim() && !isValidUrl(draft.website_url.trim())) {
-      return "웹사이트는 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다.";
-    }
-
-    return "";
+    return Object.fromEntries(Object.entries(source).filter(([, message]) => message));
   }
+
+  function validateStep(stepIndex: number) {
+    return collectProfileErrors(stepIndex);
+  }
+
 
   function handleCoverImageChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -354,7 +361,7 @@ function BusinessProfileCreateWizard({
     const imageError = getImageValidationMessage(file);
     if (imageError) {
       if (coverInputRef.current) coverInputRef.current.value = "";
-      setValidationMessage(imageError);
+      setFieldErrors((current) => ({ ...current, cover_image: imageError }));
       return;
     }
 
@@ -363,7 +370,7 @@ function BusinessProfileCreateWizard({
       url: URL.createObjectURL(file),
       name: file.name
     });
-    setValidationMessage(null);
+    setFieldErrors((current) => ({ ...current, cover_image: "" }));
   }
 
   function addSocialUrls(rawValue: string) {
@@ -372,13 +379,16 @@ function BusinessProfileCreateWizard({
 
     const invalidUrl = nextUrls.find((url) => !isValidUrl(url));
     if (invalidUrl) {
-      setValidationMessage("SNS URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다.");
+      setFieldErrors((current) => ({
+        ...current,
+        social_urls: "SNS URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다."
+      }));
       return;
     }
 
     setSocialUrls(Array.from(new Set([...draft.social_urls, ...nextUrls])));
     setSocialInput("");
-    setValidationMessage(null);
+    setFieldErrors((current) => ({ ...current, social_urls: "" }));
   }
 
   function handleSocialKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -399,29 +409,40 @@ function BusinessProfileCreateWizard({
     setSocialUrls(draft.social_urls.filter((item) => item !== url));
   }
 
+  function focusFirstError(errors: Record<string, string>) {
+    const [firstName] = Object.keys(errors);
+    if (!firstName) return;
+
+    const control = document.querySelector<HTMLElement>(`[name="${firstName}"]`);
+    control?.focus();
+    control?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+
   function handleNextStep() {
-    const message = validateStep(step);
-    if (message) {
-      setValidationMessage(message);
+    const errors = validateStep(step);
+    setFieldErrors(errors);
+
+    if (Object.keys(errors).length) {
+      focusFirstError(errors);
       return;
     }
 
-    setValidationMessage(null);
     setStep((current) => Math.min(current + 1, steps.length - 1));
   }
 
   function handlePreviousStep() {
-    setValidationMessage(null);
+    setFieldErrors({});
     setStep((current) => Math.max(current - 1, 0));
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     for (let index = 0; index < steps.length; index += 1) {
-      const message = validateStep(index);
-      if (message) {
+      const errors = validateStep(index);
+      if (Object.keys(errors).length) {
         event.preventDefault();
         setStep(index);
-        setValidationMessage(message);
+        setFieldErrors(errors);
+        window.requestAnimationFrame(() => focusFirstError(errors));
         return;
       }
     }
@@ -473,9 +494,8 @@ function BusinessProfileCreateWizard({
         })}
       </ol>
 
-      {error ? <p className="mb-5 rounded-xl bg-primary/10 p-4 text-sm font-bold text-primary">{error}</p> : null}
+      {error ? <div className="mb-5"><FormBanner>{error}</FormBanner></div> : null}
       {message ? <p className="mb-5 rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</p> : null}
-      {validationMessage ? <p className="mb-5 rounded-xl bg-amber-50 p-4 text-sm font-bold text-amber-700">{validationMessage}</p> : null}
 
       <form action={action} onSubmit={handleSubmit} className="space-y-8">
         <input type="hidden" name="next" value={next ?? ""} />
@@ -524,6 +544,7 @@ function BusinessProfileCreateWizard({
                     placeholder="카페 오디너리"
                     icon={<Store size={17} />}
                     requiredMark
+                    error={fieldErrors.business_name}
                   />
                   <SelectField
                     name="category"
@@ -532,6 +553,7 @@ function BusinessProfileCreateWizard({
                     onChange={(value) => updateDraftField("category", value)}
                     options={categoryOptions}
                     requiredMark
+                    error={fieldErrors.category}
                   />
                 </div>
 
@@ -544,6 +566,7 @@ function BusinessProfileCreateWizard({
                     placeholder="공릉동"
                     icon={<MapPin size={17} />}
                     requiredMark
+                    error={fieldErrors.district}
                   />
                   <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
                     {districtOptions.map((district) => (
@@ -570,7 +593,8 @@ function BusinessProfileCreateWizard({
                   onChange={(value) => updateDraftField("short_intro", value)}
                   placeholder="공릉동 골목의 계절 디저트와 스페셜티 커피"
                   requiredMark
-                />
+                    error={fieldErrors.short_intro}
+                  />
               </div>
 
               <ProfilePreviewCard draft={draft} businessHoursSummary={businessHoursSummary} imageUrl={displayImageUrl} />
@@ -602,7 +626,8 @@ function BusinessProfileCreateWizard({
                 placeholder="02-000-0000"
                 icon={<Phone size={17} />}
                 requiredMark
-              />
+                    error={fieldErrors.contact}
+                  />
             </div>
 
             <Divider />
@@ -617,7 +642,8 @@ function BusinessProfileCreateWizard({
                   onChange={(value) => updateDraftField("manager_name", value)}
                   placeholder="홍길동"
                   requiredMark
-                />
+                    error={fieldErrors.manager_name}
+                  />
                 <TextField
                   name="manager_phone"
                   label="담당자 전화번호"
@@ -627,7 +653,8 @@ function BusinessProfileCreateWizard({
                   icon={<Phone size={17} />}
                   type="tel"
                   requiredMark
-                />
+                    error={fieldErrors.manager_phone}
+                  />
                 <TextField
                   name="business_registration_number"
                   label="사업자등록번호"
@@ -635,7 +662,8 @@ function BusinessProfileCreateWizard({
                   onChange={(value) => updateDraftField("business_registration_number", formatBusinessRegistrationNumber(value))}
                   placeholder="000-00-00000"
                   requiredMark
-                />
+                    error={fieldErrors.business_registration_number}
+                  />
               </div>
               {initialBusiness?.referralCode ? (
                 <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3">
@@ -674,6 +702,7 @@ function BusinessProfileCreateWizard({
                     onChange={(value) => updateDraftField("business_hours_custom", value)}
                     placeholder="화-일 11:00-20:00, 월 휴무"
                     icon={<Clock size={17} />}
+                    error={fieldErrors.business_hours_custom}
                   />
                 </div>
               ) : null}
@@ -685,7 +714,8 @@ function BusinessProfileCreateWizard({
                   onChange={(value) => updateDraftField("business_hours_note", value)}
                   placeholder="브레이크타임 15:00-17:00"
                   icon={<Clock size={17} />}
-                />
+                    error={fieldErrors.business_hours_note}
+                  />
               </div>
             </div>
 
@@ -700,7 +730,8 @@ function BusinessProfileCreateWizard({
                 placeholder="https://nowon.example.com"
                 icon={<Globe size={17} />}
                 type="url"
-              />
+                    error={fieldErrors.website_url}
+                  />
               <div>
                 <FieldLabel>SNS 링크</FieldLabel>
                 <div className="flex rounded-xl border border-slate-200 bg-white focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
@@ -832,7 +863,7 @@ function BusinessProfileEditForm({
   const [draft, setDraft] = useState(() => createInitialDraft(initialBusiness));
   const [coverImagePreview, setCoverImagePreview] = useState<ImagePreview | null>(null);
   const [socialInput, setSocialInput] = useState("");
-  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const coverInputRef = useRef<HTMLInputElement>(null);
   const businessHoursSummary = useMemo(() => getBusinessHoursSummary(draft), [draft]);
   const displayImageUrl = coverImagePreview?.url ?? initialBusiness.coverImage ?? "";
@@ -862,7 +893,7 @@ function BusinessProfileEditForm({
     const imageError = getImageValidationMessage(file);
     if (imageError) {
       if (coverInputRef.current) coverInputRef.current.value = "";
-      setValidationMessage(imageError);
+      setFieldErrors((current) => ({ ...current, cover_image: imageError }));
       return;
     }
 
@@ -871,7 +902,7 @@ function BusinessProfileEditForm({
       url: URL.createObjectURL(file),
       name: file.name
     });
-    setValidationMessage(null);
+    setFieldErrors((current) => ({ ...current, cover_image: "" }));
   }
 
   function addSocialUrls(rawValue: string) {
@@ -880,13 +911,16 @@ function BusinessProfileEditForm({
 
     const invalidUrl = nextUrls.find((url) => !isValidUrl(url));
     if (invalidUrl) {
-      setValidationMessage("SNS URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다.");
+      setFieldErrors((current) => ({
+        ...current,
+        social_urls: "SNS URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다."
+      }));
       return;
     }
 
     setSocialUrls(Array.from(new Set([...draft.social_urls, ...nextUrls])));
     setSocialInput("");
-    setValidationMessage(null);
+    setFieldErrors((current) => ({ ...current, social_urls: "" }));
   }
 
   function handleSocialKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -907,35 +941,48 @@ function BusinessProfileEditForm({
     setSocialUrls(draft.social_urls.filter((item) => item !== url));
   }
 
-  function validateEditForm() {
-    if (!displayImageUrl) return "대표 이미지를 등록해주세요.";
-    if (!draft.business_name.trim()) return "가게명을 입력해주세요.";
-    if (!draft.category.trim()) return "업종을 선택해주세요.";
-    if (!draft.district.trim()) return "소재지을 입력해주세요.";
-    if (!draft.short_intro.trim()) return "한 줄 소개를 입력해주세요.";
-    if (!draft.address.trim()) return "주소를 입력해주세요.";
-    if (!draft.latitude.trim() || !draft.longitude.trim()) return "주소 검색 결과에서 매장 위치를 선택해주세요.";
-    if (draft.contact.replace(/\D/g, "").length < 8) return "매장 연락처를 정확히 입력해주세요.";
-    if (!draft.manager_name.trim()) return "담당자명을 입력해주세요.";
-    if (draft.manager_phone.replace(/\D/g, "").length < 10) return "담당자 전화번호를 정확히 입력해주세요.";
-    if (draft.business_registration_number.replace(/\D/g, "").length !== 10) return "사업자등록번호를 정확히 입력해주세요.";
-    if (!businessHoursSummary) return "영업시간을 입력해주세요.";
-    if (draft.website_url.trim() && !isValidUrl(draft.website_url.trim())) {
-      return "웹사이트는 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다.";
-    }
+  function collectEditErrors() {
+    const errors: Record<string, string> = {
+      cover_image: displayImageUrl ? "" : "대표 이미지를 등록해주세요.",
+      business_name: draft.business_name.trim() ? "" : "가게명을 입력해주세요.",
+      category: draft.category.trim() ? "" : "업종을 선택해주세요.",
+      district: draft.district.trim() ? "" : "소재지를 선택해주세요.",
+      short_intro: draft.short_intro.trim() ? "" : "한 줄 소개를 입력해주세요.",
+      address: !draft.address.trim()
+        ? "주소를 입력해주세요."
+        : !draft.latitude.trim() || !draft.longitude.trim()
+          ? "주소 검색 결과에서 매장 위치를 선택해주세요."
+          : "",
+      contact: draft.contact.replace(/\D/g, "").length >= 8 ? "" : "매장 연락처를 정확히 입력해주세요.",
+      manager_name: draft.manager_name.trim() ? "" : "담당자명을 입력해주세요.",
+      manager_phone: draft.manager_phone.replace(/\D/g, "").length >= 10 ? "" : "담당자 전화번호를 정확히 입력해주세요.",
+      business_registration_number:
+        draft.business_registration_number.replace(/\D/g, "").length === 10 ? "" : "사업자등록번호를 정확히 입력해주세요.",
+      business_hours_summary: businessHoursSummary ? "" : "영업시간을 입력해주세요.",
+      website_url:
+        draft.website_url.trim() && !isValidUrl(draft.website_url.trim())
+          ? "웹사이트는 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다."
+          : ""
+    };
 
-    return "";
+    return Object.fromEntries(Object.entries(errors).filter(([, message]) => message));
   }
+
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLElement | null;
     if (submitter?.dataset.skipProfileValidation === "true") return;
 
-    const message = validateEditForm();
-    if (!message) return;
+    const errors = collectEditErrors();
+    if (!Object.keys(errors).length) return;
 
     event.preventDefault();
-    setValidationMessage(message);
+    setFieldErrors(errors);
+
+    const [firstName] = Object.keys(errors);
+    const control = document.querySelector<HTMLElement>(`[name="${firstName}"]`);
+    control?.focus();
+    control?.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
   return (
@@ -956,9 +1003,8 @@ function BusinessProfileEditForm({
         </Link>
       </div>
 
-      {error ? <p className="mb-5 rounded-xl bg-primary/10 p-4 text-sm font-bold text-primary">{error}</p> : null}
+      {error ? <div className="mb-5"><FormBanner>{error}</FormBanner></div> : null}
       {message ? <p className="mb-5 rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</p> : null}
-      {validationMessage ? <p className="mb-5 rounded-xl bg-amber-50 p-4 text-sm font-bold text-amber-700">{validationMessage}</p> : null}
 
       <form action={action} onSubmit={handleSubmit} className="space-y-6">
         <input type="hidden" name="next" value={next ?? ""} />
@@ -971,10 +1017,16 @@ function BusinessProfileEditForm({
         <FormCard>
           <SectionHeading title="가게 기본 정보" description="가게명은 운영자 계정의 상호와 함께 동기화됩니다." />
           <div className="grid gap-5 sm:grid-cols-2">
-            <TextField name="business_name" label="가게명/상호" value={draft.business_name} onChange={(value) => updateDraftField("business_name", value)} placeholder="카페 오디너리" icon={<Store size={17} />} requiredMark />
-            <SelectField name="category" label="업종" value={draft.category} onChange={(value) => updateDraftField("category", value)} options={categoryOptions} requiredMark />
+            <TextField name="business_name" label="가게명/상호" value={draft.business_name} onChange={(value) => updateDraftField("business_name", value)} placeholder="카페 오디너리" icon={<Store size={17} />} requiredMark
+                    error={fieldErrors.business_name}
+                  />
+            <SelectField name="category" label="업종" value={draft.category} onChange={(value) => updateDraftField("category", value)} options={categoryOptions} requiredMark
+                    error={fieldErrors.category}
+                  />
             <div>
-              <TextField name="district" label="소재지" value={draft.district} onChange={(value) => updateDraftField("district", value)} placeholder="공릉동" icon={<MapPin size={17} />} requiredMark />
+              <TextField name="district" label="소재지" value={draft.district} onChange={(value) => updateDraftField("district", value)} placeholder="공릉동" icon={<MapPin size={17} />} requiredMark
+                    error={fieldErrors.district}
+                  />
               <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
                 {districtOptions.map((district) => (
                   <button
@@ -992,7 +1044,9 @@ function BusinessProfileEditForm({
                 ))}
               </div>
             </div>
-            <TextField name="short_intro" label="한 줄 소개" value={draft.short_intro} onChange={(value) => updateDraftField("short_intro", value)} placeholder="공릉동 골목의 계절 디저트와 스페셜티 커피" requiredMark />
+            <TextField name="short_intro" label="한 줄 소개" value={draft.short_intro} onChange={(value) => updateDraftField("short_intro", value)} placeholder="공릉동 골목의 계절 디저트와 스페셜티 커피" requiredMark
+                    error={fieldErrors.short_intro}
+                  />
           </div>
         </FormCard>
 
@@ -1037,19 +1091,27 @@ function BusinessProfileEditForm({
                 updateDraftField("longitude", longitude);
               }}
             />
-            <TextField name="contact" label="매장 연락처" value={draft.contact} onChange={(value) => updateDraftField("contact", formatContactNumber(value))} placeholder="02-000-0000" icon={<Phone size={17} />} requiredMark />
+            <TextField name="contact" label="매장 연락처" value={draft.contact} onChange={(value) => updateDraftField("contact", formatContactNumber(value))} placeholder="02-000-0000" icon={<Phone size={17} />} requiredMark
+                    error={fieldErrors.contact}
+                  />
           </div>
         </FormCard>
 
         <FormCard>
           <SectionHeading title="운영자 계정 정보" description="운영자 본인 확인과 계정 관리에 사용하는 정보입니다." />
           <div className="grid gap-5 sm:grid-cols-3">
-            <TextField name="manager_name" label="담당자명" value={draft.manager_name} onChange={(value) => updateDraftField("manager_name", value)} placeholder="홍길동" requiredMark />
+            <TextField name="manager_name" label="담당자명" value={draft.manager_name} onChange={(value) => updateDraftField("manager_name", value)} placeholder="홍길동" requiredMark
+                    error={fieldErrors.manager_name}
+                  />
             <div className="space-y-3">
-              <TextField name="manager_phone" label="담당자 전화번호" value={draft.manager_phone} onChange={(value) => updateDraftField("manager_phone", formatPhone(value))} placeholder="010-0000-0000" icon={<Phone size={17} />} type="tel" requiredMark />
+              <TextField name="manager_phone" label="담당자 전화번호" value={draft.manager_phone} onChange={(value) => updateDraftField("manager_phone", formatPhone(value))} placeholder="010-0000-0000" icon={<Phone size={17} />} type="tel" requiredMark
+                    error={fieldErrors.manager_phone}
+                  />
               <PhoneVerificationControls verified={initialBusiness.verification.phoneVerified} />
             </div>
-            <TextField name="business_registration_number" label="사업자등록번호" value={draft.business_registration_number} onChange={(value) => updateDraftField("business_registration_number", formatBusinessRegistrationNumber(value))} placeholder="000-00-00000" requiredMark />
+            <TextField name="business_registration_number" label="사업자등록번호" value={draft.business_registration_number} onChange={(value) => updateDraftField("business_registration_number", formatBusinessRegistrationNumber(value))} placeholder="000-00-00000" requiredMark
+                    error={fieldErrors.business_registration_number}
+                  />
           </div>
           <div className="mt-5">
             <VerificationField
@@ -1085,18 +1147,24 @@ function BusinessProfileEditForm({
           </div>
           {draft.business_hours_preset === "custom" ? (
             <div className="mt-4">
-              <TextField name="business_hours_custom" label="직접 입력" value={draft.business_hours_custom} onChange={(value) => updateDraftField("business_hours_custom", value)} placeholder="화-일 11:00-20:00, 월 휴무" icon={<Clock size={17} />} />
+              <TextField name="business_hours_custom" label="직접 입력" value={draft.business_hours_custom} onChange={(value) => updateDraftField("business_hours_custom", value)} placeholder="화-일 11:00-20:00, 월 휴무" icon={<Clock size={17} />}
+                    error={fieldErrors.business_hours_custom}
+                  />
             </div>
           ) : null}
           <div className="mt-4">
-            <TextField name="business_hours_note" label="운영 메모" value={draft.business_hours_note} onChange={(value) => updateDraftField("business_hours_note", value)} placeholder="브레이크타임 15:00-17:00" icon={<Clock size={17} />} />
+            <TextField name="business_hours_note" label="운영 메모" value={draft.business_hours_note} onChange={(value) => updateDraftField("business_hours_note", value)} placeholder="브레이크타임 15:00-17:00" icon={<Clock size={17} />}
+                    error={fieldErrors.business_hours_note}
+                  />
           </div>
         </FormCard>
 
         <FormCard>
           <SectionHeading title="웹/SNS" description="공개 채널이 있다면 선택적으로 추가합니다." />
           <div className="grid gap-5 sm:grid-cols-2">
-            <TextField name="website_url" label="웹사이트" value={draft.website_url} onChange={(value) => updateDraftField("website_url", value)} placeholder="https://nowon.example.com" icon={<Globe size={17} />} type="url" />
+            <TextField name="website_url" label="웹사이트" value={draft.website_url} onChange={(value) => updateDraftField("website_url", value)} placeholder="https://nowon.example.com" icon={<Globe size={17} />} type="url"
+                    error={fieldErrors.website_url}
+                  />
             <div>
               <FieldLabel>SNS 링크</FieldLabel>
               <div className="flex rounded-xl border border-slate-200 bg-white focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
@@ -1252,9 +1320,6 @@ function PhoneVerificationControls({ verified }: { verified: boolean }) {
   );
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <span className="mb-2 block text-sm font-black text-charcoal">{children}</span>;
-}
 
 function Required() {
   return <span className="text-primary">*</span>;
@@ -1272,7 +1337,8 @@ function TextField({
   placeholder,
   icon,
   type = "text",
-  requiredMark = false
+  requiredMark = false,
+  error
 }: {
   name: string;
   label: string;
@@ -1282,23 +1348,20 @@ function TextField({
   icon?: React.ReactNode;
   type?: string;
   requiredMark?: boolean;
+  error?: string;
 }) {
   return (
-    <label className="block">
-      <FieldLabel>{label} {requiredMark ? <Required /> : null}</FieldLabel>
-      <div className="relative">
-        {icon ? <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">{icon}</span> : null}
-        <input
-          name={name}
-          type={type}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className={`w-full rounded-xl border border-slate-200 px-4 py-3.5 text-sm text-charcoal outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary ${icon ? "pl-10" : ""}`}
-          placeholder={placeholder}
-          aria-required={requiredMark}
-        />
-      </div>
-    </label>
+    <FormField
+      name={name}
+      label={label}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      icon={icon}
+      type={type}
+      required={requiredMark}
+      error={error}
+    />
   );
 }
 
@@ -1455,7 +1518,8 @@ function SelectField({
   value,
   onChange,
   options,
-  requiredMark = false
+  requiredMark = false,
+  error
 }: {
   name: string;
   label: string;
@@ -1463,23 +1527,26 @@ function SelectField({
   onChange: (value: string) => void;
   options: string[];
   requiredMark?: boolean;
+  error?: string;
 }) {
   const normalizedOptions = value && !options.includes(value) ? [value, ...options] : options;
 
   return (
     <label className="block">
-      <FieldLabel>{label} {requiredMark ? <Required /> : null}</FieldLabel>
+      <FieldLabel required={requiredMark}>{label}</FieldLabel>
       <select
         name={name}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm text-charcoal outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+        className={fieldControlClassName(error, "bg-white")}
         aria-required={requiredMark}
+        aria-invalid={error ? true : undefined}
       >
         {normalizedOptions.map((option) => (
           <option key={option} value={option}>{option}</option>
         ))}
       </select>
+      <FieldError>{error}</FieldError>
     </label>
   );
 }

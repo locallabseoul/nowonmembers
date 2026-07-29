@@ -6,6 +6,7 @@ import { getBusinessCreatorManagement } from "@/lib/supabase/queries";
 import { requireRole } from "@/lib/auth/guards";
 import { saveCreatorReview } from "./actions";
 import { CreatorReviewCard } from "./creator-review-card";
+import { FormBanner } from "@/app/components/form-field";
 
 type RehireFilter = "all" | "yes" | "no";
 
@@ -135,7 +136,7 @@ export default async function BusinessCreatorsPage({
         <OperatorSidebar business={data.business} active="creators" />
 
         <div className="min-w-0 flex-grow space-y-6">
-          {error ? <p className="rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
+          {error ? <FormBanner>{error}</FormBanner> : null}
           {saved ? <p className="rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{saved}</p> : null}
 
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">

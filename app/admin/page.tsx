@@ -6,6 +6,7 @@ import { getAdminDashboard, getAdminNotices, type DashboardApplication, type Das
 import { CheckCircle2, ClipboardCheck, ExternalLink, ImageIcon, Send, Users, X } from "lucide-react";
 import { adjustBusinessPoints, approveCampaign, approveSubmission, createNotice, publishLocalStory, recommendApplication, rejectCampaign, requestCampaignRevision, requestSubmissionRevision, unrecommendApplication, updateNotice } from "./actions";
 import { NoticeManagementSection } from "./notice-management-section";
+import { FormBanner } from "@/app/components/form-field";
 
 const applicationStatusTabs = [
   ["", "전체"],
@@ -441,7 +442,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <h1 className="mt-2 text-3xl font-black text-charcoal">운영 대시보드</h1>
         <p className="mt-2 text-gray-500">캠페인별 지원자 검토, 추천 표시, 제출 확인, 로컬 스토리 발행을 관리합니다.</p>
       </div>
-      {error ? <p className="mb-6 rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
+      {error ? <div className="mb-6"><FormBanner>{error}</FormBanner></div> : null}
       {message ? <p className="mb-6 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{message}</p> : null}
       {noticeCreated ? <p className="mb-6 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">공지가 등록되었습니다.</p> : null}
       {noticeUpdated ? <p className="mb-6 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">공지가 수정되었습니다.</p> : null}

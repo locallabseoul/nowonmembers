@@ -8,6 +8,7 @@ import { getBusinessDashboard, type DashboardApplication, type DashboardCampaign
 import { requireRole } from "@/lib/auth/guards";
 import { approveRecommendedApplication, cancelCampaignBeforePublish, finalizeCampaignSelection, saveBusinessProfile, submitDraftCampaignForReview } from "./actions";
 import { BusinessProfileWizard } from "./business-profile-wizard";
+import { FormBanner } from "@/app/components/form-field";
 
 const applicationStatusTabs = [
   ["", "전체"],
@@ -685,7 +686,7 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
         <OperatorSidebar business={business} active="campaigns" />
 
         <div className="min-w-0 flex-grow space-y-8">
-          {error ? <p className="rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
+          {error ? <FormBanner>{error}</FormBanner> : null}
           {message ? <p className="rounded-lg bg-green-50 p-3 text-sm font-bold text-green-700">{message}</p> : null}
 
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
