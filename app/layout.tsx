@@ -148,6 +148,7 @@ function Footer() {
             </div>
           </div>
           <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-bold text-gray-400">
+            <Link href="/guide/campaign" className="transition-colors hover:text-white">캠페인 작성 가이드</Link>
             <Link href="/terms" className="transition-colors hover:text-white">이용약관</Link>
             <Link href="/privacy" className="transition-colors hover:text-white">개인정보처리방침</Link>
           </div>
