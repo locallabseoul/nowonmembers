@@ -6,7 +6,7 @@ import { getPublishedNotice } from "@/lib/supabase/queries";
 import { NoticeReadMarker } from "../notice-read-marker";
 
 export const metadata: Metadata = {
-  title: "공지사항 | 노원멤버스",
+  title: "공지사항",
   description: "노원멤버스 공지사항 상세"
 };
 

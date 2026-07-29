@@ -4,7 +4,7 @@ import { SectionHeader } from "@/app/components/ui";
 import { getPublishedNotices } from "@/lib/supabase/queries";
 
 export const metadata: Metadata = {
-  title: "공지사항 | 노원멤버스",
+  title: "공지사항",
   description: "노원멤버스 공지사항"
 };
 
