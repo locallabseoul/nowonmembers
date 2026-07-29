@@ -1,4 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getCurrentSessionProfile } from "@/lib/auth/guards";
+
+const MAX_QUERY_LENGTH = 100;
 
 type NaverGeocodeAddress = {
   roadAddress?: string;
@@ -68,8 +71,18 @@ async function fetchNaverGeocode(query: string, keyId: string, key: string) {
 }
 
 export async function GET(request: NextRequest) {
+  // 주소 검색은 가게 프로필과 캠페인 생성 위저드에서만 쓴다. 열어두면 네이버
+  // Geocoding 호출 비용을 누구나 발생시킬 수 있다.
+  const { profile } = await getCurrentSessionProfile();
+  if (profile?.role !== "business") {
+    return NextResponse.json(
+      { error: "가게 계정으로 로그인해야 주소를 검색할 수 있습니다.", addresses: [] },
+      { status: 403 }
+    );
+  }
+
   const query = request.nextUrl.searchParams.get("query")?.trim() ?? "";
-  if (query.length < 2) {
+  if (query.length < 2 || query.length > MAX_QUERY_LENGTH) {
     return NextResponse.json({ addresses: [] });
   }
 
