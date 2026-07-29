@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const navItems = [
+export const navItems = [
   { href: "/campaigns", label: "캠페인", match: (pathname: string) => pathname.startsWith("/campaigns") },
   { href: "/stories", label: "노원스토리", match: (pathname: string) => pathname.startsWith("/stories") }
 ];
