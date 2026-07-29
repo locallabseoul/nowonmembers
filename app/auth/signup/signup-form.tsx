@@ -1,15 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
+import { useActionState, useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 import { BriefcaseBusiness, Camera, CheckCircle2, UserPlus, X } from "lucide-react";
 import { LEGAL_EFFECTIVE_DATE, privacySections, termsSections, type LegalSection } from "@/lib/legal";
+import { emptyFormState, type FormState } from "@/lib/form-errors";
+import { FieldError, FieldLabel, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
 
 type SignupRole = "creator" | "business";
-type SignupAction = (formData: FormData) => void | Promise<void>;
+type SignupAction = (state: FormState, formData: FormData) => Promise<FormState>;
 type NicknameCheckStatus = "idle" | "checking" | "available" | "unavailable" | "error";
 type LegalModalType = "terms" | "privacy";
 
+// 공용 FormField로 위임한다. 예전에는 파일마다 입력창을 따로 그려서 에러를 붙일
+// 자리가 없었다.
 function Field({
   label,
   name,
@@ -17,6 +21,7 @@ function Field({
   placeholder,
   required = true,
   minLength,
+  error,
   defaultValue
 }: {
   label: string;
@@ -25,23 +30,20 @@ function Field({
   placeholder: string;
   required?: boolean;
   minLength?: number;
+  error?: string;
   defaultValue?: string;
 }) {
   return (
-    <label className="block space-y-2">
-      <span className="block text-sm font-bold text-gray-700">
-        {label} {required ? <span className="text-primary">*</span> : null}
-      </span>
-      <input
-        name={name}
-        type={type}
-        required={required}
-        minLength={minLength}
-        defaultValue={defaultValue}
-        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all placeholder:text-gray-400 focus:border-primary focus:ring-2 focus:ring-primary/20"
-        placeholder={placeholder}
-      />
-    </label>
+    <FormField
+      name={name}
+      label={label}
+      type={type}
+      placeholder={placeholder}
+      required={required}
+      minLength={minLength}
+      error={error}
+      defaultValue={defaultValue}
+    />
   );
 }
 
@@ -52,7 +54,8 @@ function NicknameField({
   value,
   onChange,
   status,
-  message
+  message,
+  error
 }: {
   label: string;
   name: string;
@@ -61,24 +64,33 @@ function NicknameField({
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
   status: NicknameCheckStatus;
   message: string;
+  error?: string;
 }) {
-  const tone = status === "available" ? "text-emerald-700" : status === "checking" ? "text-gray-500" : "text-primary";
+  const tone = status === "available" ? "text-emerald-700" : "text-gray-500";
 
   return (
-    <label className="block space-y-2">
-      <span className="block text-sm font-bold text-gray-700">
-        {label} <span className="text-primary">*</span>
-      </span>
+    <label className="block">
+      <FieldLabel required>{label}</FieldLabel>
       <input
         name={name}
         value={value}
         onChange={onChange}
         required
         minLength={2}
-        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all placeholder:text-gray-400 focus:border-primary focus:ring-2 focus:ring-primary/20"
+        aria-invalid={error ? true : undefined}
+        className={fieldControlClassName(error)}
         placeholder={placeholder}
       />
-      {message ? <p className={`text-xs font-bold ${tone}`}>{message}</p> : null}
+      {/* 서버가 돌려준 에러가 우선한다. 입력 중 확인 결과는 그 다음. */}
+      {error ? (
+        <FieldError>{error}</FieldError>
+      ) : message ? (
+        status === "unavailable" || status === "error" ? (
+          <FieldError>{message}</FieldError>
+        ) : (
+          <p className={`mt-2 text-xs font-bold ${tone}`}>{message}</p>
+        )
+      ) : null}
     </label>
   );
 }
@@ -103,16 +115,16 @@ function formatBusinessRegistrationNumber(value: string) {
 
 function BusinessRegistrationField({
   value,
-  onChange
+  onChange,
+  error
 }: {
   value: string;
   onChange: (value: string) => void;
+  error?: string;
 }) {
   return (
-    <label className="block space-y-2">
-      <span className="block text-sm font-bold text-gray-700">
-        사업자등록번호 <span className="text-primary">*</span>
-      </span>
+    <label className="block">
+      <FieldLabel required>사업자등록번호</FieldLabel>
       <input
         name="business_registration_number"
         inputMode="numeric"
@@ -121,25 +133,27 @@ function BusinessRegistrationField({
         required
         minLength={12}
         maxLength={12}
-        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all placeholder:text-gray-400 focus:border-primary focus:ring-2 focus:ring-primary/20"
+        aria-invalid={error ? true : undefined}
+        className={fieldControlClassName(error)}
         placeholder="000-00-00000"
       />
+      <FieldError>{error}</FieldError>
     </label>
   );
 }
 
 function PhoneField({
   value,
-  onChange
+  onChange,
+  error
 }: {
   value: string;
   onChange: (value: string) => void;
+  error?: string;
 }) {
   return (
-    <label className="block space-y-2">
-      <span className="block text-sm font-bold text-gray-700">
-        전화번호 <span className="text-primary">*</span>
-      </span>
+    <label className="block">
+      <FieldLabel required>전화번호</FieldLabel>
       <input
         name="phone"
         type="tel"
@@ -150,10 +164,15 @@ function PhoneField({
         required
         minLength={12}
         maxLength={13}
-        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-all placeholder:text-gray-400 focus:border-primary focus:ring-2 focus:ring-primary/20"
+        aria-invalid={error ? true : undefined}
+        className={fieldControlClassName(error)}
         placeholder="010-0000-0000"
       />
-      <p className="text-xs font-medium text-gray-400">숫자만 입력해도 자동으로 하이픈이 입력됩니다.</p>
+      {error ? (
+        <FieldError>{error}</FieldError>
+      ) : (
+        <p className="mt-2 text-xs font-medium text-gray-400">숫자만 입력해도 자동으로 하이픈이 입력됩니다.</p>
+      )}
     </label>
   );
 }
@@ -280,32 +299,18 @@ function LegalAgreementModal({
 
 export function SignupForm({
   action,
-  error,
-  initialRole,
-  initialValues
+  initialRole
 }: {
   action: SignupAction;
-  error?: string;
   initialRole: SignupRole;
-  initialValues?: {
-    email?: string;
-    phone?: string;
-    nickname?: string;
-    name?: string;
-    businessName?: string;
-    businessRegistrationNumber?: string;
-    managerName?: string;
-    referralCode?: string;
-    agreedTerms?: boolean;
-    agreedPrivacy?: boolean;
-    agreedMarketing?: boolean;
-  };
 }) {
+  const [state, formAction, isPending] = useActionState(action, emptyFormState);
+  const fieldErrors = state.fieldErrors ?? {};
   const [role, setRole] = useState<SignupRole>(initialRole);
-  const [creatorNickname, setCreatorNickname] = useState(initialValues?.nickname ?? "");
-  const [businessName, setBusinessName] = useState(initialValues?.businessName ?? "");
-  const [businessRegistrationNumber, setBusinessRegistrationNumber] = useState(initialValues?.businessRegistrationNumber ?? "");
-  const [phone, setPhone] = useState(initialValues?.phone ?? "");
+  const [creatorNickname, setCreatorNickname] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [businessRegistrationNumber, setBusinessRegistrationNumber] = useState("");
+  const [phone, setPhone] = useState("");
   const [nicknameStatus, setNicknameStatus] = useState<NicknameCheckStatus>("idle");
   const [nicknameMessage, setNicknameMessage] = useState("");
   const [legalModal, setLegalModal] = useState<LegalModalType | null>(null);
@@ -373,9 +378,9 @@ export function SignupForm({
         <p className="mt-3 text-sm text-gray-500">노원멤버스에서 캠페인 참여와 운영을 시작하세요.</p>
       </div>
 
-      {error ? <p className="mb-6 rounded-xl bg-primary/10 p-4 text-sm font-bold text-primary">{error}</p> : null}
+      {state.formError ? <div className="mb-6"><FormBanner>{state.formError}</FormBanner></div> : null}
 
-      <form action={action} className="space-y-8">
+      <form action={formAction} className="space-y-8">
         <input type="hidden" name="role" value={role} />
 
         <section>
@@ -405,11 +410,11 @@ export function SignupForm({
         <section className="space-y-5">
           <SectionTitle number={2}>계정 정보</SectionTitle>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <PhoneField value={phone} onChange={setPhone} />
-            <Field label="비밀번호" name="password" type="password" placeholder="6자 이상" minLength={6} />
+            <PhoneField value={phone} onChange={setPhone} error={fieldErrors.phone} />
+            <Field label="비밀번호" name="password" type="password" placeholder="6자 이상" minLength={6} error={fieldErrors.password} />
           </div>
           <p className="text-xs font-medium text-gray-400">전화번호로 로그인하고, 가입 완료 전 SMS 인증을 진행합니다.</p>
-          <Field label="이메일" name="email" type="email" placeholder="example@email.com" required={false} defaultValue={initialValues?.email} />
+          <Field label="이메일" name="email" type="email" placeholder="example@email.com" required={false} error={fieldErrors.email} defaultValue={state.values?.email} />
           <p className="text-xs font-medium text-gray-400">이메일은 계정 안내와 알림을 위한 선택 입력입니다.</p>
         </section>
 
@@ -428,12 +433,17 @@ export function SignupForm({
                   onChange={(event) => setBusinessName(event.target.value)}
                   status={nicknameStatus}
                   message={role === "business" ? nicknameMessage : ""}
+                  error={fieldErrors.business_name}
                 />
-                <BusinessRegistrationField value={businessRegistrationNumber} onChange={setBusinessRegistrationNumber} />
+                <BusinessRegistrationField
+                  value={businessRegistrationNumber}
+                  onChange={setBusinessRegistrationNumber}
+                  error={fieldErrors.business_registration_number}
+                />
               </div>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <Field label="담당자명" name="manager_name" placeholder="홍길동" defaultValue={initialValues?.managerName} />
-                <Field label="추천코드" name="referral_code" placeholder="추천코드가 있다면 입력" required={false} defaultValue={initialValues?.referralCode} />
+                <Field label="담당자명" name="manager_name" placeholder="홍길동" error={fieldErrors.manager_name} defaultValue={state.values?.manager_name} />
+                <Field label="추천코드" name="referral_code" placeholder="추천코드가 있다면 입력" required={false} defaultValue={state.values?.referral_code} />
               </div>
             </>
           ) : (
@@ -447,8 +457,9 @@ export function SignupForm({
                   onChange={(event) => setCreatorNickname(event.target.value)}
                   status={nicknameStatus}
                   message={role === "creator" ? nicknameMessage : ""}
+                  error={fieldErrors.nickname}
                 />
-                <Field label="이름" name="name" placeholder="홍길동" defaultValue={initialValues?.name} />
+                <Field label="이름" name="name" placeholder="홍길동" error={fieldErrors.name} defaultValue={state.values?.name} />
               </div>
             </>
           )}
@@ -456,32 +467,37 @@ export function SignupForm({
 
         <hr className="border-gray-100" />
 
-        <section className="space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-5">
+        <section
+          className={`space-y-4 rounded-xl border bg-gray-50 p-5 ${
+            fieldErrors.agreement ? "border-red-300" : "border-gray-200"
+          }`}
+        >
           <label className="flex cursor-pointer items-start gap-3">
-            <input name="agreement_terms" type="checkbox" required defaultChecked={initialValues?.agreedTerms} className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+            <input name="agreement_terms" type="checkbox" required className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
             <span className="text-sm font-bold text-charcoal">
               (필수) <button type="button" onClick={(event) => { event.preventDefault(); setLegalModal("terms"); }} className="text-primary underline underline-offset-2">서비스 이용약관</button> 동의
             </span>
           </label>
           <label className="flex cursor-pointer items-start gap-3">
-            <input name="agreement_privacy" type="checkbox" required defaultChecked={initialValues?.agreedPrivacy} className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+            <input name="agreement_privacy" type="checkbox" required className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
             <span className="text-sm font-bold text-charcoal">
               (필수) <button type="button" onClick={(event) => { event.preventDefault(); setLegalModal("privacy"); }} className="text-primary underline underline-offset-2">개인정보 수집 및 이용</button> 동의
             </span>
           </label>
           <label className="flex cursor-pointer items-start gap-3">
-            <input name="agreement_marketing" type="checkbox" defaultChecked={initialValues?.agreedMarketing} className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+            <input name="agreement_marketing" type="checkbox" className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
             <span className="text-sm text-gray-600">(선택) 맞춤 캠페인 추천 알림 수신 동의</span>
           </label>
+          <FieldError>{fieldErrors.agreement}</FieldError>
         </section>
 
         <div className="pt-2">
           <button
             type="submit"
-            disabled={!canSubmit}
+            disabled={!canSubmit || isPending}
             className="w-full rounded-xl bg-primary px-5 py-4 font-black text-white shadow-sm transition-colors hover:bg-primaryHover disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
           >
-            인증 문자 보내기
+            {isPending ? "인증 문자 보내는 중..." : "인증 문자 보내기"}
           </button>
           <p className="mt-3 text-center text-xs font-bold text-gray-400">입력한 전화번호로 인증번호를 보낸 뒤, 같은 회원가입 페이지에서 인증을 완료합니다.</p>
           <p className="mt-4 text-center text-sm text-gray-500">

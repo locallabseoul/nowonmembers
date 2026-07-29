@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { LogIn, UserPlus } from "lucide-react";
-import { signIn } from "./actions";
+import { SignInForm } from "./sign-in-form";
 
 function getSafeNext(next?: string) {
   if (!next || !next.startsWith("/") || next.startsWith("//")) {
@@ -10,8 +10,8 @@ function getSafeNext(next?: string) {
   return next;
 }
 
-export default async function AuthPage({ searchParams }: { searchParams: Promise<{ error?: string; message?: string; next?: string }> }) {
-  const { error, message, next } = await searchParams;
+export default async function AuthPage({ searchParams }: { searchParams: Promise<{ message?: string; next?: string }> }) {
+  const { message, next } = await searchParams;
   const safeNext = getSafeNext(next);
 
   return (
@@ -24,20 +24,8 @@ export default async function AuthPage({ searchParams }: { searchParams: Promise
           <h1 className="text-2xl font-black text-charcoal">로그인</h1>
           <p className="mt-2 text-sm text-gray-500">가입한 전화번호로 캠페인과 프로필을 관리합니다.</p>
         </div>
-        {error ? <p className="mt-4 rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
         {message ? <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{message}</p> : null}
-        <form action={signIn} className="mt-6 space-y-4">
-          <input type="hidden" name="next" value={safeNext} />
-          <label className="block">
-            <span className="mb-2 block text-sm font-black text-charcoal">전화번호</span>
-            <input name="phone" type="tel" inputMode="numeric" autoComplete="tel" required className="w-full rounded-lg border border-line px-4 py-3 text-sm focus-ring" placeholder="010-0000-0000" />
-          </label>
-          <label className="block">
-            <span className="mb-2 block text-sm font-black text-charcoal">비밀번호</span>
-            <input name="password" type="password" required className="w-full rounded-lg border border-line px-4 py-3 text-sm focus-ring" placeholder="••••••••" />
-          </label>
-          <button className="w-full rounded-xl bg-primary px-5 py-3 font-black text-white shadow-sm transition-colors hover:bg-primaryHover">로그인</button>
-        </form>
+        <SignInForm next={safeNext} />
         <div className="mt-6 rounded-2xl border border-gray-100 bg-gray-50 p-4 text-center">
           <p className="text-sm font-medium text-gray-500">아직 계정이 없으신가요?</p>
           <Link href="/auth/signup" className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-primary bg-white px-5 py-3 text-sm font-black text-primary transition-colors hover:bg-primary/5">

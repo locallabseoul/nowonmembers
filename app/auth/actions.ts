@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { getAccountPath } from "@/lib/auth/guards";
 import { normalizePhoneNumber, toKoreanE164Phone } from "@/lib/auth/phone";
+import { collectFieldErrors, fieldError, hasErrors, keepValues, type FormState } from "@/lib/form-errors";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function profilePathForRole(role: "business" | "creator") {
@@ -15,37 +16,6 @@ function getSafeNext(next: string | null) {
   }
 
   return next;
-}
-
-function appendSignupFormState(params: URLSearchParams, formData?: FormData) {
-  if (!formData) return;
-
-  const preservedFields = [
-    "email",
-    "phone",
-    "nickname",
-    "name",
-    "business_name",
-    "business_registration_number",
-    "manager_name",
-    "referral_code"
-  ];
-
-  for (const field of preservedFields) {
-    const value = String(formData.get(field) ?? "").trim();
-    if (value) params.set(field, value);
-  }
-
-  for (const agreement of ["agreement_terms", "agreement_privacy", "agreement_marketing"]) {
-    if (formData.get(agreement) === "on") params.set(agreement, "on");
-  }
-}
-
-function getSignupRedirect(role: "business" | "creator", error: string, formData?: FormData) {
-  const params = new URLSearchParams({ role, error });
-  appendSignupFormState(params, formData);
-
-  return `/auth/signup?${params.toString()}`;
 }
 
 function getSignupPhoneVerifyRedirect(role: "business" | "creator", phone: string, message: string) {
@@ -93,11 +63,13 @@ function getDuplicateSignupMessage(error: { code?: string; message?: string; sta
   return null;
 }
 
-function requiredText(formData: FormData, name: string, label: string, role: "business" | "creator") {
-  const value = String(formData.get(name) ?? "").trim();
-  if (!value) redirect(getSignupRedirect(role, `${label}을(를) 입력해주세요.`, formData));
-
-  return value;
+// 중복 메시지를 어느 입력창에 붙일지까지 함께 정한다. 필드를 특정하지 못하면 폼 상단
+// 배너로 보여준다.
+function getDuplicateSignupField(message: string, nicknameField: string) {
+  if (message.includes("닉네임")) return nicknameField;
+  if (message.includes("전화번호")) return "phone";
+  if (message.includes("이메일")) return "email";
+  return null;
 }
 
 function normalizePhone(phone: string) {
@@ -133,20 +105,41 @@ function getAuthOtpErrorMessage(error: { message?: string; status?: number } | n
   return message || "인증번호 발송 중 오류가 발생했습니다.";
 }
 
-export async function signIn(formData: FormData) {
+// Supabase는 영문 메시지를 준다. 어느 쪽이 틀렸는지는 알려주지 않는 편이 안전하므로
+// 자격 증명 오류는 하나의 문구로 묶는다.
+function getSignInErrorMessage(error: { message?: string; status?: number } | null | undefined) {
+  const lower = (error?.message ?? "").toLowerCase();
+
+  if (error?.status === 429 || lower.includes("rate limit") || lower.includes("too many")) {
+    return "로그인 시도가 너무 잦습니다. 잠시 후 다시 시도해주세요.";
+  }
+
+  if (lower.includes("not confirmed") || lower.includes("not_confirmed")) {
+    return "전화번호 인증이 완료되지 않았습니다. 인증을 먼저 진행해주세요.";
+  }
+
+  return "전화번호 또는 비밀번호가 올바르지 않습니다.";
+}
+
+export async function signIn(_prevState: FormState, formData: FormData): Promise<FormState> {
   const phone = normalizePhone(String(formData.get("phone") ?? ""));
   const password = String(formData.get("password") ?? "");
   const next = getSafeNext(String(formData.get("next") ?? ""));
   const authPhone = toKoreanE164Phone(phone);
 
+  const kept = keepValues(formData, ["phone"]);
+  const invalid = collectFieldErrors({
+    phone: !phone ? "전화번호를 입력해주세요." : !authPhone ? "전화번호를 정확히 입력해주세요." : null,
+    password: password ? null : "비밀번호를 입력해주세요."
+  });
+
+  if (hasErrors(invalid) || !authPhone) return { ...invalid, values: kept };
+
   const supabase = await createSupabaseServerClient();
-  const { data, error } = authPhone
-    ? await supabase.auth.signInWithPassword({ phone: authPhone, password })
-    : { data: { user: null }, error: new Error("전화번호를 정확히 입력해주세요.") };
+  const { data, error } = await supabase.auth.signInWithPassword({ phone: authPhone, password });
 
   if (error) {
-    const nextParam = next ? `&next=${encodeURIComponent(next)}` : "";
-    redirect(`/auth?mode=signin&error=${encodeURIComponent(error.message)}${nextParam}`);
+    return { ...fieldError("password", getSignInErrorMessage(error)), values: kept };
   }
 
   if (next) redirect(next);
@@ -158,86 +151,83 @@ export async function signIn(formData: FormData) {
   redirect(getAccountPath(profile?.role));
 }
 
-export async function signUp(formData: FormData) {
+export async function signUp(_prevState: FormState, formData: FormData): Promise<FormState> {
   const rawRole = String(formData.get("role") ?? "creator");
   const role: "business" | "creator" = rawRole === "business" ? "business" : "creator";
+  const isBusiness = role === "business";
+  const nicknameField = isBusiness ? "business_name" : "nickname";
+  const nameField = isBusiness ? "manager_name" : "name";
+
   const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
-  const password = requiredText(formData, "password", "비밀번호", role);
+  const password = String(formData.get("password") ?? "");
+  const nickname = String(formData.get(nicknameField) ?? "").trim();
+  const name = String(formData.get(nameField) ?? "").trim();
+  const phone = normalizePhone(String(formData.get("phone") ?? "").trim());
+  const authPhone = toKoreanE164Phone(phone);
+  const businessRegistrationNumber = isBusiness
+    ? normalizeBusinessRegistrationNumber(String(formData.get("business_registration_number") ?? ""))
+    : null;
   const agreedTerms = formData.get("agreement_terms") === "on";
   const agreedPrivacy = formData.get("agreement_privacy") === "on";
+  // 비밀번호는 돌려주지 않는다. 다시 입력받는다.
+  const kept = keepValues(formData, ["email", "phone", nicknameField, nameField, "business_registration_number", "referral_code"]);
 
-  if (!agreedTerms || !agreedPrivacy) {
-    redirect(getSignupRedirect(role, "필수 약관에 동의해주세요.", formData));
-  }
-
-  if (password.length < 6) {
-    redirect(getSignupRedirect(role, "비밀번호는 6자 이상이어야 합니다.", formData));
-  }
-
-  const nickname = role === "business"
-    ? requiredText(formData, "business_name", "상호", role)
-    : requiredText(formData, "nickname", "닉네임", role);
-  const name = role === "business"
-    ? requiredText(formData, "manager_name", "담당자명", role)
-    : requiredText(formData, "name", "이름", role);
-  const phone = normalizePhone(requiredText(formData, "phone", "전화번호", role));
-  if (phone.length < 10 || phone.length > 11) {
-    redirect(getSignupRedirect(role, "전화번호를 정확히 입력해주세요.", formData));
-  }
-  const authPhone = toKoreanE164Phone(phone);
-  if (!authPhone) {
-    redirect(getSignupRedirect(role, "전화번호를 정확히 입력해주세요.", formData));
-  }
-
-  const businessRegistrationNumber = role === "business"
-    ? normalizeBusinessRegistrationNumber(requiredText(formData, "business_registration_number", "사업자등록번호", role))
-    : null;
-  if (role === "business" && businessRegistrationNumber?.length !== 10) {
-    redirect(getSignupRedirect(role, "사업자등록번호를 정확히 입력해주세요.", formData));
-  }
-
-  const referralCode = role === "business" ? String(formData.get("referral_code") ?? "").trim() || null : null;
-  const supabase = await createSupabaseServerClient();
-  if (email) {
-    const { data: isEmailAvailable, error: emailAvailabilityError } = await supabase.rpc("is_signup_email_available", {
-      target_email: email
-    });
-
-    if (emailAvailabilityError) {
-      redirect(getSignupRedirect(role, "이메일 중복 확인 중 오류가 발생했습니다.", formData));
-    }
-
-    if (!isEmailAvailable) {
-      redirect(getSignupRedirect(role, "이미 가입된 이메일입니다.", formData));
-    }
-  }
-
-  const { data: isNicknameAvailable, error: nicknameAvailabilityError } = await supabase.rpc(
-    "is_signup_nickname_available",
-    {
-      target_nickname: nickname
-    }
-  );
-
-  if (nicknameAvailabilityError) {
-    redirect(getSignupRedirect(role, "닉네임 중복 확인 중 오류가 발생했습니다.", formData));
-  }
-
-  if (!isNicknameAvailable) {
-    redirect(getSignupRedirect(role, "이미 사용 중인 닉네임입니다.", formData));
-  }
-
-  const { data: isPhoneAvailable, error: phoneAvailabilityError } = await supabase.rpc("is_signup_phone_available", {
-    target_phone: phone
+  // 한 번에 모아서 돌려준다. 하나씩 알려주면 고칠 때마다 다음 에러를 새로 만나게 된다.
+  const invalid = collectFieldErrors({
+    [nicknameField]: nickname ? null : `${isBusiness ? "상호" : "닉네임"}을(를) 입력해주세요.`,
+    [nameField]: name ? null : `${isBusiness ? "담당자명" : "이름"}을(를) 입력해주세요.`,
+    password: !password
+      ? "비밀번호를 입력해주세요."
+      : password.length < 6
+        ? "비밀번호는 6자 이상이어야 합니다."
+        : null,
+    phone: !phone
+      ? "전화번호를 입력해주세요."
+      : phone.length < 10 || phone.length > 11 || !authPhone
+        ? "전화번호를 정확히 입력해주세요."
+        : null,
+    business_registration_number: isBusiness
+      ? !businessRegistrationNumber
+        ? "사업자등록번호를 입력해주세요."
+        : businessRegistrationNumber.length !== 10
+          ? "사업자등록번호를 정확히 입력해주세요."
+          : null
+      : null,
+    agreement: !agreedTerms || !agreedPrivacy ? "필수 약관에 동의해주세요." : null
   });
 
-  if (phoneAvailabilityError) {
-    redirect(getSignupRedirect(role, "전화번호 중복 확인 중 오류가 발생했습니다.", formData));
-  }
+  if (hasErrors(invalid) || !authPhone) return { ...invalid, values: kept };
 
-  if (!isPhoneAvailable) {
-    redirect(getSignupRedirect(role, "이미 가입된 전화번호입니다.", formData));
-  }
+  const referralCode = isBusiness ? String(formData.get("referral_code") ?? "").trim() || null : null;
+  const supabase = await createSupabaseServerClient();
+
+  const [emailCheck, nicknameCheck, phoneCheck] = await Promise.all([
+    email
+      ? supabase.rpc("is_signup_email_available", { target_email: email })
+      : Promise.resolve({ data: true, error: null }),
+    supabase.rpc("is_signup_nickname_available", { target_nickname: nickname }),
+    supabase.rpc("is_signup_phone_available", { target_phone: phone })
+  ]);
+
+  const unavailable = collectFieldErrors({
+    email: emailCheck.error
+      ? "이메일 중복 확인 중 오류가 발생했습니다."
+      : emailCheck.data === false
+        ? "이미 가입된 이메일입니다."
+        : null,
+    [nicknameField]: nicknameCheck.error
+      ? "닉네임 중복 확인 중 오류가 발생했습니다."
+      : nicknameCheck.data === false
+        ? `이미 사용 중인 ${isBusiness ? "상호" : "닉네임"}입니다.`
+        : null,
+    phone: phoneCheck.error
+      ? "전화번호 중복 확인 중 오류가 발생했습니다."
+      : phoneCheck.data === false
+        ? "이미 가입된 전화번호입니다."
+        : null
+  });
+
+  if (hasErrors(unavailable)) return { ...unavailable, values: kept };
 
   const { data, error } = await supabase.auth.signUp({
     phone: authPhone,
@@ -280,7 +270,12 @@ export async function signUp(formData: FormData) {
         }, { onConflict: "id" });
 
         if (profileError) {
-          redirect(getSignupRedirect(role, getDuplicateSignupMessage(profileError) ?? profileError.message, formData));
+          const message = getDuplicateSignupMessage(profileError);
+          const field = message ? getDuplicateSignupField(message, nicknameField) : null;
+
+          return field
+            ? { ...fieldError(field, message as string), values: kept }
+            : { formError: message ?? "가입 정보를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.", values: kept };
         }
 
         redirect(profilePathForRole(role));
@@ -292,39 +287,56 @@ export async function signUp(formData: FormData) {
       });
 
       if (resendError) {
-        redirect(`${getSignupPhoneVerifyRedirect(role, phone, "")}&error=${encodeURIComponent(getAuthOtpErrorMessage(resendError))}`);
+        return { ...fieldError("phone", getAuthOtpErrorMessage(resendError)), values: kept };
       }
 
       redirect(getSignupPhoneVerifyRedirect(role, phone, "인증번호를 다시 보냈습니다."));
     }
 
-    redirect(getSignupRedirect(role, duplicateMessage ?? error.message, formData));
+    if (duplicateMessage) {
+      const field = getDuplicateSignupField(duplicateMessage, nicknameField);
+      return field
+        ? { ...fieldError(field, duplicateMessage), values: kept }
+        : { formError: duplicateMessage, values: kept };
+    }
+
+    return { formError: "회원가입 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.", values: kept };
   }
 
   if (!data.user) {
-    redirect(getSignupRedirect(role, "전화번호 회원가입 요청이 생성되지 않았습니다. Phone Provider 설정을 확인해주세요.", formData));
+    return {
+      formError: "전화번호 회원가입 요청이 생성되지 않았습니다. Phone Provider 설정을 확인해주세요.",
+      values: kept
+    };
   }
 
   redirect(`/auth/signup?role=${role}&verify=phone&phone=${encodeURIComponent(phone)}&message=${encodeURIComponent("문자로 받은 인증번호를 입력해주세요.")}`);
 }
 
-export async function verifyAuthPhoneOtp(formData: FormData) {
+function getOtpVerifyErrorMessage(error: { message?: string; status?: number } | null | undefined) {
+  const lower = (error?.message ?? "").toLowerCase();
+
+  if (error?.status === 429 || lower.includes("rate limit") || lower.includes("too many")) {
+    return "인증 시도가 너무 잦습니다. 잠시 후 다시 시도해주세요.";
+  }
+
+  if (lower.includes("expired")) return "인증번호가 만료되었습니다. 다시 받아주세요.";
+
+  return "인증번호가 올바르지 않습니다.";
+}
+
+export async function verifyAuthPhoneOtp(_prevState: FormState, formData: FormData): Promise<FormState> {
   const phone = normalizePhone(String(formData.get("phone") ?? ""));
   const token = String(formData.get("token") ?? "").trim();
   const rawRole = String(formData.get("role") ?? "creator");
   const role: "business" | "creator" = rawRole === "business" ? "business" : "creator";
   const rawType = String(formData.get("type") ?? "sms");
   const type: "sms" | "phone_change" = rawType === "phone_change" ? "phone_change" : "sms";
-  const source = String(formData.get("source") ?? "");
   const next = getSafeNext(String(formData.get("next") ?? "")) ?? profilePathForRole(role);
   const authPhone = toKoreanE164Phone(phone);
-  const errorRedirect = source === "signup"
-    ? `/auth/signup?role=${role}&verify=phone&phone=${encodeURIComponent(phone)}`
-    : `/auth/verify-phone?role=${role}&phone=${encodeURIComponent(phone)}&type=${type}&next=${encodeURIComponent(next)}`;
 
-  if (!authPhone || !token) {
-    redirect(`${errorRedirect}&error=${encodeURIComponent("전화번호와 인증번호를 확인해주세요.")}`);
-  }
+  if (!authPhone) return { formError: "전화번호를 확인해주세요. 처음부터 다시 진행해주세요." };
+  if (!token) return fieldError("token", "인증번호를 입력해주세요.");
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.verifyOtp({
@@ -334,11 +346,14 @@ export async function verifyAuthPhoneOtp(formData: FormData) {
   });
 
   if (error) {
-    redirect(`${errorRedirect}&error=${encodeURIComponent(error.message)}`);
+    return fieldError("token", getOtpVerifyErrorMessage(error));
   }
 
   if (!data.user || !data.session) {
-    redirect(`${errorRedirect}&error=${encodeURIComponent("전화번호 인증은 처리되었지만 로그인 세션이 생성되지 않았습니다. Phone Provider 설정과 인증번호 유형을 확인해주세요.")}`);
+    return {
+      formError:
+        "전화번호 인증은 처리되었지만 로그인 세션이 생성되지 않았습니다. Phone Provider 설정과 인증번호 유형을 확인해주세요."
+    };
   }
 
   {
@@ -362,29 +377,21 @@ export async function verifyAuthPhoneOtp(formData: FormData) {
     }, { onConflict: "id" });
 
     if (profileError) {
-      redirect(`${errorRedirect}&error=${encodeURIComponent(getDuplicateSignupMessage(profileError) ?? profileError.message)}`);
+      const message = getDuplicateSignupMessage(profileError);
+      return { formError: message ?? "가입 정보를 저장하지 못했습니다. 잠시 후 다시 시도해주세요." };
     }
   }
 
   redirect(next);
 }
 
-export async function resendAuthPhoneOtp(formData: FormData) {
+export async function resendAuthPhoneOtp(_prevState: FormState, formData: FormData): Promise<FormState> {
   const phone = normalizePhone(String(formData.get("phone") ?? ""));
-  const rawRole = String(formData.get("role") ?? "creator");
-  const role: "business" | "creator" = rawRole === "business" ? "business" : "creator";
   const rawType = String(formData.get("type") ?? "sms");
   const type: "sms" | "phone_change" = rawType === "phone_change" ? "phone_change" : "sms";
-  const source = String(formData.get("source") ?? "");
-  const next = getSafeNext(String(formData.get("next") ?? "")) ?? profilePathForRole(role);
   const authPhone = toKoreanE164Phone(phone);
-  const baseRedirect = source === "signup"
-    ? `/auth/signup?role=${role}&verify=phone&phone=${encodeURIComponent(phone)}`
-    : `/auth/verify-phone?role=${role}&phone=${encodeURIComponent(phone)}&type=${type}&next=${encodeURIComponent(next)}`;
 
-  if (!authPhone) {
-    redirect(`${baseRedirect}&error=${encodeURIComponent("전화번호를 정확히 입력해주세요.")}`);
-  }
+  if (!authPhone) return { formError: "전화번호를 확인해주세요. 처음부터 다시 진행해주세요." };
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.resend({
@@ -393,10 +400,10 @@ export async function resendAuthPhoneOtp(formData: FormData) {
   });
 
   if (error) {
-    redirect(`${baseRedirect}&error=${encodeURIComponent(getAuthOtpErrorMessage(error))}`);
+    return { formError: getAuthOtpErrorMessage(error) };
   }
 
-  redirect(`${baseRedirect}&message=${encodeURIComponent("인증번호를 다시 보냈습니다.")}`);
+  return { successMessage: "인증번호를 다시 보냈습니다." };
 }
 
 export async function signOut() {

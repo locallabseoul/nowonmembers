@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
-import { resendAuthPhoneOtp, verifyAuthPhoneOtp } from "../actions";
+import { PhoneOtpForm } from "../phone-otp-form";
 
 function getSafeNext(next?: string) {
   if (!next || !next.startsWith("/") || next.startsWith("//")) {
@@ -17,9 +17,9 @@ function normalizeRole(value?: string): "creator" | "business" {
 export default async function VerifyPhonePage({
   searchParams
 }: {
-  searchParams: Promise<{ role?: string; phone?: string; type?: string; next?: string; error?: string; message?: string }>;
+  searchParams: Promise<{ role?: string; phone?: string; type?: string; next?: string }>;
 }) {
-  const { role, phone = "", type = "sms", next, error, message } = await searchParams;
+  const { role, phone = "", type = "sms", next } = await searchParams;
   const safeRole = normalizeRole(role);
   const safeNext = getSafeNext(next);
   const safeType = type === "phone_change" ? "phone_change" : "sms";
@@ -35,34 +35,13 @@ export default async function VerifyPhonePage({
           <p className="mt-2 text-sm text-gray-500">문자로 받은 인증번호를 입력하면 가입이 완료됩니다.</p>
         </div>
 
-        {error ? <p className="mt-4 rounded-lg bg-primary/10 p-3 text-sm font-bold text-primary">{error}</p> : null}
-        {message ? <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{message}</p> : null}
-
-        <form action={verifyAuthPhoneOtp} className="mt-6 space-y-4">
-          <input type="hidden" name="role" value={safeRole} />
-          <input type="hidden" name="phone" value={phone} />
-          <input type="hidden" name="type" value={safeType} />
-          <input type="hidden" name="next" value={safeNext} />
-          <label className="block">
-            <span className="mb-2 block text-sm font-black text-charcoal">전화번호</span>
-            <input value={phone} readOnly className="w-full rounded-lg border border-line bg-gray-50 px-4 py-3 text-sm text-gray-500" />
-          </label>
-          <label className="block">
-            <span className="mb-2 block text-sm font-black text-charcoal">인증번호</span>
-            <input name="token" inputMode="numeric" autoComplete="one-time-code" required className="w-full rounded-lg border border-line px-4 py-3 text-sm focus-ring" placeholder="6자리 인증번호" />
-          </label>
-          <button className="w-full rounded-xl bg-primary px-5 py-3 font-black text-white shadow-sm transition-colors hover:bg-primaryHover">인증 완료하기</button>
-        </form>
-
-        <form action={resendAuthPhoneOtp} className="mt-3">
-          <input type="hidden" name="role" value={safeRole} />
-          <input type="hidden" name="phone" value={phone} />
-          <input type="hidden" name="type" value={safeType} />
-          <input type="hidden" name="next" value={safeNext} />
-          <button className="w-full rounded-xl border border-line bg-white px-5 py-3 text-sm font-black text-charcoal transition-colors hover:border-primary hover:text-primary">
-            인증번호 다시 보내기
-          </button>
-        </form>
+        <PhoneOtpForm
+          role={safeRole}
+          phone={phone}
+          type={safeType}
+          next={safeNext}
+          submitLabel="인증 완료하기"
+        />
 
         <p className="mt-5 text-center text-sm text-gray-500">
           번호가 잘못되었나요? <Link href="/auth/signup" className="font-bold text-primary hover:underline">회원가입 다시하기</Link>

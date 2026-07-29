@@ -9,66 +9,19 @@ function normalizeRole(value?: string): "creator" | "business" {
 export default async function SignupPage({
   searchParams
 }: {
-  searchParams: Promise<{
-    role?: string;
-    error?: string;
-    message?: string;
-    phone?: string;
-    verify?: string;
-    email?: string;
-    nickname?: string;
-    name?: string;
-    business_name?: string;
-    business_registration_number?: string;
-    manager_name?: string;
-    referral_code?: string;
-    agreement_terms?: string;
-    agreement_privacy?: string;
-    agreement_marketing?: string;
-  }>;
+  searchParams: Promise<{ role?: string; phone?: string; verify?: string }>;
 }) {
-  const {
-    role,
-    error,
-    message,
-    phone = "",
-    verify,
-    email = "",
-    nickname = "",
-    name = "",
-    business_name = "",
-    business_registration_number = "",
-    manager_name = "",
-    referral_code = "",
-    agreement_terms,
-    agreement_privacy,
-    agreement_marketing
-  } = await searchParams;
+  // 입력값을 URL로 되돌리던 파라미터는 더 이상 필요 없다. 검증에 걸려도 화면이
+  // 그대로 남아 입력한 내용이 유지된다.
+  const { role, phone = "", verify } = await searchParams;
   const safeRole = normalizeRole(role);
 
   return (
     <main className="flex items-center justify-center bg-[#F8F9FA] px-4 py-12 sm:px-6 lg:px-8">
       {verify === "phone" ? (
-        <SignupPhoneVerification role={safeRole} phone={phone} error={error} message={message} />
+        <SignupPhoneVerification role={safeRole} phone={phone} />
       ) : (
-        <SignupForm
-          action={signUp}
-          error={error}
-          initialRole={safeRole}
-          initialValues={{
-            email,
-            phone,
-            nickname,
-            name,
-            businessName: business_name,
-            businessRegistrationNumber: business_registration_number,
-            managerName: manager_name,
-            referralCode: referral_code,
-            agreedTerms: agreement_terms === "on",
-            agreedPrivacy: agreement_privacy === "on",
-            agreedMarketing: agreement_marketing === "on"
-          }}
-        />
+        <SignupForm action={signUp} initialRole={safeRole} />
       )}
     </main>
   );
