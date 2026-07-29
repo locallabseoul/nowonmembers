@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
+import { fieldError, keepValues, type FormState } from "@/lib/form-errors";
 import { getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import type { Campaign } from "@/lib/types";
 
@@ -45,7 +46,7 @@ function isDateInRange(value: string, minDate: string, maxDate: string) {
   return value >= minDate && value <= maxDate;
 }
 
-export async function applyCampaign(formData: FormData) {
+export async function applyCampaign(_prevState: FormState, formData: FormData): Promise<FormState> {
   const campaignId = String(formData.get("campaign_id") ?? "");
   const { supabase, user } = await requireRole("creator", `/campaigns/${campaignId}/apply`);
   await supabase.rpc("sync_expired_campaigns");
@@ -78,17 +79,25 @@ export async function applyCampaign(formData: FormData) {
   const maxDate = parseDateInput(campaign.submission_due);
   const availableDates = normalizeAvailableDates(formData);
 
+  const kept = keepValues(formData, ["applicant_name", "channel_url", "proposed_content_type", "message"]);
+
   if (!minDate || !maxDate || minDate > maxDate) {
-    redirect(`/campaigns/${campaignId}/apply?error=${encodeURIComponent("캠페인 방문 가능 기간이 올바르지 않습니다. 운영자에게 문의해주세요.")}`);
+    return { formError: "캠페인 방문 가능 기간이 올바르지 않습니다. 운영자에게 문의해주세요.", values: kept };
   }
 
   if (!availableDates.selectedDates.length) {
-    redirect(`/campaigns/${campaignId}/apply?error=${encodeURIComponent("방문 가능한 날짜를 1개 이상 선택해주세요.")}`);
+    return { ...fieldError("available_dates", "방문 가능한 날짜를 1개 이상 선택해주세요."), values: kept };
   }
 
   const outOfRangeDate = availableDates.selectedDates.find((date) => !isDateInRange(date, minDate, maxDate));
   if (outOfRangeDate) {
-    redirect(`/campaigns/${campaignId}/apply?error=${encodeURIComponent("방문 가능한 날짜는 선정 발표일 이후부터 콘텐츠 등록 마감일까지 선택해주세요.")}`);
+    return {
+      ...fieldError(
+        "available_dates",
+        "방문 가능한 날짜는 선정 발표일 이후부터 콘텐츠 등록 마감일까지 선택해주세요."
+      ),
+      values: kept
+    };
   }
 
   const { data: creator, error: creatorError } = await supabase
@@ -110,6 +119,12 @@ export async function applyCampaign(formData: FormData) {
     status: "submitted"
   });
 
-  if (error) redirect(`/campaigns/${campaignId}/apply?error=${encodeURIComponent(error.message)}`);
+  if (error) {
+    return {
+      formError: "신청을 저장하지 못했습니다. 이미 신청한 캠페인인지 확인해주세요.",
+      values: kept
+    };
+  }
+
   redirect("/creator/dashboard");
 }

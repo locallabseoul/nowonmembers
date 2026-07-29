@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useActionState, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { CalendarDays, Check, ExternalLink, ImageIcon, Link2, UploadCloud } from "lucide-react";
 import type { CollaborationSubmissionDetail } from "@/lib/supabase/queries";
+import { emptyFormState } from "@/lib/form-errors";
+import { FieldError, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
 import { submitContent } from "./actions";
 
 type SubmissionDetail = NonNullable<CollaborationSubmissionDetail>;
@@ -20,15 +22,6 @@ type ImagePreview = {
 const platformOptions = ["블로그", "인스타그램", "유튜브 쇼츠", "기타"];
 const submissionImageAccept = "image/jpeg,image/png,image/webp";
 const maxSubmissionImageBytes = 10 * 1024 * 1024;
-
-function isValidUrl(value: string) {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
 
 function getImageValidationMessage(file: File) {
   if (!file.type.startsWith("image/") || !submissionImageAccept.split(",").includes(file.type)) {
@@ -66,7 +59,9 @@ function statusLabel(status: string) {
   return status || "진행중";
 }
 
-export function SubmissionForm({ collaboration, error }: SubmissionFormProps) {
+export function SubmissionForm({ collaboration }: SubmissionFormProps) {
+  const [state, formAction, isPending] = useActionState(submitContent, emptyFormState);
+  const fieldErrors = state.fieldErrors ?? {};
   const existingSubmission = collaboration.submission;
   const canEdit = existingSubmission?.reviewStatus !== "approved";
   const [platform, setPlatform] = useState(existingSubmission?.platform || platformOptions[0]);
@@ -74,7 +69,8 @@ export function SubmissionForm({ collaboration, error }: SubmissionFormProps) {
   const [publishedAt, setPublishedAt] = useState(existingSubmission?.publishedAt ?? "");
   const [disclosureConfirmed, setDisclosureConfirmed] = useState(existingSubmission?.disclosureConfirmed ?? false);
   const [previewImage, setPreviewImage] = useState<ImagePreview | null>(null);
-  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  // 파일을 고르는 즉시 형식·용량을 알려준다. 서버 검증 결과와 같은 자리에 표시한다.
+  const [imageMessage, setImageMessage] = useState<string | null>(null);
   const previewImageInputRef = useRef<HTMLInputElement>(null);
   const previewImageUrl = previewImage?.url ?? existingSubmission?.previewImageUrl ?? "";
   const isRevision = existingSubmission?.reviewStatus === "needs_revision";
@@ -88,7 +84,7 @@ export function SubmissionForm({ collaboration, error }: SubmissionFormProps) {
     const imageError = getImageValidationMessage(file);
     if (imageError) {
       if (previewImageInputRef.current) previewImageInputRef.current.value = "";
-      setValidationMessage(imageError);
+      setImageMessage(imageError);
       return;
     }
 
@@ -97,36 +93,10 @@ export function SubmissionForm({ collaboration, error }: SubmissionFormProps) {
       url: URL.createObjectURL(file),
       name: file.name
     });
-    setValidationMessage(null);
+    setImageMessage(null);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    if (!contentUrl.trim() || !isValidUrl(contentUrl.trim())) {
-      event.preventDefault();
-      setValidationMessage("콘텐츠 URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다.");
-      return;
-    }
 
-    if (!publishedAt) {
-      event.preventDefault();
-      setValidationMessage("게시일을 선택해주세요.");
-      return;
-    }
-
-    if (!previewImageUrl) {
-      event.preventDefault();
-      setValidationMessage("미리보기 이미지를 업로드해주세요.");
-      return;
-    }
-
-    if (!disclosureConfirmed) {
-      event.preventDefault();
-      setValidationMessage("제공 사실 표시와 콘텐츠 유지 조건에 동의해주세요.");
-      return;
-    }
-
-    setValidationMessage(null);
-  }
 
   if (!canEdit && existingSubmission) {
     return (
@@ -160,13 +130,12 @@ export function SubmissionForm({ collaboration, error }: SubmissionFormProps) {
       <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
         <SubmissionHeader collaboration={collaboration} />
 
-        {error ? <p className="mt-5 rounded-xl bg-primary/10 p-4 text-sm font-bold text-primary">{error}</p> : null}
-        {validationMessage ? <p className="mt-5 rounded-xl bg-amber-50 p-4 text-sm font-bold text-amber-700">{validationMessage}</p> : null}
+        {state.formError ? <div className="mt-5"><FormBanner>{state.formError}</FormBanner></div> : null}
         {isRevision && existingSubmission?.adminMemo ? (
           <p className="mt-5 rounded-xl bg-amber-50 p-4 text-sm font-bold text-amber-700">수정 요청: {existingSubmission.adminMemo}</p>
         ) : null}
 
-        <form action={submitContent} onSubmit={handleSubmit} className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <form action={formAction} className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <input type="hidden" name="collaboration_id" value={collaboration.id} />
 
           <div className="space-y-6 rounded-[20px] border border-slate-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:p-8">
@@ -177,10 +146,11 @@ export function SubmissionForm({ collaboration, error }: SubmissionFormProps) {
                   name="platform"
                   value={platform}
                   onChange={(event) => setPlatform(event.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm text-charcoal outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+                  className={fieldControlClassName(fieldErrors.platform, "bg-white")}
                 >
                   {platformOptions.map((option) => <option key={option}>{option}</option>)}
                 </select>
+                <FieldError>{fieldErrors.platform}</FieldError>
               </label>
               <TextField
                 name="published_at"
@@ -190,6 +160,7 @@ export function SubmissionForm({ collaboration, error }: SubmissionFormProps) {
                 type="date"
                 icon={<CalendarDays size={17} />}
                 requiredMark
+                error={fieldErrors.published_at}
               />
             </div>
 
@@ -202,6 +173,7 @@ export function SubmissionForm({ collaboration, error }: SubmissionFormProps) {
               type="url"
               icon={<Link2 size={17} />}
               requiredMark
+              error={fieldErrors.content_url}
             />
 
             {lateSubmission ? (
@@ -234,9 +206,10 @@ export function SubmissionForm({ collaboration, error }: SubmissionFormProps) {
                 )}
                 <input ref={previewImageInputRef} name="preview_image" type="file" accept={submissionImageAccept} onChange={handlePreviewImageChange} className="sr-only" />
               </label>
+              <FieldError>{imageMessage ?? fieldErrors.preview_image}</FieldError>
             </div>
 
-            <label className="group flex cursor-pointer items-start gap-3 rounded-xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600">
+            <label className={`group flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm font-bold text-slate-600 ${fieldErrors.disclosure_confirmed ? "border-red-300 bg-red-50" : "border-transparent bg-slate-50"}`}>
               <input
                 type="checkbox"
                 name="disclosure_confirmed"
@@ -249,9 +222,13 @@ export function SubmissionForm({ collaboration, error }: SubmissionFormProps) {
               </span>
               제공 사실 표시를 포함했고, 캠페인 종료 후 최소 6개월간 콘텐츠를 유지하는 데 동의합니다.
             </label>
+            <FieldError>{fieldErrors.disclosure_confirmed}</FieldError>
 
-            <button className="w-full rounded-xl bg-primary px-5 py-3.5 font-black text-white shadow-md shadow-primary/25 transition-colors hover:bg-primaryHover">
-              {submitLabel}
+            <button
+              disabled={isPending}
+              className="w-full rounded-xl bg-primary px-5 py-3.5 font-black text-white shadow-md shadow-primary/25 transition-colors hover:bg-primaryHover disabled:cursor-wait disabled:opacity-60"
+            >
+              {isPending ? "제출하는 중..." : submitLabel}
             </button>
           </div>
 
@@ -318,7 +295,8 @@ function TextField({
   placeholder,
   icon,
   type = "text",
-  requiredMark = false
+  requiredMark = false,
+  error
 }: {
   name: string;
   label: string;
@@ -328,23 +306,20 @@ function TextField({
   icon?: React.ReactNode;
   type?: string;
   requiredMark?: boolean;
+  error?: string;
 }) {
   return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-black text-charcoal">{label} {requiredMark ? <Required /> : null}</span>
-      <div className="relative">
-        {icon ? <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">{icon}</span> : null}
-        <input
-          name={name}
-          type={type}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className={`w-full rounded-xl border border-slate-200 px-4 py-3.5 text-sm text-charcoal outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary ${icon ? "pl-10" : ""}`}
-          placeholder={placeholder}
-          aria-required={requiredMark}
-        />
-      </div>
-    </label>
+    <FormField
+      name={name}
+      label={label}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      icon={icon}
+      type={type}
+      required={requiredMark}
+      error={error}
+    />
   );
 }
 

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
+import { collectFieldErrors, fieldError, hasErrors, keepValues, type FormState } from "@/lib/form-errors";
 
 const SUBMISSION_IMAGE_BUCKET = "submission-images";
 const MAX_SUBMISSION_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -11,39 +12,18 @@ const ALLOWED_SUBMISSION_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "imag
 
 type SupabaseClient = Awaited<ReturnType<typeof requireRole>>["supabase"];
 
-function redirectWithError(collaborationId: string, message: string): never {
-  redirect(`/creator/submissions/${collaborationId}?error=${encodeURIComponent(message)}`);
-}
-
-function requiredText(formData: FormData, name: string, label: string, collaborationId: string) {
-  const value = String(formData.get(name) ?? "").trim();
-  if (!value) redirectWithError(collaborationId, `${label}을(를) 입력해주세요.`);
-
-  return value;
-}
-
-function normalizeUrl(value: string, label: string) {
+function isValidUrl(value: string) {
   try {
     const url = new URL(value);
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      throw new Error("unsupported protocol");
-    }
-
-    return value;
+    return url.protocol === "http:" || url.protocol === "https:";
   } catch {
-    throw new Error(`${label}은(는) http:// 또는 https://로 시작하는 올바른 URL이어야 합니다.`);
+    return false;
   }
 }
 
-function validateDate(value: string, label: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw new Error(`${label}을(를) 올바른 날짜로 선택해주세요.`);
-  }
-
-  const date = new Date(`${value}T00:00:00+09:00`);
-  if (Number.isNaN(date.getTime())) {
-    throw new Error(`${label}을(를) 올바른 날짜로 선택해주세요.`);
-  }
+function isValidDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  return !Number.isNaN(new Date(`${value}T00:00:00+09:00`).getTime());
 }
 
 function getImageFile(formData: FormData, fieldName: string) {
@@ -97,33 +77,34 @@ function canSubmitForCollaborationStatus(status: string) {
   return !["completed", "cancelled", "no_show"].includes(status);
 }
 
-export async function submitContent(formData: FormData) {
+export async function submitContent(_prevState: FormState, formData: FormData): Promise<FormState> {
   const collaborationId = String(formData.get("collaboration_id") ?? "");
   const { supabase, user } = await requireRole("creator", `/creator/submissions/${collaborationId}`);
 
-  const platform = requiredText(formData, "platform", "게시 채널", collaborationId);
-  const contentUrlRaw = requiredText(formData, "content_url", "콘텐츠 URL", collaborationId);
-  const publishedAt = requiredText(formData, "published_at", "게시일", collaborationId);
+  const platform = String(formData.get("platform") ?? "").trim();
+  const contentUrl = String(formData.get("content_url") ?? "").trim();
+  const publishedAt = String(formData.get("published_at") ?? "").trim();
   const disclosureConfirmed = formData.get("disclosure_confirmed") === "on";
-
-  if (!disclosureConfirmed) {
-    redirectWithError(collaborationId, "제공 사실 표시와 콘텐츠 유지 조건에 동의해주세요.");
-  }
-
-  let contentUrl = "";
-  try {
-    contentUrl = normalizeUrl(contentUrlRaw, "콘텐츠 URL");
-    validateDate(publishedAt, "게시일");
-  } catch (validationError) {
-    const message = validationError instanceof Error ? validationError.message : "제출 정보를 확인해주세요.";
-    redirectWithError(collaborationId, message);
-  }
-
   const previewImage = getImageFile(formData, "preview_image");
-  if (previewImage) {
-    const imageValidationError = validateImageFile(previewImage);
-    if (imageValidationError) redirectWithError(collaborationId, imageValidationError);
-  }
+  const kept = keepValues(formData, ["platform", "content_url", "published_at"]);
+
+  const invalid = collectFieldErrors({
+    platform: platform ? null : "게시 채널을 선택해주세요.",
+    content_url: !contentUrl
+      ? "콘텐츠 URL을 입력해주세요."
+      : !isValidUrl(contentUrl)
+        ? "콘텐츠 URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다."
+        : null,
+    published_at: !publishedAt
+      ? "게시일을 선택해주세요."
+      : !isValidDate(publishedAt)
+        ? "게시일을 올바른 날짜로 선택해주세요."
+        : null,
+    preview_image: previewImage ? validateImageFile(previewImage) : null,
+    disclosure_confirmed: disclosureConfirmed ? null : "제공 사실 표시와 콘텐츠 유지 조건에 동의해주세요."
+  });
+
+  if (hasErrors(invalid)) return { ...invalid, values: kept };
 
   const { data: creator, error: creatorError } = await supabase
     .from("creator_profiles")
@@ -132,7 +113,7 @@ export async function submitContent(formData: FormData) {
     .maybeSingle();
 
   if (creatorError || !creator) {
-    redirectWithError(collaborationId, creatorError?.message ?? "크리에이터 프로필을 찾을 수 없습니다.");
+    return { formError: "크리에이터 프로필을 찾을 수 없습니다.", values: kept };
   }
 
   const { data: collaboration, error: collaborationError } = await supabase
@@ -143,11 +124,11 @@ export async function submitContent(formData: FormData) {
     .maybeSingle();
 
   if (collaborationError || !collaboration) {
-    redirectWithError(collaborationId, collaborationError?.message ?? "제출 가능한 협업을 찾을 수 없습니다.");
+    return { formError: "제출 가능한 협업을 찾을 수 없습니다.", values: kept };
   }
 
   if (!canSubmitForCollaborationStatus(collaboration.status)) {
-    redirectWithError(collaborationId, "이미 종료되었거나 취소된 협업은 제출할 수 없습니다.");
+    return { formError: "이미 종료되었거나 취소된 협업은 제출할 수 없습니다.", values: kept };
   }
 
   const { data: existingSubmissions, error: existingSubmissionsError } = await supabase
@@ -157,15 +138,17 @@ export async function submitContent(formData: FormData) {
     .order("created_at", { ascending: false })
     .limit(1);
 
-  if (existingSubmissionsError) redirectWithError(collaborationId, existingSubmissionsError.message);
+  if (existingSubmissionsError) {
+    return { formError: "이전 제출 내역을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.", values: kept };
+  }
 
   const existingSubmission = existingSubmissions?.[0] ?? null;
   if (existingSubmission?.review_status === "approved") {
-    redirectWithError(collaborationId, "이미 승인된 제출물은 수정할 수 없습니다.");
+    return { formError: "이미 승인된 제출물은 수정할 수 없습니다.", values: kept };
   }
 
   if (!previewImage && !existingSubmission?.preview_image_url) {
-    redirectWithError(collaborationId, "미리보기 이미지를 업로드해주세요.");
+    return { ...fieldError("preview_image", "미리보기 이미지를 업로드해주세요."), values: kept };
   }
 
   const uploadedPaths: string[] = [];
@@ -176,9 +159,8 @@ export async function submitContent(formData: FormData) {
       const uploadedImage = await uploadSubmissionImage({ supabase, userId: user.id, collaborationId, file: previewImage });
       uploadedPaths.push(uploadedImage.path);
       previewImageUrl = uploadedImage.publicUrl;
-    } catch (uploadError) {
-      const message = uploadError instanceof Error ? uploadError.message : "이미지 업로드 중 오류가 발생했습니다.";
-      redirectWithError(collaborationId, message);
+    } catch {
+      return { ...fieldError("preview_image", "이미지 업로드 중 오류가 발생했습니다."), values: kept };
     }
   }
 
@@ -199,7 +181,7 @@ export async function submitContent(formData: FormData) {
 
   if (error) {
     if (uploadedPaths.length) await supabase.storage.from(SUBMISSION_IMAGE_BUCKET).remove(uploadedPaths);
-    redirectWithError(collaborationId, error.message);
+    return { formError: "제출을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.", values: kept };
   }
 
   await supabase.from("collaborations").update({ status: "submitted" }).eq("id", collaborationId);
