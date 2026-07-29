@@ -82,6 +82,22 @@ export function campaignPointCost(recruitCount: number) {
   return Math.max(0, Math.trunc(recruitCount)) * POINTS_PER_RECRUIT;
 }
 
+const POINT_PAYMENT_FAILURE_MESSAGES: Record<string, string> = {
+  PAY_PROCESS_CANCELED: "결제를 취소했습니다.",
+  PAY_PROCESS_ABORTED: "결제 진행 중 오류가 발생해 결제가 중단되었습니다.",
+  REJECT_CARD_COMPANY: "카드사에서 결제를 거절했습니다."
+};
+
+export function normalizePaymentFailureCode(code?: string | null) {
+  return code && /^[A-Z0-9_]{1,50}$/.test(code) ? code : "PAYMENT_FAILED";
+}
+
+// 결제 실패 사유는 리다이렉트 쿼리로 들어온다. 그 문구를 그대로 화면에 옮기면
+// 링크 하나로 임의의 안내문을 띄울 수 있어, 아는 코드만 우리 문구로 바꿔 보여준다.
+export function paymentFailureMessage(code: string) {
+  return POINT_PAYMENT_FAILURE_MESSAGES[code] ?? "결제가 완료되지 않았습니다. 잠시 후 다시 시도해주세요.";
+}
+
 export function pointEventLabel(eventType: string) {
   if (eventType === "promotional_credit") return "출시 혜택";
   if (eventType === "paid_credit") return "포인트 충전";
