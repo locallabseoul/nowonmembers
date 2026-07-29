@@ -1,3 +1,64 @@
+export const CAMPAIGN_GUIDE_HERO = {
+  eyebrow: "NOWON MEMBERS",
+  headingLead: "우리 동네를 가장 잘 아는 사람이,",
+  headingHighlight: "우리 가게의 이야기를 전합니다",
+  body:
+    "노원에서 살고, 일하고, 일상을 보내는 로컬 크리에이터와 지역의 가게를 연결하는 하이퍼로컬 콘텐츠 플랫폼입니다.",
+  primaryCta: "우리 가게 캠페인 만들기",
+  secondaryCta: "노원의 캠페인 둘러보기"
+};
+
+export const LOCAL_VALUE_SECTION = {
+  badge: "지역성",
+  heading: "지역을 아는 사람이 만드는 ",
+  highlight: "콘텐츠는 다릅니다",
+  body:
+    "노원의 골목과 상권, 주민의 생활 방식을 잘 아는 로컬 크리에이터가 직접 가게를 방문하고 자신의 경험을 콘텐츠로 기록합니다.",
+  points: [
+    {
+      title: "노원에서 생활하는 크리에이터",
+      description: "노원에서 살거나 일하며 지역을 자주 경험하는 사람들이 참여합니다."
+    },
+    {
+      title: "상권을 이해하는 콘텐츠",
+      description: "가게의 위치와 주변 상권을 알기 때문에 어떤 손님에게 닿아야 하는지 압니다."
+    },
+    {
+      title: "한 번으로 끝나지 않는 관계",
+      description: "일회성 방문이 아니라 지역 안에서 계속 이어지는 관계로 남습니다."
+    },
+    {
+      title: "실제 고객에게 닿는 이야기",
+      description: "같은 생활권 주민이 공감할 수 있는 이야기가 만들어집니다."
+    }
+  ]
+};
+
+export const COMPARISON_SECTION = {
+  badge: "일반 체험단과의 차이",
+  heading: "한 번의 체험으로 끝나지 않는 ",
+  highlight: "로컬 콘텐츠",
+  body:
+    "노원멤버스는 단순한 체험 후기를 넘어, 가게와 동네의 이야기가 지역 안에서 이어지는 콘텐츠를 만듭니다.",
+  ordinaryLabel: "일반적인 체험단",
+  membersLabel: "노원멤버스",
+  rows: [
+    { ordinary: "지역과 관계없는 방문자", members: "노원에서 생활하는 로컬 크리에이터" },
+    { ordinary: "상품 중심의 단발성 후기", members: "가게와 동네 이야기를 함께 담은 콘텐츠" },
+    { ordinary: "체험 후 관계 종료", members: "지역 안에서 다시 연결될 수 있는 관계" },
+    { ordinary: "전국 단위의 불특정 홍보", members: "노원 생활권을 중심으로 한 지역 홍보" }
+  ]
+};
+
+export const CAMPAIGN_GUIDE_CLOSING = {
+  heading: "노원을 아는 크리에이터와",
+  headingHighlight: "우리 가게의 이야기를 시작해보세요",
+  body:
+    "노원멤버스는 노원에서 살고, 일하고, 일상을 보내는 로컬 크리에이터와 지역의 가게를 연결합니다. 우리 동네를 직접 경험하고 이해하는 크리에이터가 가게의 상품과 공간, 사장님의 이야기를 콘텐츠로 기록할 수 있도록 좋은 캠페인을 만드는 방법을 안내해드립니다.",
+  primaryCta: "우리 가게 캠페인 만들기",
+  secondaryCta: "노원의 캠페인 둘러보기"
+};
+
 export const CAMPAIGN_GUIDE_META = [
   { label: "작성 단계", value: "4단계" },
   { label: "예상 소요", value: "약 10분" },
@@ -29,7 +90,7 @@ export type GuideSection = {
 export const campaignGuideSections: GuideSection[] = [
   {
     step: "STEP 1",
-    badge: "기본 정보 입력",
+    badge: "캠페인 제목 작성",
     heading: "제목만 읽어도 ",
     highlight: "무엇을, 누구에게 맡기는지",
     headingTail: " 알 수 있게 써주세요",
@@ -50,12 +111,12 @@ export const campaignGuideSections: GuideSection[] = [
   },
   {
     step: "STEP 2",
-    badge: "모집 조건과 제공 내역",
+    badge: "제공 혜택 작성",
     heading: "제공 내역은 ",
     highlight: "품목과 금액까지",
     headingTail: " 적어야 지원이 들어옵니다",
     body: "'음료 제공'처럼 모호하게 적으면 크리에이터는 얼마짜리 일인지 가늠하지 못해 그냥 넘깁니다. 무엇을 몇 개, 대략 얼마 상당으로 제공하는지 적어주세요. 별도 원고료가 있다면 그것도 함께 적는 편이 지원율에 도움이 됩니다.",
-    caption: "모집 인원 · 제공 내역 · 원고료 · 모집 마감일 · 선정일 · 제출 기한",
+    caption: "제공 내역 · 원고료 · 혜택 유형",
     exampleTitle: "제공 내역",
     example: {
       weak: ["음료 제공", "식사 제공 (1인)"],
@@ -65,14 +126,13 @@ export const campaignGuideSections: GuideSection[] = [
       ]
     },
     checklist: [
-      "모집 인원 1명당 5,000P가 예약됩니다. 5명을 모집하면 25,000P가 필요합니다",
-      "모집 마감일, 선정일, 제출 기한 순서가 어긋나지 않는지 확인해주세요",
-      "처음 참여하는 크리에이터도 받고 싶다면 '초보 가능'을 켜두면 지원 폭이 넓어집니다"
+      "혜택 유형과 실제 제공 내역이 어긋나지 않는지 확인해주세요",
+      "원고료가 있다면 금액을 함께 적는 편이 지원율에 도움이 됩니다"
     ]
   },
   {
     step: "STEP 3",
-    badge: "상세 내용과 미션",
+    badge: "콘텐츠 미션 작성",
     heading: "미션은 ",
     highlight: "숫자로 셀 수 있게",
     headingTail: " 적어주세요",
@@ -95,12 +155,12 @@ export const campaignGuideSections: GuideSection[] = [
   },
   {
     step: "STEP 4",
-    badge: "최종 검토와 검수 요청",
-    heading: "검수를 요청하면 ",
-    highlight: "포인트가 예약되고",
-    headingTail: " 수정이 어려워집니다",
-    body: "검수 요청 시점에 모집 인원만큼 포인트가 잠깁니다. 공개 전에 캠페인을 취소하거나 운영진이 반려하면 예약한 포인트는 전액 돌아옵니다. 다만 공개된 뒤에는 마음대로 취소해도 포인트가 자동으로 돌아오지 않으니, 요청 전에 날짜와 제공 내역을 한 번 더 확인해주세요.",
-    caption: "포인트 예약 · 약관 동의 · 검수 요청",
+    badge: "모집 인원 및 일정 설정",
+    heading: "모집 인원은 ",
+    highlight: "그대로 예약 포인트",
+    headingTail: "가 됩니다",
+    body: "검수를 요청하는 시점에 모집 인원만큼 포인트가 잠깁니다. 공개 전에 캠페인을 취소하거나 운영진이 반려하면 예약한 포인트는 전액 돌아옵니다. 다만 공개된 뒤에는 마음대로 취소해도 자동으로 돌아오지 않으니, 요청 전에 인원과 날짜를 한 번 더 확인해주세요.",
+    caption: "모집 인원 · 모집 마감일 · 선정일 · 제출 기한 · 포인트 예약",
     exampleTitle: "예약 포인트는 언제 돌아오나요",
     example: {
       weakLabel: "반환되지 않음",
@@ -114,6 +174,9 @@ export const campaignGuideSections: GuideSection[] = [
       ]
     },
     checklist: [
+      "모집 인원 1명당 5,000P가 예약됩니다. 5명을 모집하면 25,000P가 필요합니다",
+      "모집 마감일, 선정일, 제출 기한 순서가 어긋나지 않는지 확인해주세요",
+      "처음 참여하는 크리에이터도 받고 싶다면 '초보 가능'을 켜두면 지원 폭이 넓어집니다",
       "지원자가 정원보다 많은데 일부만 선정한 경우에는 포인트가 반환되지 않습니다",
       "포인트가 부족하면 충전 화면으로 이동하고, 충전을 마치면 캠페인이 자동으로 다시 제출됩니다"
     ]
