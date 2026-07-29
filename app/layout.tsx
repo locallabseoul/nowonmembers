@@ -8,6 +8,7 @@ import { MobileNav } from "@/app/components/mobile-nav";
 import { NoticeMenu } from "@/app/components/notice-menu";
 import { PinnedNoticeBar } from "@/app/components/pinned-notice-bar";
 import { getAccountPath, getCurrentSessionProfile } from "@/lib/auth/guards";
+import { COMPANY_INFO } from "@/lib/legal";
 import { getHeaderNoticeData, getPinnedNotice } from "@/lib/supabase/queries";
 import "./globals.css";
 
@@ -123,11 +124,14 @@ function Footer() {
             <span className="text-lg font-black tracking-tight">NOWON<span className="text-primary">MEMBERS</span></span>
             <p className="mt-3 max-w-lg text-sm leading-6 text-slate-400">노원 지역 소상공인과 크리에이터를 연결하는 로컬 콘텐츠 캠페인 플랫폼입니다.</p>
             <div className="mt-3 flex max-w-2xl flex-wrap gap-x-3 gap-y-1 text-xs leading-5 text-gray-500">
-              <span>상호: (주)로컬랩커뮤니티</span>
-              <span>대표: 김동환</span>
-              <span>사업자등록번호: 809-81-01399</span>
-              <span>주소: 서울시 노원구 동일로183길 29, 1층 102호</span>
-              <span>문의: locallab.seoul@gmail.com</span>
+              <span>상호: {COMPANY_INFO.name}</span>
+              <span>대표: {COMPANY_INFO.representative}</span>
+              <span>사업자등록번호: {COMPANY_INFO.businessRegistrationNumber}</span>
+              {COMPANY_INFO.mailOrderSalesNumber ? (
+                <span>통신판매업신고번호: {COMPANY_INFO.mailOrderSalesNumber}</span>
+              ) : null}
+              <span>주소: {COMPANY_INFO.address}</span>
+              <span>문의: {COMPANY_INFO.email}</span>
             </div>
           </div>
           <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-bold text-gray-400">

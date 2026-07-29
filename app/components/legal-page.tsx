@@ -44,12 +44,7 @@ export function LegalPage({
           ))}
         </div>
 
-        <div className="mt-10 rounded-xl border border-primary/20 bg-primary/10 p-5 text-sm leading-6 text-charcoal">
-          <p className="font-black">운영 전 확인 필요</p>
-          <p className="mt-2 text-gray-600">이 문서는 서비스 기본 틀이며, 정식 오픈 전 사업자 정보, 고객센터 연락처, 위탁 처리 업체, 실제 운영 정책을 반영해 최종 검토해야 합니다.</p>
-        </div>
-
-        <div className="mt-8 flex flex-col gap-3 border-t border-gray-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-10 flex flex-col gap-3 border-t border-gray-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <Link href={companionLink.href} className="text-sm font-bold text-primary hover:underline">
             {companionLink.label}
           </Link>
