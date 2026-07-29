@@ -1,5 +1,19 @@
 export const LEGAL_EFFECTIVE_DATE = "2026년 7월 26일";
 
+export const COMPANY_INFO = {
+  name: "(주)로컬랩커뮤니티",
+  representative: "김동환",
+  businessRegistrationNumber: "809-81-01399",
+  mailOrderSalesNumber: "제2019-서울노원-1138호",
+  address: "서울시 노원구 동일로183길 29, 1층 102호",
+  email: "locallab.seoul@gmail.com",
+  privacyOfficer: {
+    name: "김동환",
+    title: "대표",
+    email: "locallab.seoul@gmail.com"
+  }
+};
+
 export type LegalSection = {
   title: string;
   body?: string;
@@ -92,8 +106,18 @@ export const termsSections: LegalSection[] = [
     ]
   },
   {
-    title: "제11조 문의",
-    body: "서비스 이용 및 약관 관련 문의는 고객센터 또는 운영자 이메일을 통해 접수합니다. 운영자명, 사업자 정보, 문의 이메일은 서비스 정식 운영 전 확정해 본 약관에 반영합니다."
+    title: "제11조 사업자 정보 및 문의",
+    items: [
+      `상호: ${COMPANY_INFO.name}`,
+      `대표자: ${COMPANY_INFO.representative}`,
+      `사업자등록번호: ${COMPANY_INFO.businessRegistrationNumber}`,
+      ...(COMPANY_INFO.mailOrderSalesNumber
+        ? [`통신판매업신고번호: ${COMPANY_INFO.mailOrderSalesNumber}`]
+        : []),
+      `주소: ${COMPANY_INFO.address}`,
+      `문의: ${COMPANY_INFO.email}`,
+      "서비스 이용, 약관, 포인트 결제 및 환불 관련 문의는 위 이메일로 접수합니다."
+    ]
   }
 ];
 
@@ -162,7 +186,11 @@ export const privacySections: LegalSection[] = [
   },
   {
     title: "9. 개인정보 보호책임자",
-    body: "개인정보 보호책임자 성명, 직책, 연락처 및 문의 이메일은 서비스 정식 운영 전 확정해 본 방침에 반영합니다."
+    items: [
+      `개인정보 보호책임자: ${COMPANY_INFO.privacyOfficer.title} ${COMPANY_INFO.privacyOfficer.name}`,
+      `연락처: ${COMPANY_INFO.privacyOfficer.email}`,
+      "정보주체는 개인정보 처리와 관련한 문의, 열람·정정·삭제 요청, 불만 접수를 위 연락처로 하실 수 있습니다."
+    ]
   },
   {
     title: "10. 고지 의무",
