@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { CreditCard, Loader2 } from "lucide-react";
-import { DEFAULT_POINT_CHARGE_POINTS, formatPoints, POINT_CHARGE_OPTIONS } from "@/lib/points";
+import { DEFAULT_POINT_CHARGE_POINTS, formatPoints, POINT_CHARGE_OPTIONS, POINT_TERMS_VERSION } from "@/lib/points";
 import { createPointChargeOrder, markPointChargeOrderFailed, type PointChargeOrder } from "./actions";
 
 type TossPayment = {
@@ -49,17 +50,20 @@ function loadTossScript() {
 export function PointChargeButton({ campaignId }: { campaignId?: string }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [selectedPoints, setSelectedPoints] = useState(DEFAULT_POINT_CHARGE_POINTS);
   const selectedOption = POINT_CHARGE_OPTIONS.find((option) => option.paidPoints === selectedPoints)
     ?? POINT_CHARGE_OPTIONS[1];
 
   function startPayment() {
+    if (!agreed) return;
+
     setError("");
     startTransition(async () => {
       let order: PointChargeOrder | null = null;
 
       try {
-        order = await createPointChargeOrder(selectedPoints);
+        order = await createPointChargeOrder(selectedPoints, POINT_TERMS_VERSION);
         await loadTossScript();
         if (!window.TossPayments) throw new Error("결제창 초기화에 실패했습니다.");
 
@@ -146,11 +150,42 @@ export function PointChargeButton({ campaignId }: { campaignId?: string }) {
           );
         })}
       </div>
+      <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
+        <p className="text-sm font-black text-charcoal">결제 전 확인사항</p>
+        <ul className="mt-2 space-y-1.5 text-xs leading-5 text-gray-600">
+          <li>
+            결제금액 {selectedOption.totalAmount.toLocaleString("ko-KR")}원 (공급가 {selectedOption.supplyAmount.toLocaleString("ko-KR")}원 + 부가세 {selectedOption.vatAmount.toLocaleString("ko-KR")}원)
+          </li>
+          <li>
+            지급 포인트 {formatPoints(selectedOption.paidPoints)}
+            {selectedOption.bonusPoints > 0 ? ` + 충전 보너스 ${formatPoints(selectedOption.bonusPoints)}` : ""}
+          </li>
+          <li>유상 포인트는 충전일로부터 5년간 유효하며, 캠페인에 예약되지 않은 잔액은 원결제수단으로 환불할 수 있습니다.</li>
+          <li>충전 보너스는 지급일로부터 1년간 유효하고 현금으로 환불되지 않으며, 연결된 유상 포인트를 환불하면 남은 보너스는 회수됩니다.</li>
+        </ul>
+        <label className="mt-3 flex cursor-pointer items-start gap-2 border-t border-gray-200 pt-3">
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(event) => setAgreed(event.target.checked)}
+            disabled={isPending}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+          />
+          <span className="text-xs font-bold leading-5 text-charcoal">
+            위 내용과{" "}
+            <Link href="/terms" target="_blank" rel="noreferrer" className="text-primary underline">
+              포인트 이용약관
+            </Link>
+            을 확인했으며 결제에 동의합니다.
+          </span>
+        </label>
+      </div>
+
       <button
         type="button"
         onClick={startPayment}
-        disabled={isPending}
-        className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 font-black text-white shadow-sm transition-colors hover:bg-primaryHover disabled:cursor-wait disabled:opacity-60"
+        disabled={!agreed || isPending}
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 font-black text-white shadow-sm transition-colors hover:bg-primaryHover disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isPending ? <Loader2 size={18} className="animate-spin" /> : <CreditCard size={18} />}
         {selectedOption.totalAmount.toLocaleString("ko-KR")}원 결제하고 충전

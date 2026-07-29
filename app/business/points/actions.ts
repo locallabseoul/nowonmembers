@@ -17,15 +17,22 @@ export type PointChargeOrder = {
   clientKey: string;
 };
 
-export async function createPointChargeOrder(pointAmount: number): Promise<PointChargeOrder> {
+export async function createPointChargeOrder(
+  pointAmount: number,
+  acceptedTermsVersion: string
+): Promise<PointChargeOrder> {
   const chargeOption = getPointChargeOption(pointAmount);
   if (!chargeOption) throw new Error("충전 금액을 확인해주세요.");
+  // 주문에 기록되는 동의 버전은 사용자가 실제로 확인한 버전이어야 한다.
+  if (acceptedTermsVersion !== POINT_TERMS_VERSION) {
+    throw new Error("포인트 이용약관이 변경되었습니다. 새로고침 후 다시 확인해주세요.");
+  }
 
   const { supabase } = await requireRole("business", "/business/points");
   const orderId = `points_${randomUUID().replaceAll("-", "")}`;
   const { data, error } = await supabase.rpc("create_point_payment_order", {
     target_order_id: orderId,
-    target_terms_version: POINT_TERMS_VERSION,
+    target_terms_version: acceptedTermsVersion,
     target_point_amount: chargeOption.paidPoints
   });
 

@@ -104,9 +104,6 @@ export default async function BusinessPointsPage({
                 <div className="mt-5">
                   <PointChargeButton campaignId={params.campaign} />
                 </div>
-                <p className="mt-4 text-xs leading-5 text-gray-500">
-                  유상 포인트는 5년간 유효하며 미사용분은 환불할 수 있습니다. 충전 보너스는 1년간 유효하고 현금 환불되지 않으며, 연결된 유상 포인트 환불 시 남은 보너스가 회수됩니다.
-                </p>
               </section>
             </aside>
           </section>
