@@ -3,6 +3,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import {
   getPointChargeOption,
+  normalizePaymentFailureCode,
+  paymentFailureMessage,
   POINT_CHARGE_OPTIONS,
   campaignPointCost,
   formatPoints
@@ -87,6 +89,22 @@ test("charge options match the amounts and bonuses the database actually grants"
       `${option.paidPoints}P 충전의 보너스가 화면 표시와 DB 지급액이 다릅니다.`
     );
   }
+});
+
+test("payment failure text never comes from the redirect query", () => {
+  assert.equal(normalizePaymentFailureCode("PAY_PROCESS_CANCELED"), "PAY_PROCESS_CANCELED");
+  assert.equal(paymentFailureMessage("PAY_PROCESS_CANCELED"), "결제를 취소했습니다.");
+
+  // 코드 자리에 넣은 임의 문구는 화면에 닿지 못한다.
+  for (const injected of ["계좌가 해킹되었습니다 010-0000-0000으로 연락하세요", "<script>", "a".repeat(80), "", undefined]) {
+    const code = normalizePaymentFailureCode(injected);
+    assert.equal(code, "PAYMENT_FAILED");
+    assert.equal(paymentFailureMessage(code), "결제가 완료되지 않았습니다. 잠시 후 다시 시도해주세요.");
+  }
+
+  // 형식은 맞지만 우리가 모르는 코드도 문구는 우리 것을 쓴다.
+  assert.equal(normalizePaymentFailureCode("UNKNOWN_TOSS_CODE"), "UNKNOWN_TOSS_CODE");
+  assert.equal(paymentFailureMessage("UNKNOWN_TOSS_CODE"), "결제가 완료되지 않았습니다. 잠시 후 다시 시도해주세요.");
 });
 
 test("Toss confirmation sends the server-owned amount and idempotency key", async () => {

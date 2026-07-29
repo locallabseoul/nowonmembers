@@ -3,7 +3,12 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getPointChargeOption, POINT_TERMS_VERSION } from "@/lib/points";
+import {
+  getPointChargeOption,
+  normalizePaymentFailureCode,
+  paymentFailureMessage,
+  POINT_TERMS_VERSION
+} from "@/lib/points";
 import { requireRole } from "@/lib/auth/guards";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { cancelTossPayment } from "@/lib/toss-payments";
@@ -46,7 +51,8 @@ export async function createPointChargeOrder(
     amount: Number(order.total_amount),
     points: Number(order.point_amount),
     bonusPoints: Number(order.bonus_points),
-    customerKey: `customer_${randomUUID()}`,
+    // 가게마다 고정된 값이어야 토스 쪽에서 같은 고객의 결제로 묶인다.
+    customerKey: `customer_${order.business_id}`,
     clientKey
   };
 }
@@ -55,10 +61,12 @@ export async function markPointChargeOrderFailed(orderId: string, code: string, 
   const { supabase } = await requireRole("business", "/business/points");
   if (!orderId.startsWith("points_")) throw new Error("결제 주문번호를 확인해주세요.");
 
+  const failureCode = normalizePaymentFailureCode(code);
   const { error } = await supabase.rpc("mark_point_payment_failed", {
     target_order_id: orderId,
-    target_code: code || "PAYMENT_FAILED",
-    target_message: message || "결제가 완료되지 않았습니다."
+    target_code: failureCode,
+    // 결제창 SDK가 준 원문은 운영 확인에 쓰이므로 남기되 길이는 제한한다.
+    target_message: message?.slice(0, 200) || paymentFailureMessage(failureCode)
   });
 
   if (error) throw new Error(error.message);
