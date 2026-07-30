@@ -7,7 +7,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   await requireRole("admin", "/admin");
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-10 sm:px-6 lg:flex-row lg:px-8">
+    // w-full이 없으면 세로 flex 부모 안에서 mx-auto가 박스를 내용물 폭으로 줄여,
+    // 페이지마다 컨테이너 폭이 달라지고 사이드바가 좌우로 움직인다.
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-10 sm:px-6 lg:flex-row lg:px-8">
       <AdminSidebar />
       <div className="min-w-0 flex-1">{children}</div>
     </div>
