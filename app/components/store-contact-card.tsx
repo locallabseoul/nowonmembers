@@ -1,4 +1,5 @@
 import { Clock, MapPin, Phone, Store } from "lucide-react";
+import { VisitDateForm } from "@/app/creator/visit-date-form";
 
 export type StoreContact = {
   name: string;
@@ -19,7 +20,20 @@ function formatPhone(value: string) {
 
 // 선정된 크리에이터가 방문 일정을 잡으려면 매장에 직접 연락해야 한다. 협업이 시작된
 // 뒤에만 보여준다.
-export function StoreContactCard({ store, compact = false }: { store: StoreContact; compact?: boolean }) {
+export function StoreContactCard({
+  store,
+  compact = false,
+  collaborationId,
+  visitDate = "",
+  submissionDue = ""
+}: {
+  store: StoreContact;
+  compact?: boolean;
+  // 방문 일정을 기록할 수 있는 화면에서만 넘긴다.
+  collaborationId?: string;
+  visitDate?: string;
+  submissionDue?: string;
+}) {
   if (!store.name && !store.contact && !store.address) return null;
 
   const phone = store.contact ? formatPhone(store.contact) : "";
@@ -62,6 +76,10 @@ export function StoreContactCard({ store, compact = false }: { store: StoreConta
           매장 연락처가 등록되지 않았습니다. 운영자에게 문의해주세요.
         </p>
       )}
+
+      {collaborationId ? (
+        <VisitDateForm collaborationId={collaborationId} visitDate={visitDate} maxDate={submissionDue} />
+      ) : null}
     </section>
   );
 }

@@ -234,7 +234,12 @@ export function SubmissionForm({ collaboration }: SubmissionFormProps) {
           </div>
 
           <aside className="space-y-4">
-            <StoreContactCard store={collaboration.store} />
+            <StoreContactCard
+              store={collaboration.store}
+              collaborationId={collaboration.id}
+              visitDate={collaboration.visitDate}
+              submissionDue={collaboration.submissionDue}
+            />
             <div className="rounded-[20px] border border-slate-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
             <h2 className="text-lg font-black text-charcoal">제출 전 확인</h2>
             <div className="mt-5 overflow-hidden rounded-xl border border-slate-100 bg-slate-50">

@@ -190,7 +190,13 @@ function ActionRequiredCard({ item }: { item: CreatorCollaboration }) {
         </div>
       </div>
       <div className="border-t border-gray-100 p-5 pt-4 sm:p-6 sm:pt-4">
-        <StoreContactCard store={item.store} compact />
+        <StoreContactCard
+          store={item.store}
+          compact
+          collaborationId={item.id}
+          visitDate={item.visitDate}
+          submissionDue={item.submissionDue}
+        />
       </div>
     </article>
   );
@@ -198,29 +204,34 @@ function ActionRequiredCard({ item }: { item: CreatorCollaboration }) {
 
 function CollaborationCard({ item }: { item: CreatorCollaboration }) {
   return (
-    <article className="flex flex-col items-start gap-5 rounded-[20px] border border-gray-100 bg-white p-5 transition-shadow hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:flex-row sm:items-center">
-      <div className="h-20 w-full shrink-0 overflow-hidden rounded-lg bg-gray-100 sm:w-28">
-        <img src={item.campaignCoverImage} alt="" className="h-full w-full object-cover" />
-      </div>
-      <div className="min-w-0 flex-grow">
-        <div className="mb-1.5 flex flex-wrap items-center gap-2">
-          <Badge tone={collaborationStatusTone(item)}>{collaborationStatusLabel(item)}</Badge>
-          <span className="rounded bg-charcoal/90 px-2 py-1 text-[10px] font-bold text-white">{campaignTypeLabel(item.campaignType)}</span>
+    <article className="overflow-hidden rounded-[20px] border border-gray-100 bg-white transition-shadow hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+      <div className="flex flex-col items-start gap-5 p-5 sm:flex-row sm:items-center">
+        <div className="h-20 w-full shrink-0 overflow-hidden rounded-lg bg-gray-100 sm:w-28">
+          <img src={item.campaignCoverImage} alt="" className="h-full w-full object-cover" />
         </div>
-        <h4 className="mb-1 line-clamp-1 text-sm font-bold text-charcoal">{item.campaignTitle}</h4>
-        <p className="text-xs text-gray-500">방문일 {formatDateShort(item.visitDate)} · 제출 마감 {formatDateShort(item.submissionDue)}</p>
+        <div className="min-w-0 flex-grow">
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <Badge tone={collaborationStatusTone(item)}>{collaborationStatusLabel(item)}</Badge>
+            <span className="rounded bg-charcoal/90 px-2 py-1 text-[10px] font-bold text-white">{campaignTypeLabel(item.campaignType)}</span>
+          </div>
+          <h4 className="mb-1 line-clamp-1 text-sm font-bold text-charcoal">{item.campaignTitle}</h4>
+          <p className="text-xs text-gray-500">방문일 {formatDateShort(item.visitDate)} · 제출 마감 {formatDateShort(item.submissionDue)}</p>
+        </div>
+        <div className="w-full shrink-0 sm:w-auto">
+          {item.submissionContentUrl ? (
+            <a href={item.submissionContentUrl} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 sm:w-auto">
+              콘텐츠 보기
+              <ExternalLink size={14} />
+            </a>
+          ) : (
+            <Link href={`/campaigns/${item.campaignId}`} className="block w-full rounded-lg border border-gray-200 px-4 py-2 text-center text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 sm:w-auto">
+              캠페인 보기
+            </Link>
+          )}
+        </div>
       </div>
-      <div className="w-full shrink-0 sm:w-auto">
-        {item.submissionContentUrl ? (
-          <a href={item.submissionContentUrl} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 sm:w-auto">
-            콘텐츠 보기
-            <ExternalLink size={14} />
-          </a>
-        ) : (
-          <Link href={`/campaigns/${item.campaignId}`} className="block w-full rounded-lg border border-gray-200 px-4 py-2 text-center text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 sm:w-auto">
-            캠페인 보기
-          </Link>
-        )}
+      <div className="border-t border-gray-100 p-5 pt-4">
+        <StoreContactCard store={item.store} compact />
       </div>
     </article>
   );
