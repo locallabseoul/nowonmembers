@@ -1758,6 +1758,154 @@ export async function getAdminRecentSubmissions(): Promise<AdminRecentSubmission
   }));
 }
 
+export type AdminWallet = {
+  businessId: string;
+  businessName: string;
+  availablePoints: number;
+  reservedPoints: number;
+  lifetimeCredited: number;
+  lifetimeSpent: number;
+};
+
+export type AdminReservation = {
+  campaignId: string;
+  campaignTitle: string;
+  campaignStatus: string;
+  businessName: string;
+  requestedHeadcount: number;
+  billableHeadcount: number | null;
+  reservedPoints: number;
+  consumedPoints: number;
+  returnedPoints: number;
+  status: string;
+  settlementReason: string;
+  settledAt: string;
+  // draft 캠페인에 살아 있는 예약. 사장 스스로는 풀 수 없어 관리자가 해제해야 한다.
+  isStuck: boolean;
+};
+
+export type AdminPaymentOrder = {
+  id: string;
+  orderId: string;
+  businessName: string;
+  totalAmount: number;
+  pointAmount: number;
+  bonusPoints: number;
+  refundedPoints: number;
+  status: string;
+  paidAt: string;
+  failureMessage: string;
+};
+
+export type AdminRefundRequest = {
+  id: string;
+  businessName: string;
+  orderId: string;
+  refundPoints: number;
+  refundAmount: number;
+  status: string;
+  failureMessage: string;
+  createdAt: string;
+  completedAt: string;
+};
+
+export type AdminPointsData = {
+  wallets: AdminWallet[];
+  reservations: AdminReservation[];
+  orders: AdminPaymentOrder[];
+  refunds: AdminRefundRequest[];
+};
+
+export async function getAdminPointsData(): Promise<AdminPointsData> {
+  const supabase = await createSupabaseServerClient();
+  // 정산은 크론 없이 페이지 로드에 얹혀 돈다. 관리자가 이 화면을 열면 밀린 모집
+  // 마감 정산이 그 자리에서 실행되고, 결과가 아래 표에 바로 보인다.
+  await syncExpiredCampaigns(supabase);
+
+  const [walletRows, reservationRows, orderRows, refundRows] = await Promise.all([
+    supabase
+      .from("point_wallets")
+      .select("business_id,available_points,reserved_points,lifetime_credited_points,lifetime_spent_points,business_profiles(business_name)")
+      .order("available_points", { ascending: false }),
+    supabase
+      .from("campaign_point_reservations")
+      .select("campaign_id,requested_headcount,billable_headcount,reserved_points,consumed_points,returned_points,status,settlement_reason,settled_at,campaigns(title,status),business_profiles(business_name)")
+      .order("reserved_at", { ascending: false }),
+    supabase
+      .from("point_payment_orders")
+      .select("id,order_id,total_amount,point_amount,bonus_points,refunded_points,status,paid_at,failure_message,business_profiles(business_name)")
+      .order("created_at", { ascending: false })
+      .limit(50),
+    supabase
+      .from("point_refund_requests")
+      .select("id,refund_points,refund_amount,status,failure_message,created_at,completed_at,point_payment_orders(order_id),business_profiles(business_name)")
+      .order("created_at", { ascending: false })
+  ]);
+
+  return {
+    wallets: (walletRows.data ?? []).map((row) => {
+      const business = asRelation(row.business_profiles) as { business_name?: string } | null;
+      return {
+        businessId: row.business_id,
+        businessName: business?.business_name ?? "가게명 미등록",
+        availablePoints: Number(row.available_points ?? 0),
+        reservedPoints: Number(row.reserved_points ?? 0),
+        lifetimeCredited: Number(row.lifetime_credited_points ?? 0),
+        lifetimeSpent: Number(row.lifetime_spent_points ?? 0)
+      };
+    }),
+    reservations: (reservationRows.data ?? []).map((row) => {
+      const campaign = asRelation(row.campaigns) as { title?: string; status?: string } | null;
+      const business = asRelation(row.business_profiles) as { business_name?: string } | null;
+      return {
+        campaignId: row.campaign_id,
+        campaignTitle: campaign?.title ?? "캠페인",
+        campaignStatus: campaign?.status ?? "",
+        businessName: business?.business_name ?? "가게명 미등록",
+        requestedHeadcount: row.requested_headcount,
+        billableHeadcount: row.billable_headcount,
+        reservedPoints: row.reserved_points,
+        consumedPoints: row.consumed_points ?? 0,
+        returnedPoints: row.returned_points ?? 0,
+        status: row.status,
+        settlementReason: row.settlement_reason ?? "",
+        settledAt: row.settled_at ?? "",
+        isStuck: campaign?.status === "draft" && row.status === "reserved"
+      };
+    }),
+    orders: (orderRows.data ?? []).map((row) => {
+      const business = asRelation(row.business_profiles) as { business_name?: string } | null;
+      return {
+        id: row.id,
+        orderId: row.order_id,
+        businessName: business?.business_name ?? "가게명 미등록",
+        totalAmount: row.total_amount,
+        pointAmount: row.point_amount,
+        bonusPoints: row.bonus_points ?? 0,
+        refundedPoints: row.refunded_points ?? 0,
+        status: row.status,
+        paidAt: row.paid_at ?? "",
+        failureMessage: row.failure_message ?? ""
+      };
+    }),
+    refunds: (refundRows.data ?? []).map((row) => {
+      const order = asRelation(row.point_payment_orders) as { order_id?: string } | null;
+      const business = asRelation(row.business_profiles) as { business_name?: string } | null;
+      return {
+        id: row.id,
+        businessName: business?.business_name ?? "가게명 미등록",
+        orderId: order?.order_id ?? "",
+        refundPoints: row.refund_points,
+        refundAmount: row.refund_amount,
+        status: row.status,
+        failureMessage: row.failure_message ?? "",
+        createdAt: row.created_at,
+        completedAt: row.completed_at ?? ""
+      };
+    })
+  };
+}
+
 const ADMIN_MEMBER_PAGE_SIZE = 20;
 
 export async function getAdminMembers(options: AdminMemberListOptions = {}): Promise<AdminMembersData> {

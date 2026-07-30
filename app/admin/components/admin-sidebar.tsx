@@ -11,6 +11,7 @@ const menuItems = [
   { href: "/admin/campaigns", label: "캠페인 심사", icon: ClipboardCheck, exact: false },
   { href: "/admin/submissions", label: "콘텐츠 검수", icon: FileCheck, exact: false },
   { href: "/admin/members", label: "회원 관리", icon: Users, exact: false },
+  { href: "/admin/points", label: "포인트·정산", icon: CreditCard, exact: false },
   { href: "/admin/notices", label: "공지 관리", icon: Megaphone, exact: false }
 ];
 
@@ -51,14 +52,6 @@ export function AdminSidebar() {
               </li>
             );
           })}
-          <li>
-            {/* 2단계 예정: 수동 정산·결제 조회·환불 처리 */}
-            <span className={`${navClassName(false)} cursor-default opacity-50`}>
-              <CreditCard size={20} />
-              포인트·정산
-              <span className="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-400">준비중</span>
-            </span>
-          </li>
         </ul>
       </nav>
     </aside>
