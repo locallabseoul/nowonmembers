@@ -89,6 +89,7 @@ type CreatorChannelRow = {
 
 type ApplicantCreatorRow = {
   id: string;
+  user_id?: string | null;
   profiles?: Relation<{ nickname: string | null; email: string | null }>;
   creator_channels?: CreatorChannelRow[] | null;
   portfolios?: CountRelation;
@@ -235,8 +236,18 @@ export type DashboardCampaign = Campaign & CampaignApplicationStats & {
   } | null;
 };
 
+// 이 가게가 예전에 같은 크리에이터와 협업하고 남긴 평가 요약. 선정 판단에 쓴다.
+export type ApplicantPastReview = {
+  collaborationCount: number;
+  averageRating: number | null;
+  reworkIntent: boolean | null;
+  tags: string[];
+};
+
 export type DashboardApplication = {
   id: string;
+  creatorUserId: string;
+  pastReview: ApplicantPastReview | null;
   campaignId: string;
   campaignTitle: string;
   campaignStatus: Campaign["status"];
@@ -586,6 +597,49 @@ function formatBenefitSummary(benefitType?: string | null, benefitValue?: string
   return [benefitType, benefitValue].filter(Boolean).join(" / ");
 }
 
+type ApplicantReviewRow = {
+  reviewee_id: string;
+  content_quality: number | null;
+  guideline_compliance: number | null;
+  communication: number | null;
+  punctuality: number | null;
+  rework_intent: boolean | null;
+  tags: string[] | null;
+  updated_at: string | null;
+};
+
+// 같은 크리에이터와 여러 번 협업했을 수 있다. 평점은 전체 평균, 재섭외 의사는 가장
+// 최근 평가를 따른다.
+function buildApplicantPastReviews(rows: ApplicantReviewRow[]) {
+  const grouped = new Map<string, ApplicantReviewRow[]>();
+
+  for (const row of rows) {
+    const list = grouped.get(row.reviewee_id) ?? [];
+    list.push(row);
+    grouped.set(row.reviewee_id, list);
+  }
+
+  const summaries = new Map<string, ApplicantPastReview>();
+
+  for (const [revieweeId, reviews] of grouped) {
+    const scores = reviews.flatMap((review) =>
+      [review.content_quality, review.guideline_compliance, review.communication, review.punctuality].filter(
+        (score): score is number => typeof score === "number"
+      )
+    );
+    const latest = [...reviews].sort((a, b) => getTimestamp(b.updated_at ?? "") - getTimestamp(a.updated_at ?? ""))[0];
+
+    summaries.set(revieweeId, {
+      collaborationCount: reviews.length,
+      averageRating: scores.length ? Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10 : null,
+      reworkIntent: latest?.rework_intent ?? null,
+      tags: Array.from(new Set(reviews.flatMap((review) => review.tags ?? []))).slice(0, 4)
+    });
+  }
+
+  return summaries;
+}
+
 function mapDashboardApplication(row: DashboardApplicationRow): DashboardApplication {
   const campaign = asRelation(row.campaigns);
   const creator = asRelation(row.creator_profiles);
@@ -593,6 +647,8 @@ function mapDashboardApplication(row: DashboardApplicationRow): DashboardApplica
 
   return {
     id: row.id,
+    creatorUserId: creator?.user_id ?? "",
+    pastReview: null,
     campaignId: row.campaign_id,
     campaignTitle: campaign?.title ?? "캠페인",
     campaignStatus: campaign?.status ?? "draft",
@@ -800,6 +856,7 @@ const dashboardApplicationSelect = `
   collaborations(count),
   creator_profiles(
     id,
+    user_id,
     profiles(nickname,email),
     creator_channels(platform,channel_name,follower_count),
     portfolios(count)
@@ -1242,7 +1299,20 @@ export async function getBusinessDashboard(
       .in("status", ["submitted", "recommended", "selected", "rejected"])
       .order("applied_at", { ascending: false })
     : { data: [] };
-  const selectedCampaignApplications = ((selectedApplicationRows ?? []) as DashboardApplicationRow[]).map(mapDashboardApplication);
+  const mappedApplications = ((selectedApplicationRows ?? []) as DashboardApplicationRow[]).map(mapDashboardApplication);
+  const applicantUserIds = Array.from(new Set(mappedApplications.map((item) => item.creatorUserId).filter(Boolean)));
+  const { data: pastReviewRows } = applicantUserIds.length
+    ? await supabase
+      .from("reviews")
+      .select("reviewee_id,content_quality,guideline_compliance,communication,punctuality,rework_intent,tags,updated_at")
+      .eq("reviewer_id", user.id)
+      .in("reviewee_id", applicantUserIds)
+    : { data: [] };
+  const pastReviews = buildApplicantPastReviews((pastReviewRows ?? []) as ApplicantReviewRow[]);
+  const selectedCampaignApplications = mappedApplications.map((item) => ({
+    ...item,
+    pastReview: pastReviews.get(item.creatorUserId) ?? null
+  }));
   const selectedCampaignSubmissions = await getSelectedCampaignSubmissions(supabase, selectedCampaign);
 
   return {
@@ -1560,7 +1630,20 @@ export async function getAdminDashboard(selectedCampaignId?: string): Promise<Ad
       .in("status", ["submitted", "recommended", "selected", "rejected"])
       .order("applied_at", { ascending: false })
     : { data: [] };
-  const selectedCampaignApplications = ((selectedApplicationRows ?? []) as DashboardApplicationRow[]).map(mapDashboardApplication);
+  const mappedApplications = ((selectedApplicationRows ?? []) as DashboardApplicationRow[]).map(mapDashboardApplication);
+  const applicantUserIds = Array.from(new Set(mappedApplications.map((item) => item.creatorUserId).filter(Boolean)));
+  const { data: pastReviewRows } = applicantUserIds.length
+    ? await supabase
+      .from("reviews")
+      .select("reviewee_id,content_quality,guideline_compliance,communication,punctuality,rework_intent,tags,updated_at")
+      .eq("reviewer_id", user.id)
+      .in("reviewee_id", applicantUserIds)
+    : { data: [] };
+  const pastReviews = buildApplicantPastReviews((pastReviewRows ?? []) as ApplicantReviewRow[]);
+  const selectedCampaignApplications = mappedApplications.map((item) => ({
+    ...item,
+    pastReview: pastReviews.get(item.creatorUserId) ?? null
+  }));
   const selectedCampaignSubmissions = await getSelectedCampaignSubmissions(supabase, selectedCampaign);
 
   return {

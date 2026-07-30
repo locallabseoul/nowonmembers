@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, ExternalLink, ImageIcon, Pencil, Plus, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, ImageIcon, Pencil, Plus, Search, Star, X } from "lucide-react";
 import { Badge } from "@/app/components/ui";
 import { OperatorSidebar } from "@/app/business/components/operator-sidebar";
 import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
@@ -414,6 +414,7 @@ function ApplicantCard({ application }: { application: DashboardApplication }) {
         <span>선정 {application.selectedCount}/{application.recruitCount}명</span>
       </div>
       <p className="mt-3 text-sm leading-6 text-gray-600">{application.message || "지원 메시지가 없습니다."}</p>
+      <PastReviewSummary review={application.pastReview} creatorNickname={application.creatorNickname} />
       {application.adminMemo ? <p className="mt-3 text-xs font-bold text-primary">{application.adminMemo}</p> : null}
       {blockReason ? (
         <button disabled className="mt-4 rounded-lg bg-gray-200 px-4 py-2 text-sm font-black text-gray-500">
@@ -427,6 +428,49 @@ function ApplicantCard({ application }: { application: DashboardApplication }) {
           </button>
         </form>
       )}
+    </div>
+  );
+}
+
+// 예전에 함께 일한 크리에이터인지, 그때 어땠는지를 선정하는 자리에서 바로 보여준다.
+function PastReviewSummary({
+  review,
+  creatorNickname
+}: {
+  review: DashboardApplication["pastReview"];
+  creatorNickname: string;
+}) {
+  if (!review) return null;
+
+  return (
+    <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-black text-charcoal">우리 가게와 {review.collaborationCount}번 협업</span>
+        {review.reworkIntent === true ? (
+          <Badge tone="green">재섭외 희망</Badge>
+        ) : review.reworkIntent === false ? (
+          <Badge tone="gray">재섭외 보류</Badge>
+        ) : null}
+        {review.averageRating !== null ? (
+          <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600">
+            <Star size={12} className="fill-amber-500 text-amber-500" />
+            {review.averageRating.toFixed(1)}
+          </span>
+        ) : null}
+      </div>
+      {review.tags.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {review.tags.map((tag) => (
+            <span key={tag} className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600">#{tag}</span>
+          ))}
+        </div>
+      ) : null}
+      <Link
+        href={`/business/creators?q=${encodeURIComponent(creatorNickname)}`}
+        className="mt-2 inline-block text-[11px] font-black text-primary hover:underline"
+      >
+        평가 기록 보기
+      </Link>
     </div>
   );
 }
