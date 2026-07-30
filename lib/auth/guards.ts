@@ -47,6 +47,12 @@ export async function requireUser(next = "/") {
     redirect(withError(`/auth?next=${encodeURIComponent(next)}`, "로그인이 필요합니다"));
   }
 
+  // is_admin() 등 DB 쪽은 status까지 확인하므로, 앱 가드만 통과시키면 화면은
+  // 열리는데 데이터는 전부 거부되는 어긋난 상태가 된다. 여기서 함께 막는다.
+  if (session.profile?.status === "suspended") {
+    redirect(withError("/auth", "정지된 계정입니다. 운영자에게 문의해주세요."));
+  }
+
   return {
     supabase: session.supabase,
     user: session.user,

@@ -451,28 +451,56 @@ function buildBusinessProfileDefaults({
   };
 }
 
-export type AdminDashboardData = {
-  stats: {
-    businesses: number;
-    verifiedCreators: number;
-    recruitingCampaigns: number;
-    approvedSubmissions: number;
-    totalSubmissions: number;
-  };
+export type AdminOverviewStats = {
+  businesses: number;
+  verifiedCreators: number;
+  recruitingCampaigns: number;
+  approvedSubmissions: number;
+  totalSubmissions: number;
+  pendingReviewCampaigns: number;
+  pendingSubmissions: number;
+  pendingVerifications: number;
+};
+
+export type AdminCampaignsData = {
   campaigns: DashboardCampaign[];
   selectedCampaign: DashboardCampaign | null;
   selectedCampaignApplications: DashboardApplication[];
   selectedCampaignSubmissions: DashboardSubmission[];
-  applications: DashboardApplication[];
-  submissions: {
-    id: string;
-    contentUrl: string;
-    previewImageUrl: string;
-    publishedAt: string;
-    reviewStatus: string;
-    platform: string;
-  }[];
-  isAdmin: boolean;
+};
+
+export type AdminRecentSubmission = {
+  id: string;
+  contentUrl: string;
+  previewImageUrl: string;
+  publishedAt: string;
+  reviewStatus: string;
+  platform: string;
+};
+
+export type AdminMember = {
+  id: string;
+  nickname: string;
+  email: string;
+  role: string;
+  status: string;
+  verificationStatus: string;
+  createdAt: string;
+  businessName: string;
+};
+
+export type AdminMembersData = {
+  members: AdminMember[];
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+};
+
+export type AdminMemberListOptions = {
+  role?: string;
+  verification?: string;
+  searchQuery?: string;
+  page?: number;
 };
 
 export type CreatorDashboardData = {
@@ -1207,8 +1235,7 @@ export async function getAdminNotices(): Promise<Notice[]> {
   const { data, error } = await supabase
     .from("notices")
     .select("*")
-    .order("created_at", { ascending: false })
-    .limit(5);
+    .order("created_at", { ascending: false });
 
   if (error || !data) return [];
   return (data as NoticeRow[]).map(mapNotice);
@@ -1640,38 +1667,11 @@ export async function getBusinessCreatorManagement({
   };
 }
 
-export async function getAdminDashboard(selectedCampaignId?: string): Promise<AdminDashboardData> {
+// 관리자 페이지 쿼리들. 접근 제어는 app/admin/layout.tsx의 requireRole이 맡고,
+// 여기서는 관리자라는 전제로 데이터만 가져온다.
+export async function getAdminOverview(): Promise<AdminOverviewStats> {
   const supabase = await createSupabaseServerClient();
   await syncExpiredCampaigns(supabase);
-  const user = await getCurrentSupabaseUser(supabase);
-
-  if (!user) {
-    return {
-      stats: { businesses: 0, verifiedCreators: 0, recruitingCampaigns: 0, approvedSubmissions: 0, totalSubmissions: 0 },
-      campaigns: [],
-      selectedCampaign: null,
-      selectedCampaignApplications: [],
-      selectedCampaignSubmissions: [],
-      applications: [],
-      submissions: [],
-      isAdmin: false
-    };
-  }
-
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-  const isAdmin = profile?.role === "admin";
-  if (!isAdmin) {
-    return {
-      stats: { businesses: 0, verifiedCreators: 0, recruitingCampaigns: 0, approvedSubmissions: 0, totalSubmissions: 0 },
-      campaigns: [],
-      selectedCampaign: null,
-      selectedCampaignApplications: [],
-      selectedCampaignSubmissions: [],
-      applications: [],
-      submissions: [],
-      isAdmin: false
-    };
-  }
 
   const [
     businessCount,
@@ -1679,16 +1679,37 @@ export async function getAdminDashboard(selectedCampaignId?: string): Promise<Ad
     recruitingCount,
     approvedSubmissionCount,
     totalSubmissionCount,
-    campaignRows,
-    applicationSummaryRows,
-    collaborationSummaryRows,
-    submissionRows
+    pendingReviewCount,
+    pendingSubmissionCount,
+    pendingVerificationCount
   ] = await Promise.all([
     supabase.from("business_profiles").select("id", { count: "exact", head: true }),
     supabase.from("creator_profiles").select("id", { count: "exact", head: true }).eq("verification_status", "verified"),
     supabase.from("campaigns").select("id", { count: "exact", head: true }).eq("status", "recruiting"),
     supabase.from("content_submissions").select("id", { count: "exact", head: true }).eq("review_status", "approved"),
     supabase.from("content_submissions").select("id", { count: "exact", head: true }),
+    supabase.from("campaigns").select("id", { count: "exact", head: true }).in("status", ["in_review", "revision_requested"]),
+    supabase.from("content_submissions").select("id", { count: "exact", head: true }).eq("review_status", "submitted"),
+    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("verification_status", "pending")
+  ]);
+
+  return {
+    businesses: businessCount.count ?? 0,
+    verifiedCreators: creatorCount.count ?? 0,
+    recruitingCampaigns: recruitingCount.count ?? 0,
+    approvedSubmissions: approvedSubmissionCount.count ?? 0,
+    totalSubmissions: totalSubmissionCount.count ?? 0,
+    pendingReviewCampaigns: pendingReviewCount.count ?? 0,
+    pendingSubmissions: pendingSubmissionCount.count ?? 0,
+    pendingVerifications: pendingVerificationCount.count ?? 0
+  };
+}
+
+export async function getAdminCampaigns(selectedCampaignId?: string): Promise<AdminCampaignsData> {
+  const supabase = await createSupabaseServerClient();
+  await syncExpiredCampaigns(supabase);
+
+  const [campaignRows, applicationSummaryRows, collaborationSummaryRows] = await Promise.all([
     supabase
       .from("campaigns")
       .select("*, business_profiles(business_name), campaign_applications(count), campaign_point_reservations(requested_headcount,reserved_points,billable_headcount,consumed_points,returned_points,status)")
@@ -1696,12 +1717,7 @@ export async function getAdminDashboard(selectedCampaignId?: string): Promise<Ad
       .in("status", ["draft", "in_review", "revision_requested", "approved", "scheduled", "recruiting", "selecting", "in_progress", "submission_review", "completed", "cancelled", "failed"])
       .order("created_at", { ascending: false }),
     supabase.from("campaign_applications").select("id,campaign_id,status"),
-    supabase.from("collaborations").select("id,campaign_id,status,content_submissions(id,review_status)"),
-    supabase
-      .from("content_submissions")
-      .select("id,content_url,preview_image_url,published_at,review_status,platform")
-      .order("created_at", { ascending: false })
-      .limit(10)
+    supabase.from("collaborations").select("id,campaign_id,status,content_submissions(id,review_status)")
   ]);
   const statsByCampaign = buildCampaignApplicationStats(
     (applicationSummaryRows.data ?? []) as ApplicationSummaryRow[],
@@ -1717,44 +1733,74 @@ export async function getAdminDashboard(selectedCampaignId?: string): Promise<Ad
       .in("status", ["submitted", "recommended", "selected", "rejected"])
       .order("applied_at", { ascending: false })
     : { data: [] };
-  const mappedApplications = ((selectedApplicationRows ?? []) as DashboardApplicationRow[]).map(mapDashboardApplication);
-  const applicantUserIds = Array.from(new Set(mappedApplications.map((item) => item.creatorUserId).filter(Boolean)));
-  const { data: pastReviewRows } = applicantUserIds.length
-    ? await supabase
-      .from("reviews")
-      .select("reviewee_id,content_quality,guideline_compliance,communication,punctuality,rework_intent,tags,updated_at")
-      .eq("reviewer_id", user.id)
-      .in("reviewee_id", applicantUserIds)
-    : { data: [] };
-  const pastReviews = buildApplicantPastReviews((pastReviewRows ?? []) as ApplicantReviewRow[]);
-  const selectedCampaignApplications = mappedApplications.map((item) => ({
-    ...item,
-    pastReview: pastReviews.get(item.creatorUserId) ?? null
-  }));
+  const selectedCampaignApplications = ((selectedApplicationRows ?? []) as DashboardApplicationRow[]).map(mapDashboardApplication);
   const selectedCampaignSubmissions = await getSelectedCampaignSubmissions(supabase, selectedCampaign);
 
+  return { campaigns, selectedCampaign, selectedCampaignApplications, selectedCampaignSubmissions };
+}
+
+export async function getAdminRecentSubmissions(): Promise<AdminRecentSubmission[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("content_submissions")
+    .select("id,content_url,preview_image_url,published_at,review_status,platform")
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  return (data ?? []).map((submission) => ({
+    id: submission.id,
+    contentUrl: submission.content_url,
+    previewImageUrl: submission.preview_image_url ?? "",
+    publishedAt: submission.published_at ?? "",
+    reviewStatus: submission.review_status,
+    platform: submission.platform
+  }));
+}
+
+const ADMIN_MEMBER_PAGE_SIZE = 20;
+
+export async function getAdminMembers(options: AdminMemberListOptions = {}): Promise<AdminMembersData> {
+  const supabase = await createSupabaseServerClient();
+  const roleFilter = ["business", "creator", "admin"].includes(options.role ?? "") ? options.role : "";
+  const verificationFilter = ["pending", "verified", "rejected"].includes(options.verification ?? "") ? options.verification : "";
+  const searchQuery = (options.searchQuery ?? "").trim();
+
+  let query = supabase
+    .from("profiles")
+    .select("id,nickname,email,role,status,verification_status,created_at,business_profiles(business_name)", { count: "exact" })
+    .order("created_at", { ascending: false });
+
+  if (roleFilter) query = query.eq("role", roleFilter);
+  if (verificationFilter) query = query.eq("verification_status", verificationFilter);
+  if (searchQuery) {
+    const escaped = searchQuery.replace(/[%_,]/g, "");
+    if (escaped) query = query.or(`nickname.ilike.%${escaped}%,email.ilike.%${escaped}%`);
+  }
+
+  const requestedPage = Math.max(options.page ?? 1, 1);
+  const from = (requestedPage - 1) * ADMIN_MEMBER_PAGE_SIZE;
+  const { data, count } = await query.range(from, from + ADMIN_MEMBER_PAGE_SIZE - 1);
+
+  const totalCount = count ?? 0;
+  const totalPages = Math.max(Math.ceil(totalCount / ADMIN_MEMBER_PAGE_SIZE), 1);
+
   return {
-    stats: {
-      businesses: businessCount.count ?? 0,
-      verifiedCreators: creatorCount.count ?? 0,
-      recruitingCampaigns: recruitingCount.count ?? 0,
-      approvedSubmissions: approvedSubmissionCount.count ?? 0,
-      totalSubmissions: totalSubmissionCount.count ?? 0
-    },
-    campaigns,
-    selectedCampaign,
-    selectedCampaignApplications,
-    selectedCampaignSubmissions,
-    applications: selectedCampaignApplications,
-    submissions: (submissionRows.data ?? []).map((submission) => ({
-      id: submission.id,
-      contentUrl: submission.content_url,
-      previewImageUrl: submission.preview_image_url ?? "",
-      publishedAt: submission.published_at ?? "",
-      reviewStatus: submission.review_status,
-      platform: submission.platform
-    })),
-    isAdmin
+    members: (data ?? []).map((row) => {
+      const business = asRelation(row.business_profiles) as { business_name?: string } | null;
+      return {
+        id: row.id,
+        nickname: row.nickname ?? "",
+        email: row.email ?? "",
+        role: row.role,
+        status: row.status,
+        verificationStatus: row.verification_status,
+        createdAt: row.created_at,
+        businessName: business?.business_name ?? ""
+      };
+    }),
+    totalCount,
+    totalPages,
+    currentPage: Math.min(requestedPage, totalPages)
   };
 }
 
