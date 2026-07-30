@@ -4,6 +4,7 @@ import { useActionState, useMemo, useRef, useState, type ChangeEvent } from "rea
 import { CalendarDays, Check, ExternalLink, ImageIcon, Link2, UploadCloud } from "lucide-react";
 import type { CollaborationSubmissionDetail } from "@/lib/supabase/queries";
 import { emptyFormState } from "@/lib/form-errors";
+import { StoreContactCard } from "@/app/components/store-contact-card";
 import { FieldError, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
 import { submitContent } from "./actions";
 
@@ -232,7 +233,9 @@ export function SubmissionForm({ collaboration }: SubmissionFormProps) {
             </button>
           </div>
 
-          <aside className="rounded-[20px] border border-slate-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+          <aside className="space-y-4">
+            <StoreContactCard store={collaboration.store} />
+            <div className="rounded-[20px] border border-slate-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
             <h2 className="text-lg font-black text-charcoal">제출 전 확인</h2>
             <div className="mt-5 overflow-hidden rounded-xl border border-slate-100 bg-slate-50">
               {previewImageUrl ? (
@@ -248,6 +251,7 @@ export function SubmissionForm({ collaboration }: SubmissionFormProps) {
               <ReviewItem label="게시일" value={formatDate(publishedAt)} />
               <ReviewItem label="콘텐츠 URL" value={contentUrl || "미입력"} />
               <ReviewItem label="제공 사실 표시" value={disclosureConfirmed ? "확인 완료" : "미확인"} />
+            </div>
             </div>
           </aside>
         </form>
@@ -272,6 +276,9 @@ function SubmissionHeader({ collaboration }: { collaboration: SubmissionDetail }
         <div className="p-6 sm:p-8">
           <div className="mb-4 flex flex-wrap gap-2">
             <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">{statusLabel(collaboration.status)}</span>
+            {collaboration.visitDate ? (
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">방문 {formatDate(collaboration.visitDate)}</span>
+            ) : null}
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">마감 {formatDate(collaboration.submissionDue)}</span>
             {collaboration.submission ? <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-700">{statusLabel(collaboration.submission.reviewStatus)}</span> : null}
           </div>

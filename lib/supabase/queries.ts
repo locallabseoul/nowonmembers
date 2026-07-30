@@ -512,6 +512,13 @@ export type CreatorDashboardData = {
     submissionReviewStatus: string;
     submissionContentUrl: string;
     submissionUpdatedAt: string;
+    // 선정된 크리에이터가 방문 일정을 잡으려면 매장에 연락할 수단이 있어야 한다.
+    store: {
+      name: string;
+      address: string;
+      contact: string;
+      businessHours: string;
+    };
   }[];
   submissions: {
     id: string;
@@ -525,6 +532,14 @@ export type CollaborationSubmissionDetail = {
   campaignCoverImage: string;
   submissionDue: string;
   status: string;
+  visitDate: string;
+  // 방문 일정을 잡으려면 크리에이터가 매장에 연락할 수 있어야 한다.
+  store: {
+    name: string;
+    address: string;
+    contact: string;
+    businessHours: string;
+  };
   submission: {
     id: string;
     platform: string;
@@ -1764,7 +1779,7 @@ export async function getCreatorDashboard(): Promise<CreatorDashboardData> {
       .order("applied_at", { ascending: false }),
     supabase
       .from("collaborations")
-      .select("id,campaign_id,visit_date,submission_due,status,campaigns(title,cover_image_url,region,campaign_type,benefit_type,benefit_value),content_submissions(id,review_status,content_url,updated_at)")
+      .select("id,campaign_id,visit_date,submission_due,status,campaigns(title,cover_image_url,region,region_detail,campaign_type,benefit_type,benefit_value,business_profiles(business_name,address,address_detail,contact,business_hours)),content_submissions(id,review_status,content_url,updated_at)")
       .eq("creator_id", creator.id)
       .order("created_at", { ascending: false }),
     supabase
@@ -1802,6 +1817,7 @@ export async function getCreatorDashboard(): Promise<CreatorDashboardData> {
     collaborations: (collaborationRows.data ?? []).map((collaboration) => {
       const campaign = Array.isArray(collaboration.campaigns) ? collaboration.campaigns[0] : collaboration.campaigns;
       const submission = collaboration.content_submissions?.[0] ?? null;
+      const store = asRelation(campaign?.business_profiles);
       return {
         id: collaboration.id,
         campaignId: collaboration.campaign_id,
@@ -1816,7 +1832,15 @@ export async function getCreatorDashboard(): Promise<CreatorDashboardData> {
         hasSubmission: Boolean(submission),
         submissionReviewStatus: submission?.review_status ?? "",
         submissionContentUrl: submission?.content_url ?? "",
-        submissionUpdatedAt: submission?.updated_at ?? ""
+        submissionUpdatedAt: submission?.updated_at ?? "",
+        store: {
+          name: store?.business_name ?? "",
+          address: [campaign?.region ?? store?.address ?? "", campaign?.region_detail ?? store?.address_detail ?? ""]
+            .filter(Boolean)
+            .join(" "),
+          contact: store?.contact ?? "",
+          businessHours: getBusinessHoursText(store?.business_hours as BusinessHoursValue, "summary")
+        }
       };
     }),
     submissions: (submissionRows.data ?? []).map((submission) => ({
@@ -1831,7 +1855,7 @@ export async function getCollaborationSubmissionDetail(id: string): Promise<Coll
   const [{ data, error }, { data: submissionRows }] = await Promise.all([
     supabase
       .from("collaborations")
-      .select("id,submission_due,status,campaigns(title,cover_image_url)")
+      .select("id,submission_due,visit_date,status,campaigns(title,cover_image_url,region,region_detail,business_profiles(business_name,address,address_detail,contact,business_hours))")
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -1846,12 +1870,23 @@ export async function getCollaborationSubmissionDetail(id: string): Promise<Coll
   const campaign = Array.isArray(data.campaigns) ? data.campaigns[0] : data.campaigns;
   const submission = submissionRows?.[0] ?? null;
 
+  const store = asRelation(campaign?.business_profiles);
+
   return {
     id: data.id,
     campaignTitle: campaign?.title ?? "캠페인",
     campaignCoverImage: campaign?.cover_image_url ?? "",
     submissionDue: data.submission_due ?? "미정",
+    visitDate: data.visit_date ?? "",
     status: data.status,
+    store: {
+      name: store?.business_name ?? "",
+      address: [campaign?.region ?? store?.address ?? "", campaign?.region_detail ?? store?.address_detail ?? ""]
+        .filter(Boolean)
+        .join(" "),
+      contact: store?.contact ?? "",
+      businessHours: getBusinessHoursText(store?.business_hours as BusinessHoursValue, "summary")
+    },
     submission: submission
       ? {
         id: submission.id,

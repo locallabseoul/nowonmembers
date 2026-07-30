@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AlertCircle, CheckCircle2, Clock, ExternalLink, PenLine, Send } from "lucide-react";
 import { Badge } from "@/app/components/ui";
+import { StoreContactCard } from "@/app/components/store-contact-card";
 import { daysUntilDate } from "@/lib/campaign-lifecycle";
 import { requireRole } from "@/lib/auth/guards";
 import { getCreatorDashboard, type CreatorDashboardData } from "@/lib/supabase/queries";
@@ -151,8 +152,14 @@ function ActivityStats({
           <div className="text-lg font-bold text-charcoal">{submittedCount}건</div>
         </div>
         <div className="col-span-2 flex items-center justify-between rounded-xl bg-gray-50 p-4">
-          <div className="text-sm font-medium text-gray-500">기한 준수율</div>
-          <div className="text-lg font-bold text-charcoal">{deadlineRate}%</div>
+          <div className="text-sm font-medium text-gray-500">
+            기한 준수율
+            <span className="ml-1.5 text-xs font-normal text-gray-400">마감일 내 게시 비율</span>
+          </div>
+          {/* 제출 기록이 없으면 0%가 아니라 기록이 없다고 알린다. */}
+          <div className="text-lg font-bold text-charcoal">
+            {submittedCount > 0 ? `${deadlineRate}%` : <span className="text-sm font-medium text-gray-400">기록 없음</span>}
+          </div>
         </div>
       </div>
     </section>
@@ -181,6 +188,9 @@ function ActionRequiredCard({ item }: { item: CreatorCollaboration }) {
             {isRevision ? "다시 제출하기" : "콘텐츠 제출하기"}
           </Link>
         </div>
+      </div>
+      <div className="border-t border-gray-100 p-5 pt-4 sm:p-6 sm:pt-4">
+        <StoreContactCard store={item.store} compact />
       </div>
     </article>
   );
