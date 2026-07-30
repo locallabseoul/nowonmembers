@@ -424,6 +424,23 @@ export async function publishLocalStory(formData: FormData) {
   revalidatePath("/stories");
 }
 
+export async function releaseCampaignReservation(formData: FormData) {
+  const supabase = await requireAdmin();
+  const campaignId = String(formData.get("campaign_id") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+
+  const { data: releasedPoints, error } = await supabase.rpc("admin_release_campaign_reservation", {
+    target_campaign_id: campaignId,
+    target_reason: reason || "관리자 예약 해제"
+  });
+
+  if (error) redirect(backTo(formData, "/admin/points", { error: error.message }));
+  revalidatePath("/admin", "layout");
+  revalidatePath("/business/points");
+  revalidatePath("/business/dashboard");
+  redirect(backTo(formData, "/admin/points", { message: `예약 포인트 ${Number(releasedPoints ?? 0).toLocaleString("ko-KR")}P를 반환했습니다.` }));
+}
+
 // ─── 회원 관리 ───
 
 export async function setMemberAdmin(formData: FormData) {
