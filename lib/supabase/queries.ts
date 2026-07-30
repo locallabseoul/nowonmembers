@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "./server";
 type CampaignRow = {
   id: string;
   business_id: string;
+  admin_memo?: string | null;
   title: string;
   description: string | null;
   campaign_type: string;
@@ -222,6 +223,8 @@ type CampaignApplicationStats = {
 
 export type DashboardCampaign = Campaign & CampaignApplicationStats & {
   billingMode: "legacy_free" | "points_v1";
+  // 운영자가 수정 요청을 하면서 남긴 사유. 가게가 무엇을 고쳐야 하는지 알아야 한다.
+  adminMemo: string;
   pointReservation: {
     requestedHeadcount: number;
     reservedPoints: number;
@@ -754,6 +757,7 @@ function mapDashboardCampaign(row: CampaignRow, stats?: CampaignApplicationStats
 
   return {
     ...campaign,
+    adminMemo: row.admin_memo ?? "",
     applicationCount: stats?.applicationCount ?? campaign.appliedCount,
     recommendedCount: stats?.recommendedCount ?? 0,
     selectedCount: stats?.selectedCount ?? 0,

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, ExternalLink, ImageIcon, Plus, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, ImageIcon, Pencil, Plus, Search, X } from "lucide-react";
 import { Badge } from "@/app/components/ui";
 import { OperatorSidebar } from "@/app/business/components/operator-sidebar";
 import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
@@ -317,6 +317,7 @@ function CampaignManagementRow({
   const actionIsPrimary = campaign.status === "selecting";
   const actionTab: ModalTab = campaign.status === "submission_review" || campaign.status === "completed" ? "submissions" : "applications";
   const actionHref = dashboardHref("/business/dashboard", campaign.id, statusFilter, actionTab);
+  const isEditable = campaign.status === "draft" || campaign.status === "revision_requested";
 
   return (
     <tr className={`group transition-colors hover:bg-gray-50 ${selected ? "bg-primary/5" : ""} ${campaign.status === "completed" ? "opacity-75" : ""}`}>
@@ -342,6 +343,7 @@ function CampaignManagementRow({
             {campaignStatusText(campaign)}
           </span>
           {selected ? <Badge tone="green">선택됨</Badge> : null}
+          {campaign.status === "revision_requested" ? <Badge tone="red">수정 필요</Badge> : null}
           {campaign.pointReservation ? (
             <Badge tone={campaign.pointReservation.status === "reserved" ? "amber" : "green"}>
               {campaign.pointReservation.status === "reserved"
@@ -363,13 +365,24 @@ function CampaignManagementRow({
       </td>
       <td className="px-6 py-5 text-sm text-gray-600">{campaignPeriodText(campaign)}</td>
       <td className="px-6 py-5 text-right">
-        {campaign.status === "draft" ? (
-          <form action={submitDraftCampaignForReview}>
-            <input type="hidden" name="campaign_id" value={campaign.id} />
-            <button className="inline-flex rounded-lg bg-primary px-3 py-1.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primaryHover">
-              {campaignActionLabel(campaign)}
-            </button>
-          </form>
+        {isEditable ? (
+          <div className="flex items-center justify-end gap-2">
+            <Link
+              href={`/business/campaigns/${campaign.id}/edit`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-charcoal shadow-sm transition-colors hover:bg-gray-50 hover:text-primary"
+            >
+              <Pencil size={13} />
+              수정
+            </Link>
+            {campaign.status === "draft" ? (
+              <form action={submitDraftCampaignForReview}>
+                <input type="hidden" name="campaign_id" value={campaign.id} />
+                <button className="inline-flex rounded-lg bg-primary px-3 py-1.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primaryHover">
+                  {campaignActionLabel(campaign)}
+                </button>
+              </form>
+            ) : null}
+          </div>
         ) : (
           <Link
             href={actionHref}
@@ -541,6 +554,21 @@ function ApplicantModal({
               <p className="mb-3 text-xs leading-5 text-gray-600">현재 선정 인원으로 마감하면 남은 지원자는 미선정 처리되고 캠페인이 진행 상태로 전환됩니다.</p>
               <button className="rounded-lg bg-primary px-4 py-2 text-sm font-black text-white hover:bg-primaryHover">현재 {campaign.selectedCount}명으로 선정 완료</button>
             </form>
+          ) : null}
+          {campaign.status === "revision_requested" ? (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-black text-amber-800">운영자 수정 요청</p>
+              {campaign.adminMemo ? (
+                <p className="mt-2 whitespace-pre-line text-sm leading-6 text-amber-800">{campaign.adminMemo}</p>
+              ) : null}
+              <Link
+                href={`/business/campaigns/${campaign.id}/edit`}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-xs font-black text-white transition-colors hover:bg-amber-700"
+              >
+                <Pencil size={13} />
+                수정하고 다시 요청하기
+              </Link>
+            </div>
           ) : null}
           {["draft", "in_review", "revision_requested", "approved", "scheduled"].includes(campaign.status) ? (
             <form action={cancelCampaignBeforePublish} className="mt-4">

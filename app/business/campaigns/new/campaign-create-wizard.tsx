@@ -20,6 +20,15 @@ import {
 } from "lucide-react";
 import { POINTS_PER_RECRUIT, campaignPointCost, formatPoints } from "@/lib/points";
 import { FieldError, FieldLabel, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
+import {
+  campaignBenefitTypeOptions,
+  campaignCategoryOptions,
+  campaignContentTypeOptions,
+  campaignImageAccept,
+  campaignMissionOptions,
+  maxCampaignImageBytes,
+  maxReferenceImageCount
+} from "@/lib/campaign-options";
 
 type CampaignCreateWizardProps = {
   action: (formData: FormData) => void | Promise<void>;
@@ -55,55 +64,33 @@ const steps = [
   }
 ];
 
-const categoryOptions = [
-  { value: "맛집·카페", label: "맛집/카페", icon: <Utensils size={26} /> },
-  { value: "뷰티·서비스", label: "뷰티/서비스", icon: <Scissors size={26} /> },
-  { value: "문화·예술", label: "문화/예술", icon: <Ticket size={26} /> },
-  { value: "제품·기타", label: "제품/기타", icon: <PackageOpen size={26} /> }
-];
+const categoryIcons: Record<string, React.ReactNode> = {
+  "맛집·카페": <Utensils size={26} />,
+  "뷰티·서비스": <Scissors size={26} />,
+  "문화·예술": <Ticket size={26} />,
+  "제품·기타": <PackageOpen size={26} />
+};
 
-const contentTypeOptions = [
-  {
-    value: "visit",
-    label: "네이버 블로그",
-    description: "상세한 방문 리뷰와 여러 장의 사진이 필요할 때",
-    icon: <PenLine size={26} />
-  },
-  {
-    value: "interview",
-    label: "인스타그램 피드",
-    description: "감성적인 사진과 해시태그로 빠른 확산이 필요할 때",
-    icon: <Instagram size={26} />
-  },
-  {
-    value: "shortform",
-    label: "인스타그램 릴스",
-    description: "짧고 임팩트 있는 영상으로 생생한 전달이 필요할 때",
-    icon: <Clapperboard size={26} />
-  }
-];
+const categoryOptions = campaignCategoryOptions.map((option) => ({
+  ...option,
+  icon: categoryIcons[option.value]
+}));
 
-const benefitTypeOptions = [
-  "방문 체험 제공",
-  "제품 제공",
-  "서비스 제공",
-  "쿠폰·이용권 제공",
-  "활동비 지급",
-  "방문 체험 + 활동비",
-  "제품 제공 + 활동비",
-  "기타 협의"
-];
+const contentTypeIcons: Record<string, React.ReactNode> = {
+  visit: <PenLine size={26} />,
+  interview: <Instagram size={26} />,
+  shortform: <Clapperboard size={26} />
+};
 
-const missionOptions = [
-  "사진 최소 15장 이상 포함",
-  "동영상 15초 이상 최소 1개 포함",
-  "네이버 지도 및 장소 링크 첨부",
-  "공식 인스타그램 계정 태그"
-];
+const contentTypeOptions = campaignContentTypeOptions.map((option) => ({
+  ...option,
+  icon: contentTypeIcons[option.value]
+}));
 
-const campaignImageAccept = "image/jpeg,image/png,image/webp";
-const maxImageSizeBytes = 10 * 1024 * 1024;
-const maxReferenceImageCount = 6;
+const benefitTypeOptions = campaignBenefitTypeOptions;
+
+const missionOptions = campaignMissionOptions;
+
 const fallbackPreviewImage = "https://storage.googleapis.com/uxpilot-auth.appspot.com/gen_abe3604481_9dd7ad35470b2f2a.png";
 
 type ImagePreview = {
@@ -503,7 +490,7 @@ export function CampaignCreateWizard({
       return "이미지는 JPG, PNG, WEBP 형식만 등록할 수 있습니다.";
     }
 
-    if (file.size > maxImageSizeBytes) {
+    if (file.size > maxCampaignImageBytes) {
       return "이미지는 10MB 이하 파일만 등록할 수 있습니다.";
     }
 
