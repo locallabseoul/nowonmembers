@@ -25,6 +25,12 @@ export const POINT_CHARGE_OPTIONS = [
 export const DEFAULT_POINT_CHARGE_POINTS = 50_000;
 export const POINT_TERMS_VERSION = "2026-07-26-v2";
 
+// 출시 혜택 조건. supabase/migrations/20260726120000_create_campaign_points.sql의
+// grant_launch_point_bonus를 따른다. 지급 시점은 가게 프로필 등록이고 유효기간은
+// 30일이다. 값이 바뀌면 함수와 함께 고쳐야 한다.
+export const LAUNCH_BONUS_POINTS = 50_000;
+export const LAUNCH_BONUS_VALID_DAYS = 30;
+
 export function getPointChargeOption(paidPoints: number) {
   return POINT_CHARGE_OPTIONS.find((option) => option.paidPoints === paidPoints);
 }

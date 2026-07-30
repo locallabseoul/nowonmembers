@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, ExternalLink, ImageIcon, Pencil, Plus, Searc
 import { Badge } from "@/app/components/ui";
 import { OperatorSidebar } from "@/app/business/components/operator-sidebar";
 import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
-import { formatPoints } from "@/lib/points";
+import { LAUNCH_BONUS_POINTS, LAUNCH_BONUS_VALID_DAYS, POINTS_PER_RECRUIT, formatPoints } from "@/lib/points";
 import { getBusinessDashboard, type DashboardApplication, type DashboardCampaign, type DashboardSubmission } from "@/lib/supabase/queries";
 import { requireRole } from "@/lib/auth/guards";
 import { approveRecommendedApplication, cancelCampaignBeforePublish, finalizeCampaignSelection, saveBusinessProfile, submitDraftCampaignForReview, withdrawCampaignFromReview } from "./actions";
@@ -116,28 +116,6 @@ function campaignListHref(status: CampaignListFilter, searchQuery: string, sortO
   return query ? `/business/dashboard?${query}` : "/business/dashboard";
 }
 
-function getFilteredCampaigns(campaigns: DashboardCampaign[], filter: CampaignListFilter, searchQuery: string, sortOrder: CampaignSort) {
-  const normalizedQuery = searchQuery.trim().toLocaleLowerCase("ko-KR");
-  const filtered = campaigns.filter((campaign) => {
-    if (filter === "active" && campaign.status !== "recruiting" && campaign.status !== "selecting") return false;
-    if (filter === "review" && campaign.status !== "submission_review" && campaign.status !== "in_progress") return false;
-    if (filter === "completed" && campaign.status !== "completed" && campaign.status !== "cancelled" && campaign.status !== "failed") return false;
-    if (!normalizedQuery) return true;
-
-    return [campaign.title, campaign.category, campaign.region].some((value) => value.toLocaleLowerCase("ko-KR").includes(normalizedQuery));
-  });
-
-  if (sortOrder !== "deadline") return filtered;
-
-  return [...filtered].sort((a, b) => getDateOrderValue(a.recruitEnd) - getDateOrderValue(b.recruitEnd));
-}
-
-function getDateOrderValue(value: string) {
-  if (!value) return Number.MAX_SAFE_INTEGER;
-  const timestamp = new Date(`${value.slice(0, 10)}T00:00:00+09:00`).getTime();
-
-  return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
-}
 
 function normalizePage(value?: string) {
   const parsed = Number(value);
@@ -700,22 +678,29 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
   const sortOrder = normalizeCampaignSort(sort);
   const searchQuery = q?.trim() ?? "";
   const { supabase } = await requireRole("business", "/business/dashboard");
-  const [{ business, businessProfileDefaults, campaigns, selectedCampaign, selectedCampaignApplications, selectedCampaignSubmissions }, { data: walletRows }] = await Promise.all([
-    getBusinessDashboard(campaign),
+  const [dashboard, { data: walletRows }] = await Promise.all([
+    getBusinessDashboard(campaign, {
+      filter: campaignFilter,
+      q: searchQuery,
+      sort: sortOrder,
+      page: normalizePage(page),
+      perPage: CAMPAIGNS_PER_PAGE
+    }),
     supabase.rpc("get_my_point_wallet")
   ]);
+  const {
+    business,
+    businessProfileDefaults,
+    campaigns: paginatedCampaigns,
+    campaignSummary: summary,
+    totalPages,
+    currentPage,
+    selectedCampaign,
+    selectedCampaignApplications,
+    selectedCampaignSubmissions
+  } = dashboard;
   const wallet = Array.isArray(walletRows) ? walletRows[0] : walletRows;
   const filteredApplications = filterApplications(selectedCampaignApplications, statusFilter);
-  const visibleCampaigns = getFilteredCampaigns(campaigns, campaignFilter, searchQuery, sortOrder);
-  const totalPages = Math.max(Math.ceil(visibleCampaigns.length / CAMPAIGNS_PER_PAGE), 1);
-  const currentPage = Math.min(normalizePage(page), totalPages);
-  const paginatedCampaigns = visibleCampaigns.slice((currentPage - 1) * CAMPAIGNS_PER_PAGE, currentPage * CAMPAIGNS_PER_PAGE);
-  const summary = {
-    recruiting: campaigns.filter((item) => item.status === "recruiting").length,
-    progressing: campaigns.filter((item) => item.status === "in_progress").length,
-    review: campaigns.filter((item) => item.status === "submission_review").length,
-    completed: campaigns.filter((item) => item.status === "completed").length
-  };
 
   if (!business) {
     return (
@@ -760,7 +745,9 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
           <Link href="/business/points" className="flex flex-col justify-between gap-3 rounded-[20px] border border-primary/15 bg-primary/5 p-5 transition-colors hover:bg-primary/10 sm:flex-row sm:items-center">
             <div>
               <p className="text-sm font-black text-charcoal">캠페인 포인트</p>
-              <p className="mt-1 text-xs text-gray-500">첫 캠페인 2건 무료 · 최대 10명 모집 가능한 50,000P 출시 혜택</p>
+              <p className="mt-1 text-xs text-gray-500">
+                오픈 혜택 {formatPoints(LAUNCH_BONUS_POINTS)} 지급 · 최대 {LAUNCH_BONUS_POINTS / POINTS_PER_RECRUIT}명 모집 · 지급일로부터 {LAUNCH_BONUS_VALID_DAYS}일간 사용 가능
+              </p>
             </div>
             <div className="text-left sm:text-right">
               <p className="text-xl font-black text-primary">{formatPoints(Number(wallet?.available_points ?? 0))}</p>
@@ -793,6 +780,8 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
             </div>
 
             <form action="/business/dashboard" className="flex flex-col items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-4 sm:flex-row sm:p-6">
+              {/* 상태는 위 탭이 정한다. 검색·정렬을 제출할 때 현재 탭을 유지한다. */}
+              <input type="hidden" name="status" value={campaignFilter} />
               <div className="relative w-full sm:w-64">
                 <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
@@ -804,12 +793,6 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
                 />
               </div>
               <div className="flex w-full gap-2 overflow-x-auto sm:w-auto">
-                <select name="status" defaultValue={campaignFilter} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-charcoal focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20">
-                  <option value="">상태 전체</option>
-                  <option value="active">모집중/선정</option>
-                  <option value="review">리뷰 진행중</option>
-                  <option value="completed">완료</option>
-                </select>
                 <select name="sort" defaultValue={sortOrder} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-charcoal focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20">
                   <option value="latest">최신순</option>
                   <option value="deadline">마감일순</option>

@@ -312,7 +312,11 @@ export type BusinessDashboardBusiness = {
 export type BusinessDashboardData = {
   business: BusinessDashboardBusiness | null;
   businessProfileDefaults: BusinessDashboardBusiness | null;
+  // 현재 페이지에 보이는 캠페인만 담는다. 지원자·협업 통계도 이 목록에 대해서만 센다.
   campaigns: DashboardCampaign[];
+  campaignSummary: { recruiting: number; progressing: number; review: number; completed: number };
+  totalPages: number;
+  currentPage: number;
   selectedCampaign: DashboardCampaign | null;
   selectedCampaignApplications: DashboardApplication[];
   selectedCampaignSubmissions: DashboardSubmission[];
@@ -1091,13 +1095,63 @@ export function getDisplayCreator(id: string) {
   return getFallbackCreator(id) ?? { nickname: "노원 크리에이터" };
 }
 
-export async function getBusinessDashboard(selectedCampaignId?: string): Promise<BusinessDashboardData> {
+export type DashboardListFilter = "" | "active" | "review" | "completed";
+export type DashboardListSort = "latest" | "deadline";
+
+export type DashboardListOptions = {
+  filter?: DashboardListFilter;
+  q?: string;
+  sort?: DashboardListSort;
+  page?: number;
+  perPage?: number;
+};
+
+function dashboardDateOrderValue(value: string) {
+  if (!value) return Number.MAX_SAFE_INTEGER;
+  const timestamp = new Date(`${value.slice(0, 10)}T00:00:00+09:00`).getTime();
+
+  return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
+}
+
+function filterDashboardCampaigns(campaigns: DashboardCampaign[], filter: DashboardListFilter, q: string, sort: DashboardListSort) {
+  const normalizedQuery = q.trim().toLocaleLowerCase("ko-KR");
+  const filtered = campaigns.filter((campaign) => {
+    if (filter === "active" && campaign.status !== "recruiting" && campaign.status !== "selecting") return false;
+    if (filter === "review" && campaign.status !== "submission_review" && campaign.status !== "in_progress") return false;
+    if (filter === "completed" && campaign.status !== "completed" && campaign.status !== "cancelled" && campaign.status !== "failed") return false;
+    if (!normalizedQuery) return true;
+
+    return [campaign.title, campaign.category, campaign.region].some((value) =>
+      value.toLocaleLowerCase("ko-KR").includes(normalizedQuery)
+    );
+  });
+
+  if (sort !== "deadline") return filtered;
+
+  return [...filtered].sort((a, b) => dashboardDateOrderValue(a.recruitEnd) - dashboardDateOrderValue(b.recruitEnd));
+}
+
+export async function getBusinessDashboard(
+  selectedCampaignId?: string,
+  listOptions: DashboardListOptions = {}
+): Promise<BusinessDashboardData> {
   const supabase = await createSupabaseServerClient();
   await syncExpiredCampaigns(supabase);
   const user = await getCurrentSupabaseUser(supabase);
 
   if (!user) {
-    return { business: null, businessProfileDefaults: null, campaigns: [], selectedCampaign: null, selectedCampaignApplications: [], selectedCampaignSubmissions: [], recommendedApplications: [] };
+    return {
+      business: null,
+      businessProfileDefaults: null,
+      campaigns: [],
+      campaignSummary: { recruiting: 0, progressing: 0, review: 0, completed: 0 },
+      totalPages: 1,
+      currentPage: 1,
+      selectedCampaign: null,
+      selectedCampaignApplications: [],
+      selectedCampaignSubmissions: [],
+      recommendedApplications: []
+    };
   }
 
   const [{ data: business }, { data: profile }] = await Promise.all([
@@ -1116,7 +1170,18 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
   const businessProfileDefaults = buildBusinessProfileDefaults({ user, profile });
 
   if (!business) {
-    return { business: null, businessProfileDefaults, campaigns: [], selectedCampaign: null, selectedCampaignApplications: [], selectedCampaignSubmissions: [], recommendedApplications: [] };
+    return {
+      business: null,
+      businessProfileDefaults,
+      campaigns: [],
+      campaignSummary: { recruiting: 0, progressing: 0, review: 0, completed: 0 },
+      totalPages: 1,
+      currentPage: 1,
+      selectedCampaign: null,
+      selectedCampaignApplications: [],
+      selectedCampaignSubmissions: [],
+      recommendedApplications: []
+    };
   }
 
   const { data: campaignRows } = await supabase
@@ -1125,19 +1190,50 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
     .eq("business_id", business.id)
     .order("created_at", { ascending: false });
 
-  const campaignIds = ((campaignRows ?? []) as CampaignRow[]).map((campaign) => campaign.id);
-  const [applicationSummaryRows, collaborationSummaryRows] = campaignIds.length
+  const allRows = (campaignRows ?? []) as CampaignRow[];
+  // 통계 없이 먼저 만들어 상태 집계와 필터·정렬에만 쓴다. 필터 조건은 통계를 보지 않는다.
+  const allCampaigns = allRows.map((campaign) => mapDashboardCampaign(campaign));
+  const campaignSummary = {
+    recruiting: allCampaigns.filter((item) => item.status === "recruiting").length,
+    progressing: allCampaigns.filter((item) => item.status === "in_progress").length,
+    review: allCampaigns.filter((item) => item.status === "submission_review").length,
+    completed: allCampaigns.filter((item) => item.status === "completed").length
+  };
+
+  const perPage = listOptions.perPage ?? 6;
+  const visible = filterDashboardCampaigns(
+    allCampaigns,
+    listOptions.filter ?? "",
+    listOptions.q ?? "",
+    listOptions.sort ?? "latest"
+  );
+  const totalPages = Math.max(Math.ceil(visible.length / perPage), 1);
+  const currentPage = Math.min(Math.max(listOptions.page ?? 1, 1), totalPages);
+  const pageCampaignIds = visible.slice((currentPage - 1) * perPage, currentPage * perPage).map((item) => item.id);
+
+  // 선택된 캠페인은 모달에서 통계를 쓰므로 현재 페이지에 없더라도 함께 센다.
+  const statsTargetIds = Array.from(
+    new Set([...pageCampaignIds, ...(selectedCampaignId ? [selectedCampaignId] : [])])
+  ).filter((id) => allCampaigns.some((item) => item.id === id));
+
+  const [applicationSummaryRows, collaborationSummaryRows] = statsTargetIds.length
     ? await Promise.all([
-      supabase.from("campaign_applications").select("id,campaign_id,status").in("campaign_id", campaignIds),
-      supabase.from("collaborations").select("id,campaign_id,status,content_submissions(id,review_status)").in("campaign_id", campaignIds)
+      supabase.from("campaign_applications").select("id,campaign_id,status").in("campaign_id", statsTargetIds),
+      supabase.from("collaborations").select("id,campaign_id,status,content_submissions(id,review_status)").in("campaign_id", statsTargetIds)
     ])
     : [{ data: [] }, { data: [] }];
   const stats = buildCampaignApplicationStats(
     (applicationSummaryRows.data ?? []) as ApplicationSummaryRow[],
     (collaborationSummaryRows.data ?? []) as CollaborationSummaryRow[]
   );
-  const campaigns = ((campaignRows ?? []) as CampaignRow[]).map((campaign) => mapDashboardCampaign(campaign, stats.get(campaign.id)));
-  const selectedCampaign = resolveSelectedCampaign(campaigns, selectedCampaignId);
+
+  const withStats = new Map(
+    allRows
+      .filter((row) => statsTargetIds.includes(row.id))
+      .map((row) => [row.id, mapDashboardCampaign(row, stats.get(row.id))] as const)
+  );
+  const campaigns = pageCampaignIds.map((id) => withStats.get(id)).filter((item): item is DashboardCampaign => Boolean(item));
+  const selectedCampaign = selectedCampaignId ? withStats.get(selectedCampaignId) ?? null : null;
   const { data: selectedApplicationRows } = selectedCampaign
     ? await supabase
       .from("campaign_applications")
@@ -1185,6 +1281,9 @@ export async function getBusinessDashboard(selectedCampaignId?: string): Promise
     },
     businessProfileDefaults,
     campaigns,
+    campaignSummary,
+    totalPages,
+    currentPage,
     selectedCampaign,
     selectedCampaignApplications,
     selectedCampaignSubmissions,
