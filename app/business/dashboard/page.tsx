@@ -6,7 +6,7 @@ import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-l
 import { formatPoints } from "@/lib/points";
 import { getBusinessDashboard, type DashboardApplication, type DashboardCampaign, type DashboardSubmission } from "@/lib/supabase/queries";
 import { requireRole } from "@/lib/auth/guards";
-import { approveRecommendedApplication, cancelCampaignBeforePublish, finalizeCampaignSelection, saveBusinessProfile, submitDraftCampaignForReview } from "./actions";
+import { approveRecommendedApplication, cancelCampaignBeforePublish, finalizeCampaignSelection, saveBusinessProfile, submitDraftCampaignForReview, withdrawCampaignFromReview } from "./actions";
 import { BusinessProfileWizard } from "./business-profile-wizard";
 import { FormBanner } from "@/app/components/form-field";
 
@@ -318,6 +318,8 @@ function CampaignManagementRow({
   const actionTab: ModalTab = campaign.status === "submission_review" || campaign.status === "completed" ? "submissions" : "applications";
   const actionHref = dashboardHref("/business/dashboard", campaign.id, statusFilter, actionTab);
   const isEditable = campaign.status === "draft" || campaign.status === "revision_requested";
+  // 검수 대기 중에는 요청을 회수해야 고칠 수 있다. 회수 후 바로 수정 화면으로 보낸다.
+  const canWithdraw = campaign.status === "in_review";
 
   return (
     <tr className={`group transition-colors hover:bg-gray-50 ${selected ? "bg-primary/5" : ""} ${campaign.status === "completed" ? "opacity-75" : ""}`}>
@@ -365,7 +367,23 @@ function CampaignManagementRow({
       </td>
       <td className="px-6 py-5 text-sm text-gray-600">{campaignPeriodText(campaign)}</td>
       <td className="px-6 py-5 text-right">
-        {isEditable ? (
+        {canWithdraw ? (
+          <div className="flex items-center justify-end gap-2">
+            <form action={withdrawCampaignFromReview}>
+              <input type="hidden" name="campaign_id" value={campaign.id} />
+              <button className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-charcoal shadow-sm transition-colors hover:bg-gray-50 hover:text-primary">
+                <Pencil size={13} />
+                수정
+              </button>
+            </form>
+            <Link
+              href={actionHref}
+              className="inline-flex rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-charcoal shadow-sm transition-colors hover:bg-gray-50 hover:text-primary"
+            >
+              {campaignActionLabel(campaign)}
+            </Link>
+          </div>
+        ) : isEditable ? (
           <div className="flex items-center justify-end gap-2">
             <Link
               href={`/business/campaigns/${campaign.id}/edit`}
@@ -569,6 +587,18 @@ function ApplicantModal({
                 수정하고 다시 요청하기
               </Link>
             </div>
+          ) : null}
+          {campaign.status === "in_review" ? (
+            <form action={withdrawCampaignFromReview} className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <input type="hidden" name="campaign_id" value={campaign.id} />
+              <p className="mb-3 text-xs leading-5 text-gray-600">
+                검수 대기 중입니다. 내용을 고치려면 요청을 회수해주세요. 예약한 포인트는 그대로 유지되고, 수정 후 다시 요청하면 재예약 없이 올라갑니다.
+              </p>
+              <button className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2 text-xs font-black text-charcoal transition-colors hover:border-primary hover:text-primary">
+                <Pencil size={13} />
+                검수 요청 회수하고 수정하기
+              </button>
+            </form>
           ) : null}
           {["draft", "in_review", "revision_requested", "approved", "scheduled"].includes(campaign.status) ? (
             <form action={cancelCampaignBeforePublish} className="mt-4">

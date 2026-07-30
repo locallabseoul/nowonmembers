@@ -320,6 +320,25 @@ export async function submitDraftCampaignForReview(formData: FormData) {
   redirect(`/business/dashboard?campaign=${campaignId}&message=${encodeURIComponent("포인트를 예약하고 캠페인 검수를 요청했습니다.")}`);
 }
 
+// 검수 대기 중인 캠페인을 초안으로 되돌린다. 예약 포인트는 유지되므로 수정 후 다시
+// 제출하면 재예약 없이 그대로 올라간다.
+export async function withdrawCampaignFromReview(formData: FormData) {
+  const campaignId = String(formData.get("campaign_id") ?? "");
+  const { supabase } = await requireRole("business", "/business/dashboard");
+
+  const { error } = await supabase.rpc("withdraw_campaign_from_review", {
+    target_campaign_id: campaignId
+  });
+
+  if (error) {
+    redirect(`/business/dashboard?campaign=${campaignId}&error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/business/dashboard");
+  revalidatePath("/admin");
+  redirect(`/business/campaigns/${campaignId}/edit`);
+}
+
 export async function finalizeCampaignSelection(formData: FormData) {
   const campaignId = String(formData.get("campaign_id") ?? "");
   const { supabase } = await requireRole("business", "/business/dashboard");

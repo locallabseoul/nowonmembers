@@ -47,7 +47,7 @@ export function CampaignEditForm({ campaign }: { campaign: CampaignEditValues })
   const [state, formAction, isPending] = useActionState(updateCampaign, emptyFormState);
   const fieldErrors = state.fieldErrors ?? {};
   const values = state.values ?? {};
-  const needsResubmit = campaign.status === "revision_requested";
+  const isRevision = campaign.status === "revision_requested";
 
   return (
     <form action={formAction} className="space-y-6">
@@ -274,27 +274,21 @@ export function CampaignEditForm({ campaign }: { campaign: CampaignEditValues })
       </FormCard>
 
       <div className="rounded-[20px] border border-gray-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-        {needsResubmit ? (
-          <label className="flex cursor-pointer items-start gap-3">
-            <input type="checkbox" name="resubmit" defaultChecked className="mt-1 h-4 w-4 accent-primary" />
-            <span className="text-sm leading-6 text-charcoal">
-              <strong className="font-black">저장하고 검수를 다시 요청합니다.</strong>
-              <br />
-              <span className="text-gray-500">
-                체크를 해제하면 저장만 하고 수정 요청 상태로 남습니다. 예약한 포인트는 그대로 유지됩니다.
-              </span>
+        <label className="flex cursor-pointer items-start gap-3">
+          <input type="checkbox" name="resubmit" defaultChecked className="mt-1 h-4 w-4 accent-primary" />
+          <span className="text-sm leading-6 text-charcoal">
+            <strong className="font-black">저장하고 검수를 다시 요청합니다.</strong>
+            <br />
+            <span className="text-gray-500">
+              {isRevision
+                ? "체크를 해제하면 저장만 하고 수정 요청 상태로 남습니다."
+                : "체크를 해제하면 저장만 하고 초안으로 남습니다. 검수를 요청해야 공개 절차가 진행됩니다."}
+              {campaign.reservedPoints > 0
+                ? " 이미 예약한 포인트가 있어 다시 예약하지 않습니다."
+                : " 검수를 요청하면 모집 인원만큼 포인트가 예약됩니다."}
             </span>
-          </label>
-        ) : (
-          <label className="flex cursor-pointer items-start gap-3">
-            <input type="checkbox" name="resubmit" className="mt-1 h-4 w-4 accent-primary" />
-            <span className="text-sm leading-6 text-charcoal">
-              <strong className="font-black">저장 후 바로 검수를 요청합니다.</strong>
-              <br />
-              <span className="text-gray-500">검수를 요청하면 모집 인원만큼 포인트가 예약됩니다.</span>
-            </span>
-          </label>
-        )}
+          </span>
+        </label>
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <button

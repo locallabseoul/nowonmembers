@@ -99,7 +99,7 @@ export default async function CampaignEditPage({ params }: { params: Promise<{ i
             <p className="mt-2 text-sm text-gray-500">
               {campaign.status === "revision_requested"
                 ? "운영자 요청 사항을 반영한 뒤 검수를 다시 요청해주세요."
-                : "검수를 요청하기 전까지 자유롭게 수정할 수 있습니다."}
+                : "검수 요청을 회수한 상태입니다. 수정을 마치면 다시 요청해주세요. 예약한 포인트는 그대로 유지됩니다."}
             </p>
           </div>
 
