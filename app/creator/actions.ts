@@ -4,6 +4,23 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/guards";
 import { fieldError, keepValues, type FormState } from "@/lib/form-errors";
 
+export async function cancelApplication(_prevState: FormState, formData: FormData): Promise<FormState> {
+  const applicationId = String(formData.get("application_id") ?? "").trim();
+  const { supabase } = await requireRole("creator", "/creator/dashboard");
+
+  const { error } = await supabase.rpc("cancel_campaign_application", {
+    target_application_id: applicationId
+  });
+
+  if (error) {
+    return { formError: error.message };
+  }
+
+  revalidatePath("/creator/dashboard");
+
+  return { successMessage: "지원을 취소했습니다." };
+}
+
 export async function saveVisitDate(_prevState: FormState, formData: FormData): Promise<FormState> {
   const collaborationId = String(formData.get("collaboration_id") ?? "").trim();
   const visitDate = String(formData.get("visit_date") ?? "").trim();

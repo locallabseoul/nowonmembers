@@ -54,6 +54,7 @@ export async function applyCampaign(_prevState: FormState, formData: FormData): 
   const { data: campaign, error: campaignError } = await supabase
     .from("campaigns")
     .select("id,status,recruit_count,recruit_end,selection_date,submission_due,campaign_applications(count)")
+    .neq("campaign_applications.status", "cancelled")
     .eq("id", campaignId)
     .maybeSingle();
 
@@ -110,20 +111,35 @@ export async function applyCampaign(_prevState: FormState, formData: FormData): 
     redirect(`/creator/profile?next=${encodeURIComponent(`/campaigns/${campaignId}/apply`)}&error=${encodeURIComponent("캠페인 신청 전 크리에이터 프로필을 완성해주세요.")}`);
   }
 
+  const message = String(formData.get("message") ?? "");
+  const contentType = String(formData.get("proposed_content_type") ?? "");
+
   const { error } = await supabase.from("campaign_applications").insert({
     campaign_id: campaignId,
     creator_id: creator.id,
-    message: String(formData.get("message") ?? ""),
+    message,
     available_dates: availableDates.text,
-    proposed_content_type: String(formData.get("proposed_content_type") ?? ""),
+    proposed_content_type: contentType,
     status: "submitted"
   });
 
   if (error) {
-    return {
-      formError: "신청을 저장하지 못했습니다. 이미 신청한 캠페인인지 확인해주세요.",
-      values: kept
-    };
+    // unique (campaign_id, creator_id) 때문에 취소한 캠페인에는 다시 지원할 수 없다.
+    // 취소된 행이면 되살린다.
+    if (error.code !== "23505") {
+      return { formError: "신청을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.", values: kept };
+    }
+
+    const { error: restoreError } = await supabase.rpc("restore_campaign_application", {
+      target_campaign_id: campaignId,
+      application_message: message,
+      application_available_dates: availableDates.text,
+      application_content_type: contentType
+    });
+
+    if (restoreError) {
+      return { formError: restoreError.message, values: kept };
+    }
   }
 
   redirect("/creator/dashboard");

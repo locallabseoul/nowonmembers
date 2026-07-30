@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AlertCircle, CheckCircle2, Clock, ExternalLink, PenLine, Send } from "lucide-react";
 import { Badge } from "@/app/components/ui";
 import { StoreContactCard } from "@/app/components/store-contact-card";
+import { CancelApplicationButton } from "@/app/creator/cancel-application-button";
 import { daysUntilDate } from "@/lib/campaign-lifecycle";
 import { requireRole } from "@/lib/auth/guards";
 import { getCreatorDashboard, type CreatorDashboardData } from "@/lib/supabase/queries";
@@ -253,10 +254,11 @@ function ApplicationCard({ application }: { application: CreatorApplication }) {
           {application.selectionDate ? `${formatDateShort(application.selectionDate)} 선정 결과 발표 예정` : application.campaignRegion || "선정 결과를 기다리고 있습니다."}
         </p>
       </div>
-      <div className="w-full shrink-0 sm:w-auto">
+      <div className="flex w-full shrink-0 flex-col gap-1 sm:w-auto">
         <Link href={`/campaigns/${application.campaignId}`} className="block w-full rounded-lg border border-gray-200 px-4 py-2 text-center text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 sm:w-auto">
           캠페인 보기
         </Link>
+        {application.canCancel ? <CancelApplicationButton applicationId={application.id} /> : null}
       </div>
     </article>
   );
@@ -301,7 +303,7 @@ export default async function CreatorDashboardPage({ searchParams }: { searchPar
           <aside className="order-first space-y-6 lg:order-last lg:col-span-4">
             <ProfileSummary creator={creator} />
             <ActivityStats
-              applicationsCount={applications.length}
+              applicationsCount={applications.filter((item) => item.status !== "cancelled").length}
               actionRequiredCount={actionRequiredCollaborations.length}
               submittedCount={submissions.length}
               deadlineRate={creator.deadlineRate}

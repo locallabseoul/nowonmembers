@@ -1,5 +1,6 @@
 import { stories as fallbackStories, getBusiness as getFallbackBusiness, getCreator as getFallbackCreator } from "@/lib/data";
 import { normalizeKoreanAuthPhone } from "@/lib/auth/phone";
+import { getKoreaTodayString } from "@/lib/campaign-lifecycle";
 import type { AppNotification, Campaign, HeaderFeedItem, LocalStory, Notice } from "@/lib/types";
 import { createSupabaseServerClient } from "./server";
 
@@ -496,6 +497,7 @@ export type CreatorDashboardData = {
     benefitSummary: string;
     status: string;
     proposedContentType: string;
+    canCancel: boolean;
   }[];
   collaborations: {
     id: string;
@@ -1027,6 +1029,7 @@ export async function getPublicCampaigns(): Promise<Campaign[]> {
   const { data, error } = await supabase
     .from("campaigns")
     .select("*, business_profiles(business_name,category,business_hours,cover_image_url,address,address_detail), campaign_applications(count)")
+    .neq("campaign_applications.status", "cancelled")
     .in("status", ["recruiting", "selecting", "in_progress", "submission_review", "completed", "cancelled", "failed"])
     .order("recruit_end", { ascending: true });
 
@@ -1040,6 +1043,7 @@ export async function getPublicCampaign(id: string): Promise<Campaign | undefine
   const { data, error } = await supabase
     .from("campaigns")
     .select("*, business_profiles(business_name,category,business_hours,cover_image_url,address,address_detail), campaign_applications(count)")
+    .neq("campaign_applications.status", "cancelled")
     .eq("id", id)
     .maybeSingle();
 
@@ -1325,6 +1329,7 @@ export async function getBusinessDashboard(
   const { data: campaignRows } = await supabase
     .from("campaigns")
     .select("*, business_profiles(business_name), campaign_applications(count), campaign_point_reservations(requested_headcount,reserved_points,billable_headcount,consumed_points,returned_points,status)")
+    .neq("campaign_applications.status", "cancelled")
     .eq("business_id", business.id)
     .order("created_at", { ascending: false });
 
@@ -1687,6 +1692,7 @@ export async function getAdminDashboard(selectedCampaignId?: string): Promise<Ad
     supabase
       .from("campaigns")
       .select("*, business_profiles(business_name), campaign_applications(count), campaign_point_reservations(requested_headcount,reserved_points,billable_headcount,consumed_points,returned_points,status)")
+      .neq("campaign_applications.status", "cancelled")
       .in("status", ["draft", "in_review", "revision_requested", "approved", "scheduled", "recruiting", "selecting", "in_progress", "submission_review", "completed", "cancelled", "failed"])
       .order("created_at", { ascending: false }),
     supabase.from("campaign_applications").select("id,campaign_id,status"),
@@ -1774,7 +1780,7 @@ export async function getCreatorDashboard(): Promise<CreatorDashboardData> {
   const [applicationRows, collaborationRows, submissionRows] = await Promise.all([
     supabase
       .from("campaign_applications")
-      .select("id,campaign_id,status,proposed_content_type,campaigns(title,cover_image_url,region,campaign_type,selection_date,benefit_type,benefit_value)")
+      .select("id,campaign_id,status,proposed_content_type,campaigns(title,cover_image_url,region,campaign_type,selection_date,benefit_type,benefit_value,status,recruit_end)")
       .eq("creator_id", creator.id)
       .order("applied_at", { ascending: false }),
     supabase
@@ -1811,7 +1817,13 @@ export async function getCreatorDashboard(): Promise<CreatorDashboardData> {
         selectionDate: campaign?.selection_date ?? "",
         benefitSummary: formatBenefitSummary(campaign?.benefit_type, campaign?.benefit_value),
         status: application.status,
-        proposedContentType: application.proposed_content_type ?? ""
+        proposedContentType: application.proposed_content_type ?? "",
+        // 모집이 열려 있는 동안만 스스로 취소할 수 있다. 마감되면 정산이 끝난 뒤다.
+        canCancel:
+          (application.status === "submitted" || application.status === "recommended") &&
+          campaign?.status === "recruiting" &&
+          Boolean(campaign?.recruit_end) &&
+          String(campaign?.recruit_end) >= getKoreaTodayString()
       };
     }),
     collaborations: (collaborationRows.data ?? []).map((collaboration) => {
