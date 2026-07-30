@@ -2,23 +2,23 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, LayoutDashboard, LogOut, Settings } from "lucide-react";
+import { ChevronDown, LayoutDashboard, LogOut, Settings, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 type AccountMenuProps = {
   displayName: string;
   role?: string | null;
+  isAdmin?: boolean;
   accountPath: string;
   profileEditPath: string | null;
   avatarUrl: string;
   signOutAction: () => void | Promise<void>;
 };
 
-function getRoleLabel(role?: string | null) {
-  if (role === "business") return "캠페인 운영자";
-  if (role === "creator") return "크리에이터";
-  if (role === "admin") return "관리자";
-  return "회원";
+function getRoleLabel(role?: string | null, isAdmin?: boolean) {
+  const base = role === "business" ? "캠페인 운영자" : role === "creator" ? "크리에이터" : "회원";
+
+  return isAdmin ? `${base} · 관리자` : base;
 }
 
 function getInitial(value: string) {
@@ -39,7 +39,7 @@ function Avatar({ displayName, avatarUrl, size }: { displayName: string; avatarU
   );
 }
 
-export function AccountMenu({ displayName, role, accountPath, profileEditPath, avatarUrl, signOutAction }: AccountMenuProps) {
+export function AccountMenu({ displayName, role, isAdmin = false, accountPath, profileEditPath, avatarUrl, signOutAction }: AccountMenuProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
@@ -88,7 +88,7 @@ export function AccountMenu({ displayName, role, accountPath, profileEditPath, a
             <Avatar displayName={displayName} avatarUrl={avatarUrl} size="md" />
             <div className="min-w-0">
               <p className="truncate text-sm font-black text-charcoal">{displayName}</p>
-              <p className="mt-0.5 text-xs font-bold text-slate-400">{getRoleLabel(role)}</p>
+              <p className="mt-0.5 text-xs font-bold text-slate-400">{getRoleLabel(role, isAdmin)}</p>
             </div>
           </div>
           <div className="p-2">
@@ -100,6 +100,12 @@ export function AccountMenu({ displayName, role, accountPath, profileEditPath, a
               <Link href={profileEditPath} role="menuitem" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-primary">
                 <Settings size={17} />
                 프로필 수정
+              </Link>
+            ) : null}
+            {isAdmin ? (
+              <Link href="/admin" role="menuitem" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-primary">
+                <ShieldCheck size={17} />
+                관리자 콘솔
               </Link>
             ) : null}
             <form action={signOutAction} className="mt-1 border-t border-slate-100 pt-1">

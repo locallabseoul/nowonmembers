@@ -23,12 +23,10 @@ const verificationTabs = [
 function roleLabel(role: string) {
   if (role === "business") return "가게";
   if (role === "creator") return "크리에이터";
-  if (role === "admin") return "관리자";
   return role;
 }
 
-function roleTone(role: string): "blue" | "green" | "gray" | "amber" {
-  if (role === "admin") return "amber";
+function roleTone(role: string): "blue" | "green" {
   if (role === "business") return "blue";
   return "green";
 }
@@ -198,7 +196,10 @@ export default async function AdminMembersPage({ searchParams }: { searchParams:
                     <p className="mt-0.5 text-xs text-gray-400">{member.email || "이메일 없음"}{member.businessName && member.nickname !== member.businessName ? ` · ${member.businessName}` : ""}</p>
                   </td>
                   <td className="px-3 py-4">
-                    <Badge tone={roleTone(member.role)}>{roleLabel(member.role)}</Badge>
+                    <span className="inline-flex flex-wrap gap-1">
+                      <Badge tone={roleTone(member.role)}>{roleLabel(member.role)}</Badge>
+                      {member.isAdmin ? <Badge tone="amber">관리자</Badge> : null}
+                    </span>
                   </td>
                   <td className="px-3 py-4">
                     <Badge tone={verificationTone(member.verificationStatus)}>{verificationLabel(member.verificationStatus)}</Badge>

@@ -483,6 +483,7 @@ export type AdminMember = {
   nickname: string;
   email: string;
   role: string;
+  isAdmin: boolean;
   status: string;
   verificationStatus: string;
   createdAt: string;
@@ -1767,10 +1768,12 @@ export async function getAdminMembers(options: AdminMemberListOptions = {}): Pro
 
   let query = supabase
     .from("profiles")
-    .select("id,nickname,email,role,status,verification_status,created_at,business_profiles(business_name)", { count: "exact" })
+    .select("id,nickname,email,role,is_admin,status,verification_status,created_at,business_profiles(business_name)", { count: "exact" })
     .order("created_at", { ascending: false });
 
-  if (roleFilter) query = query.eq("role", roleFilter);
+  // '관리자'는 역할이 아니라 플래그다. 그 외 필터는 역할 그대로.
+  if (roleFilter === "admin") query = query.eq("is_admin", true);
+  else if (roleFilter) query = query.eq("role", roleFilter);
   if (verificationFilter) query = query.eq("verification_status", verificationFilter);
   if (searchQuery) {
     const escaped = searchQuery.replace(/[%_,]/g, "");
@@ -1792,6 +1795,7 @@ export async function getAdminMembers(options: AdminMemberListOptions = {}): Pro
         nickname: row.nickname ?? "",
         email: row.email ?? "",
         role: row.role,
+        isAdmin: Boolean(row.is_admin),
         status: row.status,
         verificationStatus: row.verification_status,
         createdAt: row.created_at,

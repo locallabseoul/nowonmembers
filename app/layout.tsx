@@ -81,7 +81,7 @@ async function Header() {
                 </Link>
               ) : null}
               <NoticeMenu items={feedData.items} unreadCount={feedData.unreadCount} onOpen={markNotificationsRead} />
-              <AccountMenu displayName={displayName} role={role} accountPath={accountPath} profileEditPath={profileEditPath} avatarUrl={avatarUrl} signOutAction={signOut} />
+              <AccountMenu displayName={displayName} role={role} isAdmin={Boolean(profile?.is_admin)} accountPath={accountPath} profileEditPath={profileEditPath} avatarUrl={avatarUrl} signOutAction={signOut} />
             </>
           ) : (
             <Link href="/auth" className="flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-primary hover:text-primary">

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { AdminMember } from "@/lib/supabase/queries";
-import { setMemberRole, setMemberStatus, setMemberVerification } from "../actions";
+import { setMemberAdmin, setMemberStatus, setMemberVerification } from "../actions";
 
 // 승격·정지처럼 무게 있는 동작은 한 번 더 확인을 받는다. 인증 승인·반려는
 // 언제든 되돌릴 수 있으므로 바로 실행한다.
@@ -44,9 +44,6 @@ const dangerButton = "rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-black tex
 const dangerOutlineButton = "rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-bold text-red-600 transition-colors hover:bg-red-50";
 
 export function MemberActions({ member, returnTo, isSelf = false }: { member: AdminMember; returnTo: string; isSelf?: boolean }) {
-  // 관리자 해제 시 되돌릴 역할: 가게 프로필이 있으면 가게, 아니면 크리에이터.
-  const demotedRole = member.businessName ? "business" : "creator";
-
   // 자기 계정의 역할·상태 변경은 서버에서도 거부된다. 눌러봐야 에러만 보이므로
   // 버튼 대신 표시만 한다.
   if (isSelf) {
@@ -88,22 +85,22 @@ export function MemberActions({ member, returnTo, isSelf = false }: { member: Ad
         </form>
       ) : null}
 
-      {member.role !== "admin" ? (
-        <ConfirmButton label="관리자 승격" confirmLabel="관리자로 승격합니다" className={subtleButton}>
-          <form action={setMemberRole} className="inline">
+      {member.isAdmin ? (
+        <ConfirmButton label="관리자 해제" confirmLabel="관리자 권한을 해제합니다" className={subtleButton}>
+          <form action={setMemberAdmin} className="inline">
             <input type="hidden" name="user_id" value={member.id} />
-            <input type="hidden" name="role" value="admin" />
+            <input type="hidden" name="make_admin" value="false" />
             <input type="hidden" name="return_to" value={returnTo} />
-            <button className={primaryButton}>승격 확정</button>
+            <button className={dangerButton}>해제 확정</button>
           </form>
         </ConfirmButton>
       ) : (
-        <ConfirmButton label="관리자 해제" confirmLabel="관리자 권한을 해제합니다" className={subtleButton}>
-          <form action={setMemberRole} className="inline">
+        <ConfirmButton label="관리자 지정" confirmLabel="관리자 권한을 부여합니다" className={subtleButton}>
+          <form action={setMemberAdmin} className="inline">
             <input type="hidden" name="user_id" value={member.id} />
-            <input type="hidden" name="role" value={demotedRole} />
+            <input type="hidden" name="make_admin" value="true" />
             <input type="hidden" name="return_to" value={returnTo} />
-            <button className={dangerButton}>해제 확정</button>
+            <button className={primaryButton}>지정 확정</button>
           </form>
         </ConfirmButton>
       )}

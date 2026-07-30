@@ -38,7 +38,7 @@ const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE
 
 const { data: profile, error } = await supabase
   .from("profiles")
-  .select("id,email,nickname,role,status")
+  .select("id,email,nickname,role,status,is_admin")
   .eq("email", email)
   .maybeSingle();
 
@@ -52,16 +52,17 @@ if (!profile) {
   process.exit(1);
 }
 
-console.log(`대상: ${profile.nickname ?? "(닉네임 없음)"} <${profile.email}> — 현재 역할 ${profile.role}, 상태 ${profile.status}`);
+console.log(`대상: ${profile.nickname ?? "(닉네임 없음)"} <${profile.email}> — 역할 ${profile.role}, 상태 ${profile.status}, 관리자 ${profile.is_admin ? "예" : "아니오"}`);
 
-if (profile.role === "admin" && profile.status === "active") {
+if (profile.is_admin && profile.status === "active") {
   console.log("이미 활성 관리자입니다. 변경할 것이 없습니다.");
   process.exit(0);
 }
 
+// 역할은 그대로 둔다. 관리자는 크리에이터/가게 계정에 붙는 플래그다.
 const { error: updateError } = await supabase
   .from("profiles")
-  .update({ role: "admin", status: "active", updated_at: new Date().toISOString() })
+  .update({ is_admin: true, status: "active", updated_at: new Date().toISOString() })
   .eq("id", profile.id);
 
 if (updateError) {

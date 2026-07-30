@@ -3,11 +3,11 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireRole } from "@/lib/auth/guards";
+import { requireAdmin as requireAdminSession } from "@/lib/auth/guards";
 import { getKoreaTodayString } from "@/lib/campaign-lifecycle";
 
 async function requireAdmin() {
-  const { supabase } = await requireRole("admin", "/admin");
+  const { supabase } = await requireAdminSession();
   return supabase;
 }
 
@@ -426,19 +426,19 @@ export async function publishLocalStory(formData: FormData) {
 
 // ─── 회원 관리 ───
 
-export async function setMemberRole(formData: FormData) {
+export async function setMemberAdmin(formData: FormData) {
   const supabase = await requireAdmin();
   const userId = String(formData.get("user_id") ?? "");
-  const role = String(formData.get("role") ?? "");
+  const makeAdmin = String(formData.get("make_admin") ?? "") === "true";
 
-  const { error } = await supabase.rpc("admin_set_user_role", {
+  const { error } = await supabase.rpc("admin_set_admin", {
     target_user_id: userId,
-    new_role: role
+    make_admin: makeAdmin
   });
 
   if (error) redirect(backTo(formData, "/admin/members", { error: error.message }));
   revalidatePath("/admin", "layout");
-  redirect(backTo(formData, "/admin/members", { message: role === "admin" ? "관리자로 승격했습니다." : "관리자 권한을 해제했습니다." }));
+  redirect(backTo(formData, "/admin/members", { message: makeAdmin ? "관리자 권한을 부여했습니다." : "관리자 권한을 해제했습니다." }));
 }
 
 export async function setMemberStatus(formData: FormData) {

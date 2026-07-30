@@ -5,7 +5,6 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export function getAccountPath(role?: UserRole | string | null) {
   if (role === "business") return "/business/dashboard";
-  if (role === "admin") return "/admin";
   if (role === "creator") return "/creator/dashboard";
   return "/";
 }
@@ -33,7 +32,7 @@ export const getCurrentSessionProfile = cache(async function getCurrentSessionPr
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id,email,role,nickname,verification_status,status")
+    .select("id,email,role,nickname,verification_status,status,is_admin")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -67,6 +66,18 @@ export async function requireRole(roles: UserRole | UserRole[], next = "/") {
 
   if (!role || !allowedRoles.includes(role)) {
     redirect(withError(getAccountPath(role), "해당 계정으로 접근할 수 없는 페이지입니다"));
+  }
+
+  return session;
+}
+
+// 관리자는 별도 역할이 아니라 크리에이터/가게 계정에 붙는 플래그다. 마이페이지는
+// 본래 역할의 대시보드가 뜨고, /admin은 이 가드를 통과해야 열린다.
+export async function requireAdmin(next = "/admin") {
+  const session = await requireUser(next);
+
+  if (!session.profile?.is_admin) {
+    redirect(withError(getAccountPath(session.profile?.role), "관리자만 접근할 수 있는 페이지입니다"));
   }
 
   return session;
