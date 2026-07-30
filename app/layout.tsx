@@ -6,10 +6,11 @@ import { AccountMenu } from "@/app/components/account-menu";
 import { HeaderNav } from "@/app/components/header-nav";
 import { MobileNav } from "@/app/components/mobile-nav";
 import { NoticeMenu } from "@/app/components/notice-menu";
+import { markNotificationsRead } from "@/app/notifications/actions";
 import { PinnedNoticeBar } from "@/app/components/pinned-notice-bar";
 import { getAccountPath, getCurrentSessionProfile } from "@/lib/auth/guards";
 import { COMPANY_INFO } from "@/lib/legal";
-import { getHeaderNoticeData, getPinnedNotice } from "@/lib/supabase/queries";
+import { getHeaderFeedData, getPinnedNotice } from "@/lib/supabase/queries";
 import "./globals.css";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3003";
@@ -52,8 +53,8 @@ async function Header() {
   const accountPath = getAccountPath(role);
   const profileEditPath = getProfileEditPath(role);
   const avatarUrl = isLoggedIn ? await getHeaderAvatarUrl(role, user?.id) : "";
-  const [noticeData, pinnedNotice] = await Promise.all([
-    isLoggedIn && user ? getHeaderNoticeData(user.id) : Promise.resolve({ notices: [], unreadCount: 0 }),
+  const [feedData, pinnedNotice] = await Promise.all([
+    isLoggedIn && user ? getHeaderFeedData(user.id) : Promise.resolve({ items: [], unreadCount: 0 }),
     getPinnedNotice()
   ]);
 
@@ -79,7 +80,7 @@ async function Header() {
                   <Plus size={13} /> 캠페인 만들기
                 </Link>
               ) : null}
-              <NoticeMenu notices={noticeData.notices} unreadCount={noticeData.unreadCount} />
+              <NoticeMenu items={feedData.items} unreadCount={feedData.unreadCount} onOpen={markNotificationsRead} />
               <AccountMenu displayName={displayName} role={role} accountPath={accountPath} profileEditPath={profileEditPath} avatarUrl={avatarUrl} signOutAction={signOut} />
             </>
           ) : (

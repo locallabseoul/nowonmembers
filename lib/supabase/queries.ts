@@ -1,6 +1,6 @@
 import { stories as fallbackStories, getBusiness as getFallbackBusiness, getCreator as getFallbackCreator } from "@/lib/data";
 import { normalizeKoreanAuthPhone } from "@/lib/auth/phone";
-import type { Campaign, LocalStory, Notice } from "@/lib/types";
+import type { AppNotification, Campaign, HeaderFeedItem, LocalStory, Notice } from "@/lib/types";
 import { createSupabaseServerClient } from "./server";
 
 type CampaignRow = {
@@ -1091,30 +1091,96 @@ export async function getPinnedNotice(): Promise<Notice | undefined> {
   return mapNotice(data as NoticeRow);
 }
 
-export async function getHeaderNoticeData(userId: string) {
+type NotificationRow = {
+  id: string;
+  type: string;
+  title: string;
+  // 기존 스키마의 본문 컬럼 이름은 message다.
+  message: string | null;
+  link: string | null;
+  read_at: string | null;
+  created_at: string;
+};
+
+// 헤더 종 아이콘은 운영자 공지와 개인 알림을 함께 보여준다. 두 출처를 최신순으로
+// 합치고, 읽지 않은 개수도 합쳐서 센다.
+export async function getHeaderFeedData(userId: string): Promise<{ items: HeaderFeedItem[]; unreadCount: number }> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("notices")
-    .select("*")
-    .eq("status", "published")
-    .order("published_at", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false });
 
-  if (error || !data?.length) return { notices: [], unreadCount: 0 };
+  const [{ data: noticeRows }, { data: notificationRows }] = await Promise.all([
+    supabase
+      .from("notices")
+      .select("*")
+      .eq("status", "published")
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("notifications")
+      .select("id,type,title,message,link,read_at,created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(20)
+  ]);
 
-  const notices = (data as NoticeRow[]).map(mapNotice);
+  const notices = ((noticeRows ?? []) as NoticeRow[]).map(mapNotice);
   const noticeIds = notices.map((notice) => notice.id);
-  const { data: readRows } = await supabase
-    .from("notice_reads")
-    .select("notice_id")
-    .eq("user_id", userId)
-    .in("notice_id", noticeIds);
+  const { data: readRows } = noticeIds.length
+    ? await supabase.from("notice_reads").select("notice_id").eq("user_id", userId).in("notice_id", noticeIds)
+    : { data: [] };
   const readNoticeIds = new Set((readRows ?? []).map((row) => row.notice_id as string));
 
+  const noticeItems: HeaderFeedItem[] = notices.map((notice) => ({
+    id: notice.id,
+    kind: "notice",
+    title: notice.title,
+    body: notice.body,
+    link: `/notices/${notice.id}`,
+    createdAt: notice.publishedAt || notice.createdAt,
+    isRead: readNoticeIds.has(notice.id)
+  }));
+
+  const notificationItems: HeaderFeedItem[] = ((notificationRows ?? []) as NotificationRow[]).map((row) => ({
+    id: row.id,
+    kind: "notification",
+    title: row.title,
+    body: row.message ?? "",
+    link: row.link ?? "/notifications",
+    createdAt: row.created_at,
+    isRead: Boolean(row.read_at)
+  }));
+
+  const items = [...noticeItems, ...notificationItems].sort(
+    (a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt)
+  );
+
   return {
-    notices: notices.slice(0, 5).map((notice) => ({ ...notice, isRead: readNoticeIds.has(notice.id) })),
-    unreadCount: notices.filter((notice) => !readNoticeIds.has(notice.id)).length
+    items: items.slice(0, 6),
+    unreadCount: items.filter((item) => !item.isRead).length
   };
+}
+
+export async function getUserNotifications(): Promise<AppNotification[]> {
+  const supabase = await createSupabaseServerClient();
+  const user = await getCurrentSupabaseUser(supabase);
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from("notifications")
+    .select("id,type,title,message,link,read_at,created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  return ((data ?? []) as NotificationRow[]).map((row) => ({
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    body: row.message ?? "",
+    link: row.link ?? "",
+    createdAt: row.created_at,
+    isRead: Boolean(row.read_at)
+  }));
 }
 
 export async function getAdminNotices(): Promise<Notice[]> {

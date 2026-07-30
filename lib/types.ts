@@ -143,6 +143,28 @@ export type LocalStory = {
   publishedAt: string;
 };
 
+// 헤더 종 아이콘에는 운영자 공지와 개인 알림이 함께 뜬다. 화면에서 구분할 수 있도록
+// 종류를 함께 들고 다닌다.
+export type HeaderFeedItem = {
+  id: string;
+  kind: "notice" | "notification";
+  title: string;
+  body: string;
+  link: string;
+  createdAt: string;
+  isRead: boolean;
+};
+
+export type AppNotification = {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  link: string;
+  createdAt: string;
+  isRead: boolean;
+};
+
 export type Notice = {
   id: string;
   title: string;
