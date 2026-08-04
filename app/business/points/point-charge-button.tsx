@@ -50,6 +50,7 @@ function loadTossScript() {
 export function PointChargeButton({ campaignId }: { campaignId?: string }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const [showPreparingNotice, setShowPreparingNotice] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [selectedPoints, setSelectedPoints] = useState(DEFAULT_POINT_CHARGE_POINTS);
   const selectedOption = POINT_CHARGE_OPTIONS.find((option) => option.paidPoints === selectedPoints)
@@ -57,6 +58,13 @@ export function PointChargeButton({ campaignId }: { campaignId?: string }) {
 
   function startPayment() {
     if (!agreed) return;
+
+    // 토스 심사 승인 전까지는 결제창 대신 준비중 안내를 띄운다. 서버 액션도
+    // 같은 플래그로 막혀 있어 화면을 우회해도 주문은 생성되지 않는다.
+    if (!POINTS_PAYMENT_OPEN) {
+      setShowPreparingNotice(true);
+      return;
+    }
 
     setError("");
     startTransition(async () => {
@@ -116,7 +124,7 @@ export function PointChargeButton({ campaignId }: { campaignId?: string }) {
               key={option.paidPoints}
               type="button"
               onClick={() => setSelectedPoints(option.paidPoints)}
-              disabled={isPending || !POINTS_PAYMENT_OPEN}
+              disabled={isPending}
               className={`w-full rounded-xl border p-4 text-left transition-colors ${
                 selected
                   ? "border-primary bg-primary/5 ring-1 ring-primary"
@@ -150,17 +158,6 @@ export function PointChargeButton({ campaignId }: { campaignId?: string }) {
           );
         })}
       </div>
-      {!POINTS_PAYMENT_OPEN ? (
-        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-sm font-black text-amber-800">카드 결제 오픈을 준비하고 있어요</p>
-          <p className="mt-2 text-xs leading-5 text-amber-700">
-            결제 시스템 심사가 진행 중입니다. 그동안 포인트가 필요하시면{" "}
-            <a href="mailto:locallab.seoul@gmail.com" className="font-bold underline">locallab.seoul@gmail.com</a>
-            으로 문의해주세요. 확인 후 바로 지급해드립니다.
-          </p>
-        </div>
-      ) : (
-      <>
       <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
         <p className="text-sm font-black text-charcoal">결제 전 확인사항</p>
         <ul className="mt-2 space-y-1.5 text-xs leading-5 text-gray-600">
@@ -202,8 +199,30 @@ export function PointChargeButton({ campaignId }: { campaignId?: string }) {
         {selectedOption.totalAmount.toLocaleString("ko-KR")}원 결제하고 충전
       </button>
       {error ? <p className="mt-3 text-center text-sm font-bold text-red-600">{error}</p> : null}
-      </>
-      )}
+
+      {showPreparingNotice ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" role="dialog" aria-modal="true" aria-labelledby="payment-preparing-title">
+          <button type="button" onClick={() => setShowPreparingNotice(false)} className="absolute inset-0 bg-charcoal/50" aria-label="안내 닫기" />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+              <CreditCard size={22} />
+            </span>
+            <h3 id="payment-preparing-title" className="mt-4 text-lg font-black text-charcoal">카드 결제 오픈을 준비하고 있어요</h3>
+            <p className="mt-3 break-keep text-sm leading-6 text-gray-600">
+              결제 시스템 심사가 진행 중입니다. 그동안 포인트가 필요하시면{" "}
+              <a href="mailto:locallab.seoul@gmail.com" className="font-bold text-primary underline">locallab.seoul@gmail.com</a>
+              으로 문의해주세요. 확인 후 바로 지급해드립니다.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowPreparingNotice(false)}
+              className="mt-5 w-full rounded-xl bg-charcoal py-3 font-black text-white transition-colors hover:bg-slate-800"
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
