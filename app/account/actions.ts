@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/guards";
-import { toKoreanE164Phone } from "@/lib/auth/phone";
+import { normalizeKoreanAuthPhone, toKoreanE164Phone } from "@/lib/auth/phone";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { fieldError, type FormState } from "@/lib/form-errors";
 
@@ -27,7 +27,9 @@ export async function deleteAccount(_prevState: FormState, formData: FormData): 
     return { formError: "관리자 권한이 있는 계정은 탈퇴할 수 없습니다. 다른 관리자에게 권한 해제를 요청한 뒤 다시 시도해주세요." };
   }
 
-  const authPhone = toKoreanE164Phone(user.phone);
+  // 인증 계정의 전화번호는 국가번호가 붙은 형식(8210...)이라 국내 형식으로
+  // 되돌린 뒤 다시 E.164로 만든다. 바로 넣으면 자릿수 검사에서 걸린다.
+  const authPhone = toKoreanE164Phone(normalizeKoreanAuthPhone(user.phone));
   if (!authPhone) {
     return { formError: "계정 정보를 확인할 수 없습니다. 운영자에게 문의해주세요." };
   }
