@@ -16,6 +16,11 @@ body {
   background: #ffffff;
   color: #0f172a;
   font-family: Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+  /* 좁은 화면에서 한글이 "함께해보세/요"처럼 단어 중간에 끊기지 않도록 어절
+     단위로만 줄바꿈한다. URL처럼 공백 없는 긴 문자열은 overflow-wrap이 받아서
+     넘치지 않게 자른다. 개별 요소의 break-all 유틸리티는 그대로 우선한다. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .site-content {
