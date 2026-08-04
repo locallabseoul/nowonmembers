@@ -4,7 +4,6 @@ import { HomeHeroCarousel } from "@/app/components/home-hero-carousel";
 import { RoleAwareActionLink } from "@/app/components/role-aware-action-link";
 import { getCurrentSessionProfile } from "@/lib/auth/guards";
 import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
-import { getBusiness, stories } from "@/lib/data";
 import { getPublicCampaigns, getPublicHomeStats, getPublicStories } from "@/lib/supabase/queries";
 import type { Campaign, LocalStory } from "@/lib/types";
 
@@ -21,7 +20,6 @@ function campaignChannel(campaign: Campaign) {
 }
 
 function CampaignCard({ campaign }: { campaign: Campaign }) {
-  const business = getBusiness(campaign.businessId);
   const channel = campaignChannel(campaign);
   const lifecycle = getCampaignLifecycle(campaign);
   const deadline = getCampaignDeadlineLabel(campaign);
@@ -43,7 +41,7 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
       <div className="p-6">
         <div className="mb-2 flex items-center gap-1.5 text-xs text-slate-400">
           <MapPin size={13} className="text-primary" />
-          {campaign.region}{business?.businessName ? ` · ${business.businessName}` : ""}
+          {campaign.region}{campaign.businessName ? ` · ${campaign.businessName}` : ""}
         </div>
         <h3 className="mb-3 line-clamp-2 min-h-12 text-lg font-black leading-snug text-charcoal transition-colors group-hover:text-primary">{campaign.title}</h3>
         <p className="mb-4 line-clamp-2 text-sm leading-6 text-slate-500">{campaign.description}</p>
@@ -109,9 +107,8 @@ function ContentTypeCard({
   );
 }
 
-function ContentTile({ story, index }: { story: LocalStory; index: number }) {
-  const labels = ["블로그", "피드", "릴스", "피드"];
-  const creators = ["크리에이터 지민", "크리에이터 하은", "크리에이터 서연", "크리에이터 예진"];
+function ContentTile({ story }: { story: LocalStory }) {
+  const creatorName = story.creatorNickname ?? "노원 크리에이터";
 
   return (
     <Link href={`/stories/${story.id}`} className="group relative h-72 cursor-pointer overflow-hidden rounded-2xl md:h-80">
@@ -119,17 +116,14 @@ function ContentTile({ story, index }: { story: LocalStory; index: number }) {
       <div className="content-card-overlay absolute inset-0" />
       <div className="absolute bottom-4 left-4 right-4">
         <div className="mb-2 flex items-center gap-1.5">
-          <span className="flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-xs text-white backdrop-blur-sm">
-            {labels[index % labels.length] === "블로그" ? <span className="text-xs font-black text-[#03C75A]">B</span> : null}
-            {labels[index % labels.length] === "피드" ? <Instagram size={12} className="text-[#E1306C]" /> : null}
-            {labels[index % labels.length] === "릴스" ? <Clapperboard size={12} className="text-white" /> : null}
-            {labels[index % labels.length]}
-          </span>
+          <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs text-white backdrop-blur-sm">{story.category}</span>
         </div>
         <p className="line-clamp-2 text-sm font-bold text-white">{story.title}</p>
         <div className="mt-2 flex items-center gap-2">
-          <img src={`https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-${index + 1}.jpg`} className="h-5 w-5 rounded-full border border-white/30 object-cover" alt="" />
-          <span className="text-xs text-white/70">{creators[index % creators.length]}</span>
+          <span className="flex h-5 w-5 items-center justify-center rounded-full border border-white/30 bg-white/20 text-[10px] font-black text-white">
+            {creatorName.charAt(0)}
+          </span>
+          <span className="text-xs text-white/70">{creatorName}</span>
         </div>
       </div>
     </Link>
@@ -266,7 +260,7 @@ export default async function HomePage() {
   const [campaigns, remoteStories, session, stats] = await Promise.all([getPublicCampaigns(), getPublicStories(), getCurrentSessionProfile(), getPublicHomeStats()]);
   const role = session.profile?.role;
   const featuredCampaigns = campaigns.filter((campaign) => getCampaignLifecycle(campaign).canApply).slice(0, 3);
-  const contentStories = (remoteStories.length ? remoteStories : stories).slice(0, 4);
+  const contentStories = remoteStories.slice(0, 4);
 
   return (
     <main className="flex-grow bg-white">
@@ -458,6 +452,7 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {contentStories.length > 0 ? (
       <section id="nowon-content" className="bg-white py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-10 flex flex-col justify-between gap-6 md:flex-row md:items-end">
@@ -471,10 +466,11 @@ export default async function HomePage() {
           </div>
 
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            {contentStories.map((story, index) => <ContentTile key={story.id} story={story} index={index} />)}
+            {contentStories.map((story) => <ContentTile key={story.id} story={story} />)}
           </div>
         </div>
       </section>
+      ) : null}
     </main>
   );
 }

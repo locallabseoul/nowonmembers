@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { CalendarDays, CheckCircle2, Clock, MapPin, ShieldCheck, Users } from "lucide-react";
 import type { Campaign } from "@/lib/types";
-import { getBusiness } from "@/lib/data";
 
 export function SectionHeader({ title, description, action }: { title: string; description?: string; action?: React.ReactNode }) {
   return (
@@ -27,8 +26,7 @@ export function Badge({ children, tone = "gray" }: { children: React.ReactNode; 
 }
 
 export function CampaignCard({ campaign }: { campaign: Campaign }) {
-  const business = getBusiness(campaign.businessId);
-  const businessName = campaign.businessName ?? business?.businessName ?? "노원멤버스 파트너";
+  const businessName = campaign.businessName ?? "노원멤버스 파트너";
   const isClosed = campaign.status === "completed" || campaign.status === "selecting";
 
   return (

@@ -141,6 +141,8 @@ export type LocalStory = {
   campaignId: string;
   category: string;
   publishedAt: string;
+  businessName?: string;
+  creatorNickname?: string;
 };
 
 // 헤더 종 아이콘에는 운영자 공지와 개인 알림이 함께 뜬다. 화면에서 구분할 수 있도록

@@ -1,4 +1,3 @@
-import { stories as fallbackStories, getBusiness as getFallbackBusiness, getCreator as getFallbackCreator } from "@/lib/data";
 import { normalizeKoreanAuthPhone } from "@/lib/auth/phone";
 import { getKoreaTodayString } from "@/lib/campaign-lifecycle";
 import type { AppNotification, Campaign, HeaderFeedItem, LocalStory, Notice } from "@/lib/types";
@@ -64,6 +63,8 @@ type StoryRow = {
   campaign_id: string | null;
   category: string | null;
   published_at: string | null;
+  business_profiles?: { business_name: string | null } | { business_name: string | null }[] | null;
+  creator_profiles?: { profiles: { nickname: string | null } | { nickname: string | null }[] | null } | { profiles: { nickname: string | null } | { nickname: string | null }[] | null }[] | null;
 };
 
 type NoticeRow = {
@@ -998,7 +999,9 @@ function mapStory(row: StoryRow): LocalStory {
     creatorId: row.creator_id ?? "",
     campaignId: row.campaign_id ?? "",
     category: row.category ?? "로컬 스토리",
-    publishedAt: row.published_at ?? ""
+    publishedAt: row.published_at ?? "",
+    businessName: asRelation(row.business_profiles)?.business_name ?? undefined,
+    creatorNickname: asRelation(asRelation(row.creator_profiles)?.profiles)?.nickname ?? undefined
   };
 }
 
@@ -1084,19 +1087,23 @@ export async function getPublicStories(): Promise<LocalStory[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("local_stories")
-    .select("*")
+    .select("*, business_profiles(business_name), creator_profiles(profiles(nickname))")
     .not("published_at", "is", null)
     .order("published_at", { ascending: false });
 
-  if (error || !data?.length) return fallbackStories;
+  if (error || !data?.length) return [];
   return (data as StoryRow[]).map(mapStory);
 }
 
 export async function getPublicStory(id: string): Promise<LocalStory | undefined> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.from("local_stories").select("*").eq("id", id).maybeSingle();
+  const { data, error } = await supabase
+    .from("local_stories")
+    .select("*, business_profiles(business_name), creator_profiles(profiles(nickname))")
+    .eq("id", id)
+    .maybeSingle();
 
-  if (error || !data) return fallbackStories.find((story) => story.id === id);
+  if (error || !data) return undefined;
   return mapStory(data as StoryRow);
 }
 
@@ -1255,14 +1262,6 @@ export async function getPublicHomeStats() {
     creators: creatorCount.count ?? 0,
     businesses: businessCount.count ?? 0
   };
-}
-
-export function getDisplayBusiness(id: string) {
-  return getFallbackBusiness(id) ?? { businessName: "노원멤버스 파트너" };
-}
-
-export function getDisplayCreator(id: string) {
-  return getFallbackCreator(id) ?? { nickname: "노원 크리에이터" };
 }
 
 export type DashboardListFilter = "" | "active" | "review" | "completed";

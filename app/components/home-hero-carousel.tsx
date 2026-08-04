@@ -77,6 +77,7 @@ export function HomeHeroCarousel() {
                   <div className="relative h-52 overflow-hidden">
                     <img className="h-full w-full object-cover" src={slide.image} alt="" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                    <span className="absolute bottom-4 right-4 z-10 rounded-full bg-charcoal/60 px-2.5 py-1 text-[10px] font-bold text-white/90 backdrop-blur-sm">예시 화면</span>
                     <div className="absolute left-4 top-4 flex gap-2">
                       <span className="flex items-center gap-1 rounded-lg bg-white/90 px-2.5 py-1 text-xs font-black shadow-sm backdrop-blur-sm">
                         <ChannelIcon type={slide.type} />

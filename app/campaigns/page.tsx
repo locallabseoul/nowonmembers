@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Gift, MapPin, Search, Video } from "lucide-react";
-import { getBusiness } from "@/lib/data";
 import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import { getPublicCampaigns } from "@/lib/supabase/queries";
 import type { Campaign } from "@/lib/types";
@@ -54,7 +53,6 @@ function channelLabel(campaign: Campaign) {
 }
 
 function CampaignListCard({ campaign }: { campaign: Campaign }) {
-  const business = getBusiness(campaign.businessId);
   const channel = channelLabel(campaign);
   const lifecycle = getCampaignLifecycle(campaign);
   const deadline = getCampaignDeadlineLabel(campaign);
@@ -85,7 +83,7 @@ function CampaignListCard({ campaign }: { campaign: Campaign }) {
       <div className="p-6">
         <div className="mb-2 flex items-center gap-1.5 text-sm text-gray-500">
           <MapPin size={15} />
-          {campaign.region}{business?.businessName ? ` (${business.businessName})` : ""}
+          {campaign.region}{campaign.businessName ? ` (${campaign.businessName})` : ""}
         </div>
         <h3 className="mb-1 line-clamp-1 text-lg font-black text-charcoal transition-colors group-hover:text-primary">
           {campaign.title}
