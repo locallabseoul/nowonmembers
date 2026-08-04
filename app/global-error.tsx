@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import "./globals.css";
+import { Logo } from "@/app/components/logo";
 
 // 루트 레이아웃(헤더의 세션·공지 조회 포함)에서 던진 오류는 app/error.tsx가
 // 잡지 못한다. 이 컴포넌트가 레이아웃 자체를 대체한다.
@@ -20,8 +21,8 @@ export default function GlobalError({
     <html lang="ko">
       <body className="flex min-h-dvh items-center justify-center bg-[#F8F9FA] px-4 antialiased">
         <section className="w-full max-w-md rounded-[20px] border border-gray-100 bg-white p-8 text-center shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-          <span className="text-lg font-black tracking-tight text-charcoal">
-            NOWON<span className="text-primary">MEMBERS</span>
+          <span className="inline-block text-charcoal">
+            <Logo className="mx-auto h-[18px]" />
           </span>
           <h1 className="mt-5 text-xl font-black text-charcoal">서비스에 일시적인 문제가 있습니다</h1>
           <p className="mt-3 text-sm leading-6 text-gray-500">

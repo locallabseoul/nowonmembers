@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Plus, UserRound } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import { AccountMenu } from "@/app/components/account-menu";
+import { Logo } from "@/app/components/logo";
 import { HeaderNav } from "@/app/components/header-nav";
 import { MobileNav } from "@/app/components/mobile-nav";
 import { NoticeMenu } from "@/app/components/notice-menu";
@@ -64,8 +65,8 @@ async function Header() {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3 md:gap-8">
           <MobileNav isBusiness={role === "business"} />
-          <Link href="/" className="flex items-center">
-            <span className="text-lg font-black tracking-tight text-charcoal">NOWON<span className="text-primary">MEMBERS</span></span>
+          <Link href="/" className="flex items-center text-charcoal">
+            <Logo />
           </Link>
           <HeaderNav />
         </div>
@@ -135,7 +136,7 @@ function Footer() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <span className="text-lg font-black tracking-tight">NOWON<span className="text-primary">MEMBERS</span></span>
+            <span className="inline-block text-white"><Logo /></span>
             <p className="mt-3 max-w-lg text-sm leading-6 text-slate-400">노원 지역 소상공인과 크리에이터를 연결하는 로컬 콘텐츠 캠페인 플랫폼입니다.</p>
             <div className="mt-3 flex max-w-2xl flex-wrap gap-x-3 gap-y-1 text-xs leading-5 text-gray-500">
               <span>상호: {COMPANY_INFO.name}</span>
