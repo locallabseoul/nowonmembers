@@ -114,6 +114,9 @@ export function AccountMenu({ displayName, role, isAdmin = false, accountPath, p
                 로그아웃
               </button>
             </form>
+            <Link href="/account/delete" role="menuitem" className="block rounded-xl px-3 py-2 text-xs text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-500">
+              회원 탈퇴
+            </Link>
           </div>
         </div>
       ) : null}
