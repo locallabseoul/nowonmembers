@@ -7,8 +7,7 @@ import {
   getPointChargeOption,
   normalizePaymentFailureCode,
   paymentFailureMessage,
-  POINT_TERMS_VERSION
-} from "@/lib/points";
+  POINT_TERMS_VERSION, POINTS_PAYMENT_OPEN } from "@/lib/points";
 import { requireRole } from "@/lib/auth/guards";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { cancelTossPayment } from "@/lib/toss-payments";
@@ -26,6 +25,10 @@ export async function createPointChargeOrder(
   pointAmount: number,
   acceptedTermsVersion: string
 ): Promise<PointChargeOrder> {
+  if (!POINTS_PAYMENT_OPEN) {
+    throw new Error("카드 결제는 준비 중입니다. 포인트가 필요하시면 운영자에게 문의해주세요.");
+  }
+
   const chargeOption = getPointChargeOption(pointAmount);
   if (!chargeOption) throw new Error("충전 금액을 확인해주세요.");
   // 주문에 기록되는 동의 버전은 사용자가 실제로 확인한 버전이어야 한다.
@@ -74,6 +77,10 @@ export async function markPointChargeOrderFailed(orderId: string, code: string, 
 }
 
 export async function refundPointOrder(formData: FormData) {
+  if (!POINTS_PAYMENT_OPEN) {
+    redirect(`/business/points?error=${encodeURIComponent("결제·환불 기능은 준비 중입니다. 운영자에게 문의해주세요.")}`);
+  }
+
   const orderId = String(formData.get("order_id") ?? "");
   const { supabase } = await requireRole("business", "/business/points");
 

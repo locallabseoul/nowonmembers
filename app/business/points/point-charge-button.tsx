@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { CreditCard, Loader2 } from "lucide-react";
-import { DEFAULT_POINT_CHARGE_POINTS, formatPoints, POINT_CHARGE_OPTIONS, POINT_TERMS_VERSION } from "@/lib/points";
+import { DEFAULT_POINT_CHARGE_POINTS, formatPoints, POINT_CHARGE_OPTIONS, POINT_TERMS_VERSION, POINTS_PAYMENT_OPEN } from "@/lib/points";
 import { createPointChargeOrder, markPointChargeOrderFailed, type PointChargeOrder } from "./actions";
 
 type TossPayment = {
@@ -116,7 +116,7 @@ export function PointChargeButton({ campaignId }: { campaignId?: string }) {
               key={option.paidPoints}
               type="button"
               onClick={() => setSelectedPoints(option.paidPoints)}
-              disabled={isPending}
+              disabled={isPending || !POINTS_PAYMENT_OPEN}
               className={`w-full rounded-xl border p-4 text-left transition-colors ${
                 selected
                   ? "border-primary bg-primary/5 ring-1 ring-primary"
@@ -150,6 +150,17 @@ export function PointChargeButton({ campaignId }: { campaignId?: string }) {
           );
         })}
       </div>
+      {!POINTS_PAYMENT_OPEN ? (
+        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-black text-amber-800">카드 결제 오픈을 준비하고 있어요</p>
+          <p className="mt-2 text-xs leading-5 text-amber-700">
+            결제 시스템 심사가 진행 중입니다. 그동안 포인트가 필요하시면{" "}
+            <a href="mailto:locallab.seoul@gmail.com" className="font-bold underline">locallab.seoul@gmail.com</a>
+            으로 문의해주세요. 확인 후 바로 지급해드립니다.
+          </p>
+        </div>
+      ) : (
+      <>
       <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
         <p className="text-sm font-black text-charcoal">결제 전 확인사항</p>
         <ul className="mt-2 space-y-1.5 text-xs leading-5 text-gray-600">
@@ -191,6 +202,8 @@ export function PointChargeButton({ campaignId }: { campaignId?: string }) {
         {selectedOption.totalAmount.toLocaleString("ko-KR")}원 결제하고 충전
       </button>
       {error ? <p className="mt-3 text-center text-sm font-bold text-red-600">{error}</p> : null}
+      </>
+      )}
     </div>
   );
 }
