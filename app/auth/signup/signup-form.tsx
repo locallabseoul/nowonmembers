@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 import { BriefcaseBusiness, Camera, CheckCircle2, UserPlus, X } from "lucide-react";
-import { LEGAL_EFFECTIVE_DATE, privacySections, termsSections, type LegalSection } from "@/lib/legal";
+import { LEGAL_EFFECTIVE_DATE, marketingSections, privacySections, termsSections, type LegalSection } from "@/lib/legal";
 import { emptyFormState, type FormState } from "@/lib/form-errors";
 import { FieldError, FieldLabel, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
 
 type SignupRole = "creator" | "business";
 type SignupAction = (state: FormState, formData: FormData) => Promise<FormState>;
 type NicknameCheckStatus = "idle" | "checking" | "available" | "unavailable" | "error";
-type LegalModalType = "terms" | "privacy";
+type LegalModalType = "terms" | "privacy" | "marketing";
 
 // 공용 FormField로 위임한다. 예전에는 파일마다 입력창을 따로 그려서 에러를 붙일
 // 자리가 없었다.
@@ -226,9 +226,8 @@ function LegalAgreementModal({
   type: LegalModalType;
   onClose: () => void;
 }) {
-  const isTerms = type === "terms";
-  const title = isTerms ? "서비스 이용약관" : "개인정보 수집 및 이용";
-  const sections: LegalSection[] = isTerms ? termsSections : privacySections;
+  const title = type === "terms" ? "서비스 이용약관" : type === "privacy" ? "개인정보 수집 및 이용" : "마케팅 정보 수신 동의";
+  const sections: LegalSection[] = type === "terms" ? termsSections : type === "privacy" ? privacySections : marketingSections;
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -486,7 +485,9 @@ export function SignupForm({
           </label>
           <label className="flex cursor-pointer items-start gap-3">
             <input name="agreement_marketing" type="checkbox" className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
-            <span className="text-sm text-gray-600">(선택) 맞춤 캠페인 추천 알림 수신 동의</span>
+            <span className="text-sm text-gray-600">
+              (선택) <button type="button" onClick={(event) => { event.preventDefault(); setLegalModal("marketing"); }} className="text-primary underline underline-offset-2">마케팅 정보 수신</button> 동의
+            </span>
           </label>
           <FieldError>{fieldErrors.agreement}</FieldError>
         </section>

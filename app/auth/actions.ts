@@ -169,6 +169,7 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
     : null;
   const agreedTerms = formData.get("agreement_terms") === "on";
   const agreedPrivacy = formData.get("agreement_privacy") === "on";
+  const marketingOptIn = formData.get("agreement_marketing") === "on";
   // 비밀번호는 돌려주지 않는다. 다시 입력받는다.
   const kept = keepValues(formData, ["email", "phone", nicknameField, nameField, "business_registration_number", "referral_code"]);
 
@@ -241,7 +242,8 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
         email,
         phone,
         business_registration_number: businessRegistrationNumber,
-        referral_code: referralCode
+        referral_code: referralCode,
+        marketing_opt_in: marketingOptIn ? "true" : "false"
       }
     }
   });
@@ -266,7 +268,9 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
           business_registration_number: businessRegistrationNumber,
           referral_code: referralCode,
           verification_status: "pending",
-          status: "active"
+          status: "active",
+          marketing_opt_in: marketingOptIn,
+          marketing_opt_in_at: marketingOptIn ? new Date().toISOString() : null
         }, { onConflict: "id" });
 
         if (profileError) {
@@ -363,6 +367,7 @@ export async function verifyAuthPhoneOtp(_prevState: FormState, formData: FormDa
     const verifiedEmail = getUserMetadataString(metadata, "email") || data.user.email || null;
     const businessRegistrationNumber = getUserMetadataString(metadata, "business_registration_number") || null;
     const referralCode = getUserMetadataString(metadata, "referral_code") || null;
+    const marketingOptIn = getUserMetadataString(metadata, "marketing_opt_in") === "true";
     const { error: profileError } = await supabase.from("profiles").upsert({
       id: data.user.id,
       email: verifiedEmail,
@@ -373,7 +378,9 @@ export async function verifyAuthPhoneOtp(_prevState: FormState, formData: FormDa
       business_registration_number: businessRegistrationNumber,
       referral_code: referralCode,
       verification_status: "pending",
-      status: "active"
+      status: "active",
+      marketing_opt_in: marketingOptIn,
+      marketing_opt_in_at: marketingOptIn ? new Date().toISOString() : null
     }, { onConflict: "id" });
 
     if (profileError) {
