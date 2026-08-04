@@ -76,7 +76,14 @@ export async function deleteAccount(_prevState: FormState, formData: FormData): 
     }
   }
 
-  const admin = createSupabaseAdminClient();
+  // 설정 문제(예: 서버 키 누락)로 예외가 나도 오류 화면 대신 안내를 보여준다.
+  let admin: ReturnType<typeof createSupabaseAdminClient>;
+  try {
+    admin = createSupabaseAdminClient();
+  } catch (adminError) {
+    console.error("deleteAccount: admin client init failed", adminError);
+    return { formError: "탈퇴 처리에 필요한 서버 설정에 문제가 있습니다. 운영자에게 문의해주세요." };
+  }
 
   // 이력이 없는 계정은 계정과 데이터를 함께 삭제한다. 포인트 결제·캠페인 정산
   // 기록이 있으면 외래키(on delete restrict)가 삭제를 막는데, 그 기록은 약관
