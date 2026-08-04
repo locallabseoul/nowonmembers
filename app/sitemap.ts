@@ -12,7 +12,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE_URL}/notices`, changeFrequency: "weekly", priority: 0.4 },
     { url: `${BASE_URL}/terms`, changeFrequency: "yearly", priority: 0.2 },
     { url: `${BASE_URL}/privacy`, changeFrequency: "yearly", priority: 0.2 },
-    { url: `${BASE_URL}/marketing`, changeFrequency: "yearly", priority: 0.2 }
+    { url: `${BASE_URL}/marketing`, changeFrequency: "yearly", priority: 0.2 },
+    { url: `${BASE_URL}/brand`, changeFrequency: "yearly", priority: 0.2 }
   ];
 
   // 공개 목록에 노출되는 것만 담는다. 조회에 실패해도 정적 페이지는 내보낸다.
