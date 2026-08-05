@@ -7,6 +7,7 @@ import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-l
 import { getPublicCampaign } from "@/lib/supabase/queries";
 import type { Campaign } from "@/lib/types";
 import { CampaignMap } from "./campaign-map";
+import { CampaignViewTracker } from "./view-tracker";
 import { FormBanner } from "@/app/components/form-field";
 
 function formatShortDate(value: string) {
@@ -54,6 +55,7 @@ export default async function CampaignDetailPage({ params, searchParams }: { par
 
   return (
     <>
+      <CampaignViewTracker campaignId={campaign.id} />
       <main className="mx-auto w-full max-w-7xl px-4 py-8 pb-32 sm:px-6 lg:px-8 lg:pb-12">
         <nav className="mb-6 flex text-sm text-gray-500" aria-label="Breadcrumb">
           <ol className="inline-flex items-center gap-1 md:gap-2">

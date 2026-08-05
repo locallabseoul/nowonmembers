@@ -231,7 +231,7 @@ function campaignApplicantText(campaign: DashboardCampaign) {
   if (campaign.status === "recruiting") {
     return {
       main: `현재 ${campaign.applicationCount}명 지원`,
-      sub: `선정 ${campaign.recruitCount}명`,
+      sub: `선정 ${campaign.recruitCount}명 · 조회 ${campaign.viewCount.toLocaleString("ko-KR")}`,
       highlight: true
     };
   }
@@ -585,6 +585,7 @@ function ApplicantModal({
           <div>
             <div className="mb-3 flex flex-wrap gap-2">
               <Badge tone={getCampaignLifecycle(campaign).badgeTone}>{campaignStatusLabel(campaign.status)}</Badge>
+              <Badge tone="gray">조회 {campaign.viewCount.toLocaleString("ko-KR")}</Badge>
               <Badge tone="gray">전체 {campaign.applicationCount}명</Badge>
               <Badge tone="amber">추천 {campaign.recommendedCount}명</Badge>
               <Badge tone="green">선정 {campaign.selectedCount}/{campaign.recruitCount}명</Badge>

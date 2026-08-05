@@ -79,6 +79,7 @@ export type Campaign = {
   category: string;
   recruitCount: number;
   appliedCount: number;
+  viewCount: number;
   recruitStart: string;
   recruitEnd: string;
   selectionDate: string;

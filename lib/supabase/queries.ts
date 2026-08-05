@@ -42,6 +42,7 @@ type CampaignRow = {
     address_detail?: string | null;
   } | null;
   applicant_count?: number | null;
+  view_count?: number | null;
   campaign_applications?: { count: number }[];
   campaign_point_reservations?: Relation<{
     requested_headcount: number;
@@ -976,6 +977,7 @@ function mapCampaign(row: CampaignRow): Campaign {
     // 지원 내역은 본인·해당 가게·관리자만 읽을 수 있어, 조인으로 세면 방문자에게
     // 0이 된다. 캠페인 행에 저장해둔 집계를 쓴다.
     appliedCount: row.applicant_count ?? row.campaign_applications?.[0]?.count ?? 0,
+    viewCount: row.view_count ?? 0,
     recruitStart: row.recruit_start ?? "",
     recruitEnd: row.recruit_end ?? "",
     selectionDate: row.selection_date ?? "",
