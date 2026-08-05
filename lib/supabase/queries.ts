@@ -1312,6 +1312,120 @@ function filterDashboardCampaigns(campaigns: DashboardCampaign[], filter: Dashbo
   return [...filtered].sort((a, b) => dashboardDateOrderValue(a.recruitEnd) - dashboardDateOrderValue(b.recruitEnd));
 }
 
+export type BusinessReportCampaign = {
+  id: string;
+  title: string;
+  status: string;
+  campaignType: string;
+  createdAt: string;
+  recruitEnd: string;
+  viewCount: number;
+  applicationCount: number;
+  recruitCount: number;
+  selectedCount: number;
+  approvedSubmissionCount: number;
+  consumedPoints: number;
+  returnedPoints: number;
+  reservedPoints: number;
+};
+
+export type BusinessReport = {
+  hasBusiness: boolean;
+  campaigns: BusinessReportCampaign[];
+  totals: {
+    viewCount: number;
+    applicationCount: number;
+    selectedCount: number;
+    approvedSubmissionCount: number;
+    consumedPoints: number;
+    returnedPoints: number;
+  };
+};
+
+const EMPTY_BUSINESS_REPORT: BusinessReport = {
+  hasBusiness: false,
+  campaigns: [],
+  totals: {
+    viewCount: 0,
+    applicationCount: 0,
+    selectedCount: 0,
+    approvedSubmissionCount: 0,
+    consumedPoints: 0,
+    returnedPoints: 0
+  }
+};
+
+export async function getBusinessReport(): Promise<BusinessReport> {
+  const supabase = await createSupabaseServerClient();
+  await syncExpiredCampaigns(supabase);
+  const user = await getCurrentSupabaseUser(supabase);
+  if (!user) return EMPTY_BUSINESS_REPORT;
+
+  const { data: business } = await supabase
+    .from("business_profiles")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!business) return EMPTY_BUSINESS_REPORT;
+
+  const { data: campaignRows } = await supabase
+    .from("campaigns")
+    .select("id,title,status,campaign_type,created_at,recruit_end,recruit_count,view_count,applicant_count,campaign_point_reservations(reserved_points,consumed_points,returned_points)")
+    .eq("business_id", business.id)
+    .order("created_at", { ascending: false });
+
+  const campaignIds = (campaignRows ?? []).map((campaign) => campaign.id);
+  const { data: collaborationRows } = campaignIds.length
+    ? await supabase
+      .from("collaborations")
+      .select("id,campaign_id,status,content_submissions(id,review_status)")
+      .in("campaign_id", campaignIds)
+    : { data: [] };
+
+  const statsByCampaign = buildCampaignApplicationStats([], (collaborationRows ?? []) as CollaborationSummaryRow[]);
+
+  const campaigns: BusinessReportCampaign[] = (campaignRows ?? []).map((campaign) => {
+    const stats = statsByCampaign.get(campaign.id);
+    const reservation = asRelation(campaign.campaign_point_reservations) as
+      | { reserved_points?: number; consumed_points?: number; returned_points?: number }
+      | null;
+
+    return {
+      id: campaign.id,
+      title: campaign.title,
+      status: campaign.status,
+      campaignType: campaign.campaign_type ?? "",
+      createdAt: campaign.created_at,
+      recruitEnd: campaign.recruit_end ?? "",
+      viewCount: campaign.view_count ?? 0,
+      applicationCount: campaign.applicant_count ?? 0,
+      recruitCount: campaign.recruit_count,
+      selectedCount: stats?.selectedCount ?? 0,
+      approvedSubmissionCount: stats?.approvedSubmissionCount ?? 0,
+      consumedPoints: Number(reservation?.consumed_points ?? 0),
+      returnedPoints: Number(reservation?.returned_points ?? 0),
+      reservedPoints: Number(reservation?.reserved_points ?? 0)
+    };
+  });
+
+  return {
+    hasBusiness: true,
+    campaigns,
+    totals: campaigns.reduce(
+      (sum, campaign) => ({
+        viewCount: sum.viewCount + campaign.viewCount,
+        applicationCount: sum.applicationCount + campaign.applicationCount,
+        selectedCount: sum.selectedCount + campaign.selectedCount,
+        approvedSubmissionCount: sum.approvedSubmissionCount + campaign.approvedSubmissionCount,
+        consumedPoints: sum.consumedPoints + campaign.consumedPoints,
+        returnedPoints: sum.returnedPoints + campaign.returnedPoints
+      }),
+      { viewCount: 0, applicationCount: 0, selectedCount: 0, approvedSubmissionCount: 0, consumedPoints: 0, returnedPoints: 0 }
+    )
+  };
+}
+
 export async function getBusinessDashboard(
   selectedCampaignId?: string,
   listOptions: DashboardListOptions = {}
