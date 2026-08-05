@@ -378,7 +378,7 @@ function CampaignManagementRow({
       <td className="px-6 py-5 text-sm text-gray-600">{campaignPeriodText(campaign)}</td>
       <td className="px-6 py-5 text-right">
         {canWithdraw ? (
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <ConfirmButton
               label="회수 후 수정"
               confirmLabel="검수 요청을 회수하고 수정 화면으로 이동합니다"
@@ -400,7 +400,7 @@ function CampaignManagementRow({
             </Link>
           </div>
         ) : isEditable ? (
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Link
               href={`/business/campaigns/${campaign.id}/edit`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-charcoal shadow-sm transition-colors hover:bg-gray-50 hover:text-primary"
@@ -421,7 +421,7 @@ function CampaignManagementRow({
             ) : null}
           </div>
         ) : (
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Link
               href={actionHref}
               className={`inline-flex rounded-lg px-3 py-1.5 text-sm shadow-sm transition-colors ${

@@ -41,6 +41,15 @@ select {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* 버튼 라벨은 "회수 후 수정"처럼 짧은 동사구다. body의 word-break: keep-all이
+   어절 단위로 접기 때문에 좁은 칸에서는 두 줄이 되어 완성도가 떨어진다.
+   버튼과 버튼처럼 쓰는 링크는 한 줄로 유지하고, 자리가 모자라면 버튼 자체가
+   다음 줄로 내려가게 한다(감싸는 쪽에 flex-wrap). */
+button,
+a.inline-flex {
+  white-space: nowrap;
+}
+
 .focus-ring {
   @apply focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary;
 }
