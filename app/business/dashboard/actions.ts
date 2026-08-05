@@ -174,6 +174,9 @@ export async function saveBusinessProfile(formData: FormData) {
   const businessHoursSummary = requiredText(formData, "business_hours_summary", "영업시간");
   const businessHoursPreset = String(formData.get("business_hours_preset") ?? "").trim();
   const businessHoursNote = String(formData.get("business_hours_note") ?? "").trim();
+  // 수정 화면에서 시간 입력을 그대로 되살리려면 요약 문자열 말고 값도 남겨야 한다.
+  const businessHoursOpen = String(formData.get("business_hours_open_value") ?? "").trim();
+  const businessHoursClose = String(formData.get("business_hours_close_value") ?? "").trim();
   const websiteUrlRaw = String(formData.get("website_url") ?? "").trim();
   const socialUrlValues = splitList(formData.get("social_urls"));
   let websiteUrl: string | null = null;
@@ -247,6 +250,8 @@ export async function saveBusinessProfile(formData: FormData) {
     business_hours: {
       summary: businessHoursSummary,
       preset: businessHoursPreset || "custom",
+      open: businessHoursOpen,
+      close: businessHoursClose,
       note: businessHoursNote
     },
     website_url: websiteUrl,

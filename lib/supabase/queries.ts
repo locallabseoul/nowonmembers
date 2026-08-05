@@ -210,6 +210,8 @@ type BusinessHoursValue =
     summary?: unknown;
     preset?: unknown;
     note?: unknown;
+    open?: unknown;
+    close?: unknown;
   }
   | null;
 
@@ -305,6 +307,8 @@ export type BusinessDashboardBusiness = {
     contact: string;
     businessHours: string;
     businessHoursPreset: string;
+    businessHoursOpen: string;
+    businessHoursClose: string;
     businessHoursNote: string;
     websiteUrl: string;
     socialUrls: string[];
@@ -431,6 +435,8 @@ function buildBusinessProfileDefaults({
     contact: "",
     businessHours: "",
     businessHoursPreset: "",
+    businessHoursOpen: "",
+    businessHoursClose: "",
     businessHoursNote: "",
     websiteUrl: "",
     socialUrls: [],
@@ -619,7 +625,7 @@ function relationCount(value: CountRelation) {
   return value?.[0]?.count ?? 0;
 }
 
-function getBusinessHoursText(value: BusinessHoursValue, key: "summary" | "preset" | "note") {
+function getBusinessHoursText(value: BusinessHoursValue, key: "summary" | "preset" | "note" | "open" | "close") {
   if (!value) return "";
   if (typeof value === "string") return key === "summary" ? value : "";
 
@@ -1443,6 +1449,8 @@ export async function getBusinessDashboard(
       contact: business.contact ?? "",
       businessHours: getBusinessHoursText(business.business_hours as BusinessHoursValue, "summary"),
       businessHoursPreset: getBusinessHoursText(business.business_hours as BusinessHoursValue, "preset"),
+      businessHoursOpen: getBusinessHoursText(business.business_hours as BusinessHoursValue, "open"),
+      businessHoursClose: getBusinessHoursText(business.business_hours as BusinessHoursValue, "close"),
       businessHoursNote: getBusinessHoursText(business.business_hours as BusinessHoursValue, "note"),
       websiteUrl: business.website_url ?? "",
       socialUrls: Array.isArray(business.social_urls) ? business.social_urls.filter(Boolean) : [],
@@ -1540,6 +1548,8 @@ export async function getBusinessCreatorManagement({
     contact: business.contact ?? "",
     businessHours: getBusinessHoursText(business.business_hours as BusinessHoursValue, "summary"),
     businessHoursPreset: getBusinessHoursText(business.business_hours as BusinessHoursValue, "preset"),
+    businessHoursOpen: getBusinessHoursText(business.business_hours as BusinessHoursValue, "open"),
+    businessHoursClose: getBusinessHoursText(business.business_hours as BusinessHoursValue, "close"),
     businessHoursNote: getBusinessHoursText(business.business_hours as BusinessHoursValue, "note"),
     websiteUrl: business.website_url ?? "",
     socialUrls: Array.isArray(business.social_urls) ? business.social_urls.filter(Boolean) : [],

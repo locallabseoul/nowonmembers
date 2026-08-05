@@ -48,6 +48,8 @@ type BusinessProfileDraft = {
   contact: string;
   business_hours_preset: string;
   business_hours_custom: string;
+  business_hours_open: string;
+  business_hours_close: string;
   business_hours_note: string;
   website_url: string;
   social_urls: string[];
@@ -98,13 +100,27 @@ const categoryOptions = [
 
 const districtOptions = ["공릉동", "월계동", "하계동", "중계동", "상계동"];
 
+// 요일만 정한다. 시간은 가게마다 다르므로 아래 시간 입력에서 직접 고른다.
 const businessHourPresets = [
-  { value: "daily", label: "매일 운영", summary: "매일 10:00-21:00" },
-  { value: "weekday", label: "평일 운영", summary: "월-금 10:00-21:00" },
-  { value: "weekend", label: "주말 운영", summary: "토-일 11:00-20:00" },
-  { value: "reservation", label: "예약제", summary: "예약제로 운영" },
-  { value: "custom", label: "직접 입력", summary: "" }
+  { value: "daily", label: "매일 운영", days: "매일" },
+  { value: "weekday", label: "평일 운영", days: "월-금" },
+  { value: "weekend", label: "주말 운영", days: "토-일" },
+  { value: "reservation", label: "예약제", days: "" },
+  { value: "custom", label: "직접 입력", days: "" }
 ];
+
+const DEFAULT_OPEN_TIME = "10:00";
+const DEFAULT_CLOSE_TIME = "21:00";
+
+// "매일 10:00-21:00" 같은 기존 요약에서 시간을 되찾는다. 시간 필드가 없던 시절에
+// 저장된 프로필을 수정할 때 입력칸이 비어 보이지 않게 한다.
+function parseTimeRange(summary: string) {
+  const matched = summary.match(/(\d{1,2}:\d{2})\s*[-~]\s*(\d{1,2}:\d{2})/);
+  if (!matched) return null;
+
+  const pad = (time: string) => (time.length === 4 ? `0${time}` : time);
+  return { open: pad(matched[1]), close: pad(matched[2]) };
+}
 
 const businessImageAccept = "image/jpeg,image/png,image/webp";
 const maxBusinessImageBytes = 10 * 1024 * 1024;
@@ -112,26 +128,24 @@ const maxBusinessImageBytes = 10 * 1024 * 1024;
 function getDefaultBusinessHours(initial?: InitialBusinessProfile) {
   const initialPreset = initial?.businessHoursPreset;
   const initialSummary = initial?.businessHours ?? "";
-  const matchedPreset = businessHourPresets.find((preset) => preset.value === initialPreset)
-    ?? businessHourPresets.find((preset) => preset.summary === initialSummary);
+  const matchedPreset = businessHourPresets.find((preset) => preset.value === initialPreset);
+  const parsedTime = parseTimeRange(initialSummary);
+  const openTime = initial?.businessHoursOpen || parsedTime?.open || DEFAULT_OPEN_TIME;
+  const closeTime = initial?.businessHoursClose || parsedTime?.close || DEFAULT_CLOSE_TIME;
 
   if (matchedPreset && matchedPreset.value !== "custom") {
-    return {
-      preset: matchedPreset.value,
-      custom: ""
-    };
+    return { preset: matchedPreset.value, custom: "", openTime, closeTime };
   }
 
   if (initialSummary) {
-    return {
-      preset: "custom",
-      custom: initialSummary
-    };
+    return { preset: "custom", custom: initialSummary, openTime, closeTime };
   }
 
   return {
     preset: businessHourPresets[0]?.value ?? "daily",
-    custom: ""
+    custom: "",
+    openTime,
+    closeTime
   };
 }
 
@@ -153,6 +167,8 @@ function createInitialDraft(initial?: InitialBusinessProfile): BusinessProfileDr
     contact: formatContactNumber(initial?.contact ?? ""),
     business_hours_preset: businessHours.preset,
     business_hours_custom: businessHours.custom,
+    business_hours_open: businessHours.openTime,
+    business_hours_close: businessHours.closeTime,
     business_hours_note: initial?.businessHoursNote ?? "",
     website_url: initial?.websiteUrl ?? "",
     social_urls: initial?.socialUrls ?? [],
@@ -160,11 +176,25 @@ function createInitialDraft(initial?: InitialBusinessProfile): BusinessProfileDr
   };
 }
 
+// 자정을 넘겨 영업하는 가게는 '직접 입력'을 쓰게 안내한다. 시간 두 개만으로는
+// 22:00-02:00 같은 경우를 표현할 수 없다.
+function getClosingTimeError(draft: BusinessProfileDraft) {
+  if (draft.business_hours_preset === "custom" || draft.business_hours_preset === "reservation") return "";
+  if (!draft.business_hours_open || !draft.business_hours_close) return "여는 시간과 닫는 시간을 지정해주세요.";
+  if (draft.business_hours_close <= draft.business_hours_open) {
+    return "닫는 시간이 여는 시간보다 빨라요. 자정을 넘겨 영업한다면 '직접 입력'을 골라주세요.";
+  }
+
+  return "";
+}
+
 function getBusinessHoursSummary(draft: BusinessProfileDraft) {
   const preset = businessHourPresets.find((item) => item.value === draft.business_hours_preset);
   if (!preset || preset.value === "custom") return draft.business_hours_custom.trim();
+  if (preset.value === "reservation") return "예약제로 운영";
+  if (!draft.business_hours_open || !draft.business_hours_close) return "";
 
-  return preset.summary;
+  return `${preset.days} ${draft.business_hours_open}-${draft.business_hours_close}`;
 }
 
 function isValidUrl(value: string) {
@@ -338,6 +368,7 @@ function BusinessProfileCreateWizard({
       business_registration_number:
         draft.business_registration_number.replace(/\D/g, "").length === 10 ? "" : "사업자등록번호를 정확히 입력해주세요.",
       business_hours_summary: businessHoursSummary ? "" : "영업시간을 입력해주세요.",
+      business_hours_close: getClosingTimeError(draft),
       website_url:
         draft.website_url.trim() && !isValidUrl(draft.website_url.trim())
           ? "웹사이트는 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다."
@@ -502,6 +533,8 @@ function BusinessProfileCreateWizard({
         <input type="hidden" name="profile_mode" value={mode} />
         <input type="hidden" name="business_hours_summary" value={businessHoursSummary} />
         <input type="hidden" name="business_hours_preset" value={draft.business_hours_preset} />
+        <input type="hidden" name="business_hours_open_value" value={draft.business_hours_open} />
+        <input type="hidden" name="business_hours_close_value" value={draft.business_hours_close} />
         <input type="hidden" name="social_urls" value={draft.social_urls.join(", ")} />
 
         <StepPanel active={step === 0}>
@@ -676,47 +709,8 @@ function BusinessProfileCreateWizard({
             <Divider />
 
             <div>
-              <FieldLabel>영업시간 <Required /></FieldLabel>
-              <div className="grid gap-3 sm:grid-cols-5">
-                {businessHourPresets.map((preset) => (
-                  <button
-                    key={preset.value}
-                    type="button"
-                    onClick={() => updateDraftField("business_hours_preset", preset.value)}
-                    className={`rounded-xl border px-3 py-3 text-sm font-black transition-colors ${
-                      draft.business_hours_preset === preset.value
-                        ? "border-primary bg-primary text-white"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-primary hover:text-primary"
-                    }`}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-              {draft.business_hours_preset === "custom" ? (
-                <div className="mt-4">
-                  <TextField
-                    name="business_hours_custom"
-                    label="직접 입력"
-                    value={draft.business_hours_custom}
-                    onChange={(value) => updateDraftField("business_hours_custom", value)}
-                    placeholder="화-일 11:00-20:00, 월 휴무"
-                    icon={<Clock size={17} />}
-                    error={fieldErrors.business_hours_custom}
-                  />
-                </div>
-              ) : null}
-              <div className="mt-4">
-                <TextField
-                  name="business_hours_note"
-                  label="운영 메모"
-                  value={draft.business_hours_note}
-                  onChange={(value) => updateDraftField("business_hours_note", value)}
-                  placeholder="브레이크타임 15:00-17:00"
-                  icon={<Clock size={17} />}
-                    error={fieldErrors.business_hours_note}
-                  />
-              </div>
+              <FieldLabel>영업 요일 <Required /></FieldLabel>
+              <BusinessHoursFields draft={draft} updateDraftField={updateDraftField} fieldErrors={fieldErrors} />
             </div>
 
             <Divider />
@@ -959,6 +953,7 @@ function BusinessProfileEditForm({
       business_registration_number:
         draft.business_registration_number.replace(/\D/g, "").length === 10 ? "" : "사업자등록번호를 정확히 입력해주세요.",
       business_hours_summary: businessHoursSummary ? "" : "영업시간을 입력해주세요.",
+      business_hours_close: getClosingTimeError(draft),
       website_url:
         draft.website_url.trim() && !isValidUrl(draft.website_url.trim())
           ? "웹사이트는 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다."
@@ -1011,6 +1006,8 @@ function BusinessProfileEditForm({
         <input type="hidden" name="profile_mode" value="edit" />
         <input type="hidden" name="business_hours_summary" value={businessHoursSummary} />
         <input type="hidden" name="business_hours_preset" value={draft.business_hours_preset} />
+        <input type="hidden" name="business_hours_open_value" value={draft.business_hours_open} />
+        <input type="hidden" name="business_hours_close_value" value={draft.business_hours_close} />
         <input type="hidden" name="social_urls" value={draft.social_urls.join(", ")} />
         <input type="hidden" name="verification_return_to" value="/business/dashboard?profile=edit" />
 
@@ -1128,35 +1125,8 @@ function BusinessProfileEditForm({
         </FormCard>
 
         <FormCard>
-          <SectionHeading title="영업시간" description="운영 방식에 맞는 프리셋을 선택하거나 직접 입력합니다." />
-          <div className="grid gap-3 sm:grid-cols-5">
-            {businessHourPresets.map((preset) => (
-              <button
-                key={preset.value}
-                type="button"
-                onClick={() => updateDraftField("business_hours_preset", preset.value)}
-                className={`rounded-xl border px-3 py-3 text-sm font-black transition-colors ${
-                  draft.business_hours_preset === preset.value
-                    ? "border-primary bg-primary text-white"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-primary hover:text-primary"
-                }`}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-          {draft.business_hours_preset === "custom" ? (
-            <div className="mt-4">
-              <TextField name="business_hours_custom" label="직접 입력" value={draft.business_hours_custom} onChange={(value) => updateDraftField("business_hours_custom", value)} placeholder="화-일 11:00-20:00, 월 휴무" icon={<Clock size={17} />}
-                    error={fieldErrors.business_hours_custom}
-                  />
-            </div>
-          ) : null}
-          <div className="mt-4">
-            <TextField name="business_hours_note" label="운영 메모" value={draft.business_hours_note} onChange={(value) => updateDraftField("business_hours_note", value)} placeholder="브레이크타임 15:00-17:00" icon={<Clock size={17} />}
-                    error={fieldErrors.business_hours_note}
-                  />
-          </div>
+          <SectionHeading title="영업시간" description="운영하는 요일을 고르고 여는 시간과 닫는 시간을 지정합니다." />
+          <BusinessHoursFields draft={draft} updateDraftField={updateDraftField} fieldErrors={fieldErrors} />
         </FormCard>
 
         <FormCard>
@@ -1209,6 +1179,95 @@ function BusinessProfileEditForm({
 
 function StepPanel({ active, children }: { active: boolean; children: React.ReactNode }) {
   return <div className={active ? "block" : "hidden"}>{children}</div>;
+}
+
+// 두 폼(신규 작성·수정)이 같은 영업시간 입력을 쓴다.
+function BusinessHoursFields({
+  draft,
+  updateDraftField,
+  fieldErrors
+}: {
+  draft: BusinessProfileDraft;
+  updateDraftField: (field: keyof BusinessProfileDraft, value: string) => void;
+  fieldErrors: Record<string, string>;
+}) {
+  const isReservation = draft.business_hours_preset === "reservation";
+  const isCustom = draft.business_hours_preset === "custom";
+
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-5">
+        {businessHourPresets.map((preset) => (
+          <button
+            key={preset.value}
+            type="button"
+            onClick={() => updateDraftField("business_hours_preset", preset.value)}
+            className={`rounded-xl border px-3 py-3 text-sm font-black transition-colors ${
+              draft.business_hours_preset === preset.value
+                ? "border-primary bg-primary text-white"
+                : "border-slate-200 bg-white text-slate-600 hover:border-primary hover:text-primary"
+            }`}
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
+
+      {isCustom ? (
+        <div className="mt-4">
+          <TextField
+            name="business_hours_custom"
+            label="영업시간 직접 입력"
+            value={draft.business_hours_custom}
+            onChange={(value) => updateDraftField("business_hours_custom", value)}
+            placeholder="화-일 11:00-20:00, 월 휴무"
+            icon={<Clock size={17} />}
+            error={fieldErrors.business_hours_custom}
+          />
+        </div>
+      ) : null}
+
+      {!isCustom && !isReservation ? (
+        <div className="mt-4">
+          <FieldLabel>영업 시간 <Required /></FieldLabel>
+          <div className="flex items-center gap-3">
+            <input
+              type="time"
+              name="business_hours_open"
+              value={draft.business_hours_open}
+              onChange={(event) => updateDraftField("business_hours_open", event.target.value)}
+              className={fieldControlClassName(fieldErrors.business_hours_open, "flex-1")}
+            />
+            <span className="shrink-0 text-sm font-bold text-slate-400">부터</span>
+            <input
+              type="time"
+              name="business_hours_close"
+              value={draft.business_hours_close}
+              onChange={(event) => updateDraftField("business_hours_close", event.target.value)}
+              className={fieldControlClassName(fieldErrors.business_hours_close, "flex-1")}
+            />
+            <span className="shrink-0 text-sm font-bold text-slate-400">까지</span>
+          </div>
+          <FieldError>{fieldErrors.business_hours_open || fieldErrors.business_hours_close}</FieldError>
+          <p className="mt-2 text-xs text-slate-500">
+            자정을 넘겨 영업하거나 요일마다 다르면 위에서 &lsquo;직접 입력&rsquo;을 골라주세요.
+          </p>
+        </div>
+      ) : null}
+
+      <div className="mt-4">
+        <TextField
+          name="business_hours_note"
+          label="운영 메모 (선택)"
+          value={draft.business_hours_note}
+          onChange={(value) => updateDraftField("business_hours_note", value)}
+          placeholder="브레이크타임 15:00-17:00, 월 휴무"
+          icon={<Clock size={17} />}
+          error={fieldErrors.business_hours_note}
+        />
+      </div>
+    </>
+  );
 }
 
 function FormCard({ children }: { children: React.ReactNode }) {
