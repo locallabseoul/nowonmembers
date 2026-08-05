@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { CreditCard, Loader2 } from "lucide-react";
 import { DEFAULT_POINT_CHARGE_POINTS, formatPoints, POINT_CHARGE_OPTIONS, POINT_TERMS_VERSION, POINTS_PAYMENT_OPEN } from "@/lib/points";
+import { track } from "@vercel/analytics";
 import { createPointChargeOrder, markPointChargeOrderFailed, type PointChargeOrder } from "./actions";
 
 type TossPayment = {
@@ -62,6 +63,8 @@ export function PointChargeButton({ campaignId }: { campaignId?: string }) {
     // 토스 심사 승인 전까지는 결제창 대신 준비중 안내를 띄운다. 서버 액션도
     // 같은 플래그로 막혀 있어 화면을 우회해도 주문은 생성되지 않는다.
     if (!POINTS_PAYMENT_OPEN) {
+      // 결제를 열기 전의 실수요 지표. 결제 오픈 시점을 정할 때 쓴다.
+      track("charge_attempted_while_closed", { points: selectedPoints });
       setShowPreparingNotice(true);
       return;
     }

@@ -1,5 +1,6 @@
 "use server";
 
+import { track } from "@vercel/analytics/server";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
 import { fieldError, keepValues, type FormState } from "@/lib/form-errors";
@@ -141,6 +142,8 @@ export async function applyCampaign(_prevState: FormState, formData: FormData): 
       return { formError: restoreError.message, values: kept };
     }
   }
+
+  await track("campaign_applied").catch(() => {});
 
   redirect("/creator/dashboard");
 }

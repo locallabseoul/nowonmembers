@@ -1,5 +1,6 @@
 "use server";
 
+import { track } from "@vercel/analytics/server";
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
@@ -235,6 +236,8 @@ export async function createCampaign(formData: FormData) {
     });
     redirect(`/business/points?${params.toString()}`);
   }
+
+  await track("campaign_submitted", { recruitCount }).catch(() => {});
 
   redirect("/business/dashboard");
 }

@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getAccountPath } from "@/lib/auth/guards";
+import { track } from "@vercel/analytics/server";
 import { normalizePhoneNumber, toKoreanE164Phone } from "@/lib/auth/phone";
 import { collectFieldErrors, fieldError, hasErrors, keepValues, type FormState } from "@/lib/form-errors";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -388,6 +389,9 @@ export async function verifyAuthPhoneOtp(_prevState: FormState, formData: FormDa
       return { formError: message ?? "가입 정보를 저장하지 못했습니다. 잠시 후 다시 시도해주세요." };
     }
   }
+
+  // 집계 실패가 가입을 막으면 안 된다.
+  await track("signup_completed", { role }).catch(() => {});
 
   redirect(next);
 }
