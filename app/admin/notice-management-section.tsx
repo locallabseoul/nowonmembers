@@ -22,6 +22,7 @@ function formatNoticeDate(value: string) {
   if (Number.isNaN(date.getTime())) return value;
 
   return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
     month: "numeric",
     day: "numeric",
     hour: "2-digit",

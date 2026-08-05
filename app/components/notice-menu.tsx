@@ -21,7 +21,8 @@ function formatRelative(value: string) {
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays < 7) return `${diffDays}일 전`;
 
-  return new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric" }).format(new Date(value));
+  return new Intl.DateTimeFormat("ko-KR", {
+timeZone: "Asia/Seoul", month: "numeric", day: "numeric" }).format(new Date(value));
 }
 
 export function NoticeMenu({

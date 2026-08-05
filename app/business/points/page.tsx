@@ -12,7 +12,8 @@ function formatDate(value: string | null) {
   if (!value) return "없음";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium" }).format(date);
+  return new Intl.DateTimeFormat("ko-KR", {
+timeZone: "Asia/Seoul", dateStyle: "medium" }).format(date);
 }
 
 function orderStatusLabel(status: string) {

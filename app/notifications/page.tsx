@@ -17,6 +17,7 @@ function formatDateTime(value: string) {
   if (Number.isNaN(date.getTime())) return value;
 
   return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
     month: "long",
     day: "numeric",
     hour: "2-digit",
