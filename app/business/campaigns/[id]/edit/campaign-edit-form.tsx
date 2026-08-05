@@ -199,7 +199,8 @@ export function CampaignEditForm({ campaign }: { campaign: CampaignEditValues })
         />
 
         <div>
-          <FieldLabel>필수 미션</FieldLabel>
+          <FieldLabel>콘텐츠 필수 조건</FieldLabel>
+          <p className="mb-2 mt-1 text-xs leading-5 text-slate-500">크리에이터가 반드시 지켜야 할 조건입니다.</p>
           <div className="mt-1 grid gap-2 sm:grid-cols-2">
             {campaignMissionOptions.map((option) => (
               <label key={option} className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 p-3.5 text-sm text-charcoal transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5">
@@ -226,7 +227,8 @@ export function CampaignEditForm({ campaign }: { campaign: CampaignEditValues })
 
         <TextAreaField
           name="content_requirements"
-          label="상세 촬영 미션 및 작성 가이드"
+          label="추가로 요청할 내용 (선택)"
+          helper="위 조건만으로 부족한 부분이 있다면 적어주세요."
           rows={4}
           defaultValue={values.content_requirements ?? campaign.contentRequirements}
           error={fieldErrors.content_requirements}
@@ -338,6 +340,7 @@ function TextAreaField({
   required = false,
   defaultValue,
   placeholder,
+  helper,
   error
 }: {
   name: string;
@@ -346,11 +349,13 @@ function TextAreaField({
   required?: boolean;
   defaultValue?: string;
   placeholder?: string;
+  helper?: string;
   error?: string;
 }) {
   return (
     <label className="block">
       <FieldLabel required={required}>{label}</FieldLabel>
+      {helper ? <p className="mb-2 text-xs leading-5 text-slate-500">{helper}</p> : null}
       <textarea
         name={name}
         rows={rows}

@@ -421,6 +421,12 @@ export function CampaignCreateWizard({
       errors.keywords = keywordRequiredMessage;
     }
 
+    // 체크박스는 브라우저 기본 검증이 걸리지 않아 직접 확인한다. 조건이 하나도
+    // 없으면 크리에이터가 무엇을 지켜야 하는지 알 수 없다.
+    if (stepIndex === 2 && !formRef.current?.querySelector('input[name="mission_options"]:checked')) {
+      errors.mission_options = "콘텐츠 필수 조건을 하나 이상 선택해주세요.";
+    }
+
     return errors;
   }
 
@@ -435,6 +441,14 @@ export function CampaignCreateWizard({
 
     if (firstName === "keywords") {
       keywordInputRef.current?.focus();
+      return;
+    }
+
+    if (firstName === "mission_options") {
+      formRef.current
+        ?.querySelector('input[name="mission_options"]')
+        ?.closest("div")
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
       return;
     }
 
@@ -925,7 +939,10 @@ export function CampaignCreateWizard({
 
               <section className="space-y-6">
                 <div>
-                  <FieldLabel>콘텐츠 필수 조건 (체크리스트) <Required /></FieldLabel>
+                  <FieldLabel>콘텐츠 필수 조건 <Required /></FieldLabel>
+                  <p className="mb-3 text-xs leading-5 text-slate-500">
+                    크리에이터가 반드시 지켜야 할 조건입니다. 하나 이상 선택해주세요.
+                  </p>
                   <div className="grid gap-4 sm:grid-cols-2">
                     {missionOptions.map((mission, index) => (
                       <label key={mission} className="group flex cursor-pointer items-start gap-3">
@@ -937,16 +954,18 @@ export function CampaignCreateWizard({
                       </label>
                     ))}
                   </div>
+                  <FieldError>{fieldErrors.mission_options}</FieldError>
                 </div>
-                <TextArea
-                  name="content_requirements"
-                  label="상세 촬영 미션 및 작성 가이드"
-                  placeholder={"1. 매장 외부 간판 사진 1장 필수\n2. 시그니처 메뉴 디테일 컷 3장 이상\n3. 분위기가 좋아 데이트하기 좋다는 내용 본문 포함"}
-                  rows={4}
-                  helper="번호를 매겨 구체적으로 지시해주시면 크리에이터가 가이드에 맞춰 더 좋은 콘텐츠를 제작할 수 있습니다."
-                  requiredMark
-                  error={fieldErrors.content_requirements}
-                />
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-5">
+                  <TextArea
+                    name="content_requirements"
+                    label="추가로 요청할 내용 (선택)"
+                    placeholder={"예) 시그니처 메뉴인 밤티라미수는 꼭 담아주세요\n예) 2층 창가 자리에서 바깥 풍경이 보이게 한 컷 부탁드려요"}
+                    rows={4}
+                    helper="위 조건만으로 부족한 부분이 있다면 적어주세요. 가게에만 있는 요청을 구체적으로 적을수록 원하는 콘텐츠가 나옵니다."
+                    error={fieldErrors.content_requirements}
+                  />
+                </div>
               </section>
             </FormCard>
           </StepPanel>
