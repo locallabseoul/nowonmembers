@@ -4,6 +4,7 @@ import { Plus, UserRound } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import { AccountMenu } from "@/app/components/account-menu";
 import { Logo } from "@/app/components/logo";
+import { Analytics } from "@vercel/analytics/next";
 import { HeaderNav } from "@/app/components/header-nav";
 import { MobileNav } from "@/app/components/mobile-nav";
 import { NoticeMenu } from "@/app/components/notice-menu";
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           {children}
         </div>
         <Footer />
+        <Analytics />
       </body>
     </html>
   );
