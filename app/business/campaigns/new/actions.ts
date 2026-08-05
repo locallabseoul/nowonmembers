@@ -10,9 +10,19 @@ const CAMPAIGN_IMAGE_BUCKET = "campaign-images";
 const MAX_CAMPAIGN_IMAGE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_CAMPAIGN_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-function splitLines(value: FormDataEntryValue | null) {
+// 키워드는 한 줄에 쉼표로 나열하므로 쉼표로도 나눈다.
+function splitKeywords(value: FormDataEntryValue | null) {
   return String(value ?? "")
     .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+// 요청사항은 문장이라 쉼표가 흔하다. 줄바꿈으로만 나눈다. 쉼표로 나누면
+// "디저트, 커피 또는 굿즈 사진" 같은 문장이 두 조각으로 쪼개진다.
+function splitRequirementLines(value: FormDataEntryValue | null) {
+  return String(value ?? "")
+    .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean);
 }
@@ -20,9 +30,9 @@ function splitLines(value: FormDataEntryValue | null) {
 function getContentRequirements(formData: FormData) {
   const requirements = [
     ...formData.getAll("mission_options").map((value) => String(value).trim()).filter(Boolean),
-    ...splitLines(formData.get("content_requirements"))
+    ...splitRequirementLines(formData.get("content_requirements"))
   ];
-  const keywords = splitLines(formData.get("keywords"));
+  const keywords = splitKeywords(formData.get("keywords"));
 
   return {
     keywords: Array.from(new Set(keywords)),
