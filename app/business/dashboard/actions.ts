@@ -364,11 +364,11 @@ function toStoragePath(url: string) {
   return index === -1 ? null : decodeURIComponent(url.slice(index + marker.length));
 }
 
-export async function deleteDraftCampaign(formData: FormData) {
+export async function deleteCampaign(formData: FormData) {
   const campaignId = String(formData.get("campaign_id") ?? "");
   const { supabase } = await requireRole("business", "/business/dashboard");
 
-  const { data, error } = await supabase.rpc("delete_draft_campaign", {
+  const { data, error } = await supabase.rpc("delete_campaign", {
     target_campaign_id: campaignId
   });
 
@@ -389,7 +389,7 @@ export async function deleteDraftCampaign(formData: FormData) {
 
   revalidatePath("/business/dashboard");
   revalidatePath("/admin");
-  redirect(`/business/dashboard?message=${encodeURIComponent("초안 캠페인을 삭제하고 예약 포인트를 반환했습니다.")}`);
+  redirect(`/business/dashboard?message=${encodeURIComponent("캠페인을 삭제했습니다. 예약된 포인트가 있었다면 함께 반환됩니다.")}`);
 }
 
 export async function cancelCampaignBeforePublish(formData: FormData) {

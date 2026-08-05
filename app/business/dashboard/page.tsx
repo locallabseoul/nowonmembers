@@ -6,7 +6,7 @@ import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-l
 import { LAUNCH_BONUS_POINTS, LAUNCH_BONUS_VALID_DAYS, POINTS_PER_RECRUIT, formatPoints } from "@/lib/points";
 import { getBusinessDashboard, type DashboardApplication, type DashboardCampaign, type DashboardSubmission } from "@/lib/supabase/queries";
 import { requireRole } from "@/lib/auth/guards";
-import { approveRecommendedApplication, cancelCampaignBeforePublish, deleteDraftCampaign, finalizeCampaignSelection, saveBusinessProfile, submitDraftCampaignForReview, withdrawCampaignFromReview } from "./actions";
+import { approveRecommendedApplication, cancelCampaignBeforePublish, deleteCampaign, finalizeCampaignSelection, saveBusinessProfile, submitDraftCampaignForReview, withdrawCampaignFromReview } from "./actions";
 import { ConfirmButton } from "@/app/components/confirm-button";
 import { BusinessProfileWizard } from "./business-profile-wizard";
 import { FormBanner } from "@/app/components/form-field";
@@ -290,6 +290,24 @@ function campaignActionLabel(campaign: DashboardCampaign) {
   return "상세 보기";
 }
 
+function DeleteCampaignButton({ campaignId }: { campaignId: string }) {
+  return (
+    <ConfirmButton
+      label="삭제"
+      confirmLabel="캠페인을 삭제하고 예약 포인트를 반환합니다"
+      className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 shadow-sm transition-colors hover:bg-red-50"
+    >
+      <form action={deleteCampaign} className="inline">
+        <input type="hidden" name="campaign_id" value={campaignId} />
+        <button className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-red-700">
+          <Trash2 size={13} />
+          삭제 확정
+        </button>
+      </form>
+    </ConfirmButton>
+  );
+}
+
 function CampaignManagementRow({
   campaign,
   selected,
@@ -305,6 +323,11 @@ function CampaignManagementRow({
   const actionTab: ModalTab = campaign.status === "submission_review" || campaign.status === "completed" ? "submissions" : "applications";
   const actionHref = dashboardHref("/business/dashboard", campaign.id, statusFilter, actionTab);
   const isEditable = campaign.status === "draft" || campaign.status === "revision_requested";
+  // 지원자가 없던 캠페인은 남길 기록이 없다. 목록에서 치울 수 있게 한다.
+  const isDeletable =
+    ["draft", "cancelled", "failed"].includes(campaign.status) &&
+    campaign.applicationCount === 0 &&
+    campaign.selectedCount === 0;
   // 검수 대기 중에는 요청을 회수해야 고칠 수 있다. 회수 후 바로 수정 화면으로 보낸다.
   const canWithdraw = campaign.status === "in_review";
 
@@ -393,33 +416,24 @@ function CampaignManagementRow({
                     {campaignActionLabel(campaign)}
                   </button>
                 </form>
-                <ConfirmButton
-                  label="삭제"
-                  confirmLabel="초안 캠페인을 삭제하고 예약 포인트를 반환합니다"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 shadow-sm transition-colors hover:bg-red-50"
-                >
-                  <form action={deleteDraftCampaign} className="inline">
-                    <input type="hidden" name="campaign_id" value={campaign.id} />
-                    <button className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-red-700">
-                      <Trash2 size={13} />
-                      삭제 확정
-                    </button>
-                  </form>
-                </ConfirmButton>
+                <DeleteCampaignButton campaignId={campaign.id} />
               </>
             ) : null}
           </div>
         ) : (
-          <Link
-            href={actionHref}
-            className={`inline-flex rounded-lg px-3 py-1.5 text-sm shadow-sm transition-colors ${
-              actionIsPrimary
-                ? "bg-primary font-bold text-white hover:bg-primaryHover"
-                : "border border-gray-200 bg-white font-medium text-charcoal hover:bg-gray-50 hover:text-primary"
-            }`}
-          >
-            {campaignActionLabel(campaign)}
-          </Link>
+          <div className="flex items-center justify-end gap-2">
+            <Link
+              href={actionHref}
+              className={`inline-flex rounded-lg px-3 py-1.5 text-sm shadow-sm transition-colors ${
+                actionIsPrimary
+                  ? "bg-primary font-bold text-white hover:bg-primaryHover"
+                  : "border border-gray-200 bg-white font-medium text-charcoal hover:bg-gray-50 hover:text-primary"
+              }`}
+            >
+              {campaignActionLabel(campaign)}
+            </Link>
+            {isDeletable ? <DeleteCampaignButton campaignId={campaign.id} /> : null}
+          </div>
         )}
       </td>
     </tr>

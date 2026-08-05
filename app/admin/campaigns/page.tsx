@@ -5,6 +5,7 @@ import { formatPoints } from "@/lib/points";
 import { getAdminCampaigns, type DashboardApplication, type DashboardCampaign, type DashboardSubmission } from "@/lib/supabase/queries";
 import { ExternalLink, ImageIcon, X } from "lucide-react";
 import { adjustBusinessPoints, approveCampaign, approveSubmission, publishLocalStory, recommendApplication, rejectCampaign, requestCampaignRevision, requestSubmissionRevision, unrecommendApplication } from "../actions";
+import { ConfirmButton } from "@/app/components/confirm-button";
 import { FormBanner } from "@/app/components/form-field";
 
 const applicationStatusTabs = [
@@ -209,11 +210,18 @@ function CampaignManagementRow({
             <input type="hidden" name="admin_memo" value="운영자 수정 요청" />
             <button className="rounded-lg border border-line px-4 py-2 text-sm font-black text-charcoal">수정 요청</button>
           </form>
-          <form action={rejectCampaign}>
-            <input type="hidden" name="campaign_id" value={campaign.id} />
-            <input type="hidden" name="admin_memo" value="관리자 검수 반려" />
-            <button className="rounded-lg border border-red-200 px-4 py-2 text-sm font-black text-red-600">반려·반환</button>
-          </form>
+          {/* 취소는 되돌릴 수 없다. 고쳐서 다시 받을 생각이면 수정 요청을 써야 한다. */}
+          <ConfirmButton
+            label="캠페인 취소"
+            confirmLabel="캠페인을 취소하고 예약 포인트를 반환합니다. 되돌릴 수 없습니다"
+            className="rounded-lg border border-red-200 px-4 py-2 text-sm font-black text-red-600"
+          >
+            <form action={rejectCampaign} className="inline">
+              <input type="hidden" name="campaign_id" value={campaign.id} />
+              <input type="hidden" name="admin_memo" value="관리자 검수 반려" />
+              <button className="rounded-lg bg-red-600 px-4 py-2 text-sm font-black text-white">취소 확정</button>
+            </form>
+          </ConfirmButton>
           <form action={approveCampaign}>
             <input type="hidden" name="campaign_id" value={campaign.id} />
             <button className="rounded-lg bg-primary px-4 py-2 text-sm font-black text-white">승인</button>
