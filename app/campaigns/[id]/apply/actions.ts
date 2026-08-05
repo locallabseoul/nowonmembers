@@ -54,8 +54,7 @@ export async function applyCampaign(_prevState: FormState, formData: FormData): 
 
   const { data: campaign, error: campaignError } = await supabase
     .from("campaigns")
-    .select("id,status,recruit_count,recruit_end,selection_date,submission_due,campaign_applications(count)")
-    .neq("campaign_applications.status", "cancelled")
+    .select("id,status,recruit_count,recruit_end,selection_date,submission_due,applicant_count")
     .eq("id", campaignId)
     .maybeSingle();
 
@@ -63,9 +62,8 @@ export async function applyCampaign(_prevState: FormState, formData: FormData): 
     redirect(`/campaigns?error=${encodeURIComponent("신청 가능한 캠페인을 찾을 수 없습니다.")}`);
   }
 
-  const applicationCount = Array.isArray(campaign.campaign_applications)
-    ? campaign.campaign_applications[0]?.count ?? 0
-    : 0;
+  // 지원 내역은 본인 것만 읽히므로 조인으로 세면 정원 확인이 무의미해진다.
+  const applicationCount = campaign.applicant_count ?? 0;
   const lifecycle = getCampaignLifecycle({
     status: campaign.status as Campaign["status"],
     recruitEnd: campaign.recruit_end ?? "",
