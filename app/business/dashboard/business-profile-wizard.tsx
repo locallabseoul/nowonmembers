@@ -8,6 +8,7 @@ import {
   Building2,
   Camera,
   Check,
+  CircleAlert,
   Clock,
   Globe,
   ImageIcon,
@@ -1193,24 +1194,32 @@ function BusinessHoursFields({
 }) {
   const isReservation = draft.business_hours_preset === "reservation";
   const isCustom = draft.business_hours_preset === "custom";
+  const timeError = fieldErrors.business_hours_close || fieldErrors.business_hours_open;
+  const summary = getBusinessHoursSummary(draft);
 
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-5">
-        {businessHourPresets.map((preset) => (
-          <button
-            key={preset.value}
-            type="button"
-            onClick={() => updateDraftField("business_hours_preset", preset.value)}
-            className={`rounded-xl border px-3 py-3 text-sm font-black transition-colors ${
-              draft.business_hours_preset === preset.value
-                ? "border-primary bg-primary text-white"
-                : "border-slate-200 bg-white text-slate-600 hover:border-primary hover:text-primary"
-            }`}
-          >
-            {preset.label}
-          </button>
-        ))}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
+        {businessHourPresets.map((preset) => {
+          const isSelected = draft.business_hours_preset === preset.value;
+
+          return (
+            <button
+              key={preset.value}
+              type="button"
+              onClick={() => updateDraftField("business_hours_preset", preset.value)}
+              aria-pressed={isSelected}
+              className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-3 text-sm font-black transition-colors ${
+                isSelected
+                  ? "border-primary bg-primary text-white"
+                  : "border-slate-200 bg-white text-slate-600 hover:border-primary hover:text-primary"
+              }`}
+            >
+              {isSelected ? <Check size={14} strokeWidth={3} /> : null}
+              {preset.label}
+            </button>
+          );
+        })}
       </div>
 
       {isCustom ? (
@@ -1228,31 +1237,51 @@ function BusinessHoursFields({
       ) : null}
 
       {!isCustom && !isReservation ? (
-        <div className="mt-4">
-          <FieldLabel>영업 시간 <Required /></FieldLabel>
-          <div className="flex items-center gap-3">
-            <input
-              type="time"
-              name="business_hours_open"
-              value={draft.business_hours_open}
-              onChange={(event) => updateDraftField("business_hours_open", event.target.value)}
-              className={fieldControlClassName(fieldErrors.business_hours_open, "flex-1")}
-            />
-            <span className="shrink-0 text-sm font-bold text-slate-400">부터</span>
-            <input
-              type="time"
-              name="business_hours_close"
-              value={draft.business_hours_close}
-              onChange={(event) => updateDraftField("business_hours_close", event.target.value)}
-              className={fieldControlClassName(fieldErrors.business_hours_close, "flex-1")}
-            />
-            <span className="shrink-0 text-sm font-bold text-slate-400">까지</span>
+        <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50/60 p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Clock size={15} className="text-primary" />
+            <p className="text-sm font-black text-charcoal">영업 시간</p>
           </div>
-          <FieldError>{fieldErrors.business_hours_open || fieldErrors.business_hours_close}</FieldError>
-          <p className="mt-2 text-xs text-slate-500">
-            자정을 넘겨 영업하거나 요일마다 다르면 위에서 &lsquo;직접 입력&rsquo;을 골라주세요.
-          </p>
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-bold text-slate-500">여는 시간</span>
+              <input
+                type="time"
+                name="business_hours_open"
+                value={draft.business_hours_open}
+                onChange={(event) => updateDraftField("business_hours_open", event.target.value)}
+                aria-invalid={timeError ? true : undefined}
+                className={fieldControlClassName(timeError, "bg-white text-center font-bold tabular-nums")}
+              />
+            </label>
+            <span className="hidden pt-6 text-sm font-black text-slate-300 sm:block">~</span>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-bold text-slate-500">닫는 시간</span>
+              <input
+                type="time"
+                name="business_hours_close"
+                value={draft.business_hours_close}
+                onChange={(event) => updateDraftField("business_hours_close", event.target.value)}
+                aria-invalid={timeError ? true : undefined}
+                className={fieldControlClassName(timeError, "bg-white text-center font-bold tabular-nums")}
+              />
+            </label>
+          </div>
+          {timeError ? (
+            <FieldError>{timeError}</FieldError>
+          ) : (
+            <p className="mt-3 flex items-start gap-1.5 text-xs leading-5 text-slate-500">
+              <CircleAlert size={13} className="mt-0.5 shrink-0 text-slate-400" />
+              요일마다 시간이 다르거나 자정을 넘겨 영업한다면 위에서 &lsquo;직접 입력&rsquo;을 골라주세요.
+            </p>
+          )}
         </div>
+      ) : null}
+
+      {summary ? (
+        <p className="mt-4 rounded-xl bg-primaryLight px-4 py-3 text-sm font-bold text-primaryHover">
+          크리에이터에게 이렇게 보여요 · {summary}
+        </p>
       ) : null}
 
       <div className="mt-4">
