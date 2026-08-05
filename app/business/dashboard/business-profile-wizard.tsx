@@ -113,6 +113,25 @@ const businessHourPresets = [
 const DEFAULT_OPEN_TIME = "10:00";
 const DEFAULT_CLOSE_TIME = "21:00";
 
+// 브라우저 기본 시간 선택기는 사파리·크롬마다 생김새가 다르고 색도 손댈 수 없다.
+// 시와 분을 직접 고르게 해 사이트 안에서 같은 모양을 유지한다.
+const hourOptions = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, "0"));
+const minuteOptions = ["00", "10", "20", "30", "40", "50"];
+
+function hourLabel(hour: string) {
+  const value = Number(hour);
+  if (value === 0) return "오전 12시";
+  if (value < 12) return `오전 ${value}시`;
+  if (value === 12) return "오후 12시";
+
+  return `오후 ${value - 12}시`;
+}
+
+function splitTime(value: string) {
+  const [hour = "", minute = ""] = value.split(":");
+  return { hour, minute };
+}
+
 // "매일 10:00-21:00" 같은 기존 요약에서 시간을 되찾는다. 시간 필드가 없던 시절에
 // 저장된 프로필을 수정할 때 입력칸이 비어 보이지 않게 한다.
 function parseTimeRange(summary: string) {
@@ -1182,6 +1201,60 @@ function StepPanel({ active, children }: { active: boolean; children: React.Reac
   return <div className={active ? "block" : "hidden"}>{children}</div>;
 }
 
+function TimeSelect({
+  label,
+  value,
+  error,
+  onChange
+}: {
+  label: string;
+  value: string;
+  error?: string;
+  onChange: (value: string) => void;
+}) {
+  const { hour, minute } = splitTime(value);
+  // 예전에 저장된 09:25 같은 값도 그대로 보여준다. 목록에 없다고 비워버리면
+  // 사용자가 손대지도 않은 시간이 바뀐다.
+  const minutes = minute && !minuteOptions.includes(minute)
+    ? [...minuteOptions, minute].sort()
+    : minuteOptions;
+  const selectClassName = `${fieldControlClassName(error, "bg-white font-bold")} appearance-none bg-[length:14px] bg-[right_0.85rem_center] bg-no-repeat pr-9`;
+  const caret = {
+    backgroundImage:
+      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")"
+  };
+
+  return (
+    <div>
+      <span className="mb-1.5 block text-xs font-bold text-slate-500">{label}</span>
+      <div className="grid grid-cols-[1.4fr_1fr] gap-2">
+        <select
+          aria-label={`${label} 시`}
+          value={hour}
+          onChange={(event) => onChange(`${event.target.value}:${minute}`)}
+          className={`${selectClassName} min-w-0`}
+          style={caret}
+        >
+          {hourOptions.map((option) => (
+            <option key={option} value={option}>{hourLabel(option)}</option>
+          ))}
+        </select>
+        <select
+          aria-label={`${label} 분`}
+          value={minute}
+          onChange={(event) => onChange(`${hour}:${event.target.value}`)}
+          className={`${selectClassName} min-w-0`}
+          style={caret}
+        >
+          {minutes.map((option) => (
+            <option key={option} value={option}>{option}분</option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
 // 두 폼(신규 작성·수정)이 같은 영업시간 입력을 쓴다.
 function BusinessHoursFields({
   draft,
@@ -1243,29 +1316,19 @@ function BusinessHoursFields({
             <p className="text-sm font-black text-charcoal">영업 시간</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-bold text-slate-500">여는 시간</span>
-              <input
-                type="time"
-                name="business_hours_open"
-                value={draft.business_hours_open}
-                onChange={(event) => updateDraftField("business_hours_open", event.target.value)}
-                aria-invalid={timeError ? true : undefined}
-                className={fieldControlClassName(timeError, "bg-white text-center font-bold tabular-nums")}
-              />
-            </label>
+            <TimeSelect
+              label="여는 시간"
+              value={draft.business_hours_open}
+              error={timeError}
+              onChange={(next) => updateDraftField("business_hours_open", next)}
+            />
             <span className="hidden pt-6 text-sm font-black text-slate-300 sm:block">~</span>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-bold text-slate-500">닫는 시간</span>
-              <input
-                type="time"
-                name="business_hours_close"
-                value={draft.business_hours_close}
-                onChange={(event) => updateDraftField("business_hours_close", event.target.value)}
-                aria-invalid={timeError ? true : undefined}
-                className={fieldControlClassName(timeError, "bg-white text-center font-bold tabular-nums")}
-              />
-            </label>
+            <TimeSelect
+              label="닫는 시간"
+              value={draft.business_hours_close}
+              error={timeError}
+              onChange={(next) => updateDraftField("business_hours_close", next)}
+            />
           </div>
           {timeError ? (
             <FieldError>{timeError}</FieldError>
