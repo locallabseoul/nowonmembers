@@ -86,7 +86,9 @@ function filterApplications(applications: DashboardApplication[], statusFilter: 
 function campaignActionLabel(campaign: DashboardCampaign) {
   if (campaign.status === "submission_review") return "제출 검토";
   if (campaign.status === "completed") return "결과 확인";
-  return "지원자 보기";
+  if (campaign.status === "recruiting" || campaign.status === "selecting") return "지원자 보기";
+
+  return "상세 보기";
 }
 
 function campaignSubmissionText(campaign: DashboardCampaign) {
@@ -217,6 +219,8 @@ function CampaignManagementRow({
             <button className="rounded-lg bg-primary px-4 py-2 text-sm font-black text-white">승인</button>
           </form>
         </div>
+      ) : campaign.status === "draft" ? (
+        <span className="rounded-lg bg-gray-50 px-4 py-2 text-sm font-bold text-gray-400">가게가 작성 중</span>
       ) : (
         <Link href={dashboardHref(campaign.id, statusFilter, actionTab)} className="rounded-lg bg-white px-4 py-2 text-sm font-black text-primary ring-1 ring-primary/20">
           {campaignActionLabel(campaign)}

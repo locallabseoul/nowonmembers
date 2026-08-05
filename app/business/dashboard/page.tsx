@@ -221,8 +221,10 @@ function campaignPeriodText(campaign: DashboardCampaign) {
   if (campaign.status === "in_progress") return `~ ${formatDateShort(campaign.submissionDue || campaign.visitEnd)} 진행`;
   if (campaign.status === "submission_review") return `~ ${formatDateShort(campaign.submissionDue)} 제출`;
   if (campaign.status === "completed") return `종료일: ${formatDateShort(campaign.submissionDue || campaign.recruitEnd)}`;
+  if (campaign.status === "cancelled" || campaign.status === "failed") return "종료됨";
 
-  return `마감 ${formatDateShort(campaign.recruitEnd)}`;
+  // 아직 공개 전이라 모집이 시작되지 않았다. 이미 마감된 것처럼 보이지 않게 한다.
+  return `${formatDateShort(campaign.recruitEnd)} 마감 예정`;
 }
 
 function campaignApplicantText(campaign: DashboardCampaign) {
@@ -250,9 +252,13 @@ function campaignApplicantText(campaign: DashboardCampaign) {
     };
   }
 
+  const notPublished = ["draft", "in_review", "revision_requested", "approved", "scheduled"].includes(campaign.status);
+
   return {
     main: `선정 ${campaign.recruitCount}명`,
-    sub: campaign.applicationCount ? `지원 ${campaign.applicationCount}명` : "지원자 없음",
+    sub: campaign.applicationCount
+      ? `지원 ${campaign.applicationCount}명`
+      : notPublished ? "공개 후 모집 시작" : "지원자 없음",
     highlight: false
   };
 }
@@ -275,11 +281,13 @@ function campaignSubmissionText(campaign: DashboardCampaign) {
 
 function campaignActionLabel(campaign: DashboardCampaign) {
   if (campaign.status === "draft") return "검수 제출";
+  if (campaign.status === "recruiting") return "지원자 보기";
   if (campaign.status === "selecting") return "선정하기";
   if (campaign.status === "submission_review") return "리뷰 검토";
   if (campaign.status === "completed") return "결과 리포트";
-  if (campaign.status === "in_progress") return "상세 보기";
-  return "지원자 보기";
+
+  // 공개 전이거나 진행 중이면 지원자를 볼 단계가 아니다.
+  return "상세 보기";
 }
 
 function CampaignManagementRow({
