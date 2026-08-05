@@ -55,7 +55,7 @@ export function CampaignCard({ campaign }: { campaign: Campaign }) {
   );
 }
 
-export function StatCard({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+export function StatCard({ label, value, hint, icon }: { label: string; value: string; hint?: string; icon?: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-line bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
@@ -63,6 +63,7 @@ export function StatCard({ label, value, icon }: { label: string; value: string;
         <div className="text-primary">{icon}</div>
       </div>
       <p className="mt-3 text-3xl font-black text-charcoal">{value}</p>
+      {hint ? <p className="mt-1 text-xs text-gray-400">{hint}</p> : null}
     </div>
   );
 }

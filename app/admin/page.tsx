@@ -47,7 +47,12 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
         <h2 className="mb-4 font-black text-charcoal">서비스 현황</h2>
         <div className="grid gap-4 md:grid-cols-4">
           <StatCard label="등록 가게" value={`${stats.businesses}`} icon={<Users size={20} />} />
-          <StatCard label="인증 크리에이터" value={`${stats.verifiedCreators}`} icon={<CheckCircle2 size={20} />} />
+          <StatCard
+            label="크리에이터"
+            value={stats.unverifiedCreators ? `${stats.verifiedCreators}+${stats.unverifiedCreators}` : `${stats.verifiedCreators}`}
+            hint={stats.unverifiedCreators ? `인증 ${stats.verifiedCreators} · 미인증 ${stats.unverifiedCreators}` : "모두 인증 완료"}
+            icon={<CheckCircle2 size={20} />}
+          />
           <StatCard label="모집 중 캠페인" value={`${stats.recruitingCampaigns}`} icon={<ClipboardCheck size={20} />} />
           <StatCard label="제출 승인율" value={`${completionRate}%`} icon={<Send size={20} />} />
         </div>

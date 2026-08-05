@@ -463,6 +463,7 @@ function buildBusinessProfileDefaults({
 export type AdminOverviewStats = {
   businesses: number;
   verifiedCreators: number;
+  unverifiedCreators: number;
   recruitingCampaigns: number;
   approvedSubmissions: number;
   totalSubmissions: number;
@@ -1811,23 +1812,25 @@ export async function getAdminOverview(): Promise<AdminOverviewStats> {
     totalSubmissionCount,
     pendingReviewCount,
     pendingSubmissionCount,
-    pendingVerificationCount
+    pendingVerificationCount,
+    unverifiedCreatorCount
   ] = await Promise.all([
     supabase.from("business_profiles").select("id", { count: "exact", head: true }),
-    // 홈 지표와 같은 기준(가입자)으로 센다. 프로필을 아직 안 만든 회원은
-    // 회원 관리 목록에서 따로 표시한다.
-    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "creator").eq("verification_status", "verified"),
+    // 인증과 미인증을 나눠 센다. 심사가 밀리고 있는지 한눈에 보이게 한다.
+    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "creator").eq("status", "active").eq("verification_status", "verified"),
     supabase.from("campaigns").select("id", { count: "exact", head: true }).eq("status", "recruiting"),
     supabase.from("content_submissions").select("id", { count: "exact", head: true }).eq("review_status", "approved"),
     supabase.from("content_submissions").select("id", { count: "exact", head: true }),
     supabase.from("campaigns").select("id", { count: "exact", head: true }).in("status", ["in_review", "revision_requested"]),
     supabase.from("content_submissions").select("id", { count: "exact", head: true }).eq("review_status", "submitted"),
-    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("verification_status", "pending")
+    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("verification_status", "pending"),
+    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "creator").eq("status", "active").neq("verification_status", "verified")
   ]);
 
   return {
     businesses: businessCount.count ?? 0,
     verifiedCreators: creatorCount.count ?? 0,
+    unverifiedCreators: unverifiedCreatorCount.count ?? 0,
     recruitingCampaigns: recruitingCount.count ?? 0,
     approvedSubmissions: approvedSubmissionCount.count ?? 0,
     totalSubmissions: totalSubmissionCount.count ?? 0,
