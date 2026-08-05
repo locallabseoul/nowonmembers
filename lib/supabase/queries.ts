@@ -1259,28 +1259,15 @@ export async function getAdminNotices(): Promise<Notice[]> {
 
 export async function getPublicHomeStats() {
   const supabase = await createSupabaseServerClient();
-  // 관리자 화면과 같은 기준으로 센다. 셋 다 '있는 대로 다 세기'였던 탓에
-  // 초안 캠페인이나 인증 전 회원까지 공개 지표에 들어갔다.
-  const [campaignCount, creatorCount, businessCount] = await Promise.all([
-    supabase
-      .from("campaigns")
-      .select("id", { count: "exact", head: true })
-      .in("status", ["recruiting", "selecting", "in_progress", "submission_review", "completed"]),
-    supabase
-      .from("profiles")
-      .select("id", { count: "exact", head: true })
-      .eq("role", "creator")
-      .eq("verification_status", "verified"),
-    supabase
-      .from("business_profiles")
-      .select("id", { count: "exact", head: true })
-      .eq("verification_status", "verified")
-  ]);
+  // profiles는 본인 행과 관리자만 읽을 수 있어, 비로그인 방문자가 직접 세면 0이
+  // 나온다. 숫자만 돌려주는 함수를 쓴다.
+  const { data } = await supabase.rpc("get_public_home_stats");
+  const stats = Array.isArray(data) ? data[0] : data;
 
   return {
-    campaigns: campaignCount.count ?? 0,
-    creators: creatorCount.count ?? 0,
-    businesses: businessCount.count ?? 0
+    campaigns: Number(stats?.campaigns ?? 0),
+    creators: Number(stats?.creators ?? 0),
+    businesses: Number(stats?.businesses ?? 0)
   };
 }
 
