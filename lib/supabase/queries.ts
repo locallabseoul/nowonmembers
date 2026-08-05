@@ -495,6 +495,8 @@ export type AdminMember = {
   verificationStatus: string;
   createdAt: string;
   businessName: string;
+  // 가입만 하고 크리에이터 프로필을 아직 만들지 않은 회원을 구분한다.
+  hasRoleProfile: boolean;
 };
 
 export type AdminMembersData = {
@@ -1257,10 +1259,22 @@ export async function getAdminNotices(): Promise<Notice[]> {
 
 export async function getPublicHomeStats() {
   const supabase = await createSupabaseServerClient();
+  // 관리자 화면과 같은 기준으로 센다. 셋 다 '있는 대로 다 세기'였던 탓에
+  // 초안 캠페인이나 인증 전 회원까지 공개 지표에 들어갔다.
   const [campaignCount, creatorCount, businessCount] = await Promise.all([
-    supabase.from("campaigns").select("id", { count: "exact", head: true }),
-    supabase.from("creator_profiles").select("id", { count: "exact", head: true }),
-    supabase.from("business_profiles").select("id", { count: "exact", head: true })
+    supabase
+      .from("campaigns")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["recruiting", "selecting", "in_progress", "submission_review", "completed"]),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "creator")
+      .eq("verification_status", "verified"),
+    supabase
+      .from("business_profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("verification_status", "verified")
   ]);
 
   return {
@@ -1694,7 +1708,9 @@ export async function getAdminOverview(): Promise<AdminOverviewStats> {
     pendingVerificationCount
   ] = await Promise.all([
     supabase.from("business_profiles").select("id", { count: "exact", head: true }),
-    supabase.from("creator_profiles").select("id", { count: "exact", head: true }).eq("verification_status", "verified"),
+    // 홈 지표와 같은 기준(가입자)으로 센다. 프로필을 아직 안 만든 회원은
+    // 회원 관리 목록에서 따로 표시한다.
+    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "creator").eq("verification_status", "verified"),
     supabase.from("campaigns").select("id", { count: "exact", head: true }).eq("status", "recruiting"),
     supabase.from("content_submissions").select("id", { count: "exact", head: true }).eq("review_status", "approved"),
     supabase.from("content_submissions").select("id", { count: "exact", head: true }),
@@ -1925,7 +1941,7 @@ export async function getAdminMembers(options: AdminMemberListOptions = {}): Pro
 
   let query = supabase
     .from("profiles")
-    .select("id,nickname,email,role,is_admin,status,verification_status,created_at,business_profiles(business_name)", { count: "exact" })
+    .select("id,nickname,email,role,is_admin,status,verification_status,created_at,business_profiles(business_name),creator_profiles(id)", { count: "exact" })
     .order("created_at", { ascending: false });
 
   // '관리자'는 역할이 아니라 플래그다. 그 외 필터는 역할 그대로.
@@ -1947,6 +1963,7 @@ export async function getAdminMembers(options: AdminMemberListOptions = {}): Pro
   return {
     members: (data ?? []).map((row) => {
       const business = asRelation(row.business_profiles) as { business_name?: string } | null;
+      const creator = asRelation(row.creator_profiles) as { id?: string } | null;
       return {
         id: row.id,
         nickname: row.nickname ?? "",
@@ -1956,7 +1973,8 @@ export async function getAdminMembers(options: AdminMemberListOptions = {}): Pro
         status: row.status,
         verificationStatus: row.verification_status,
         createdAt: row.created_at,
-        businessName: business?.business_name ?? ""
+        businessName: business?.business_name ?? "",
+        hasRoleProfile: row.role === "business" ? Boolean(business) : Boolean(creator)
       };
     }),
     totalCount,

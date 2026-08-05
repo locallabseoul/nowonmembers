@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Badge } from "@/app/components/ui";
 import { getCurrentSessionProfile } from "@/lib/auth/guards";
 import { getAdminMembers } from "@/lib/supabase/queries";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { FormBanner } from "@/app/components/form-field";
 import { MemberActions } from "./member-actions";
 
@@ -194,6 +194,12 @@ export default async function AdminMembersPage({ searchParams }: { searchParams:
                       {member.status === "suspended" ? <Badge tone="red">정지됨</Badge> : null}
                     </p>
                     <p className="mt-0.5 text-xs text-gray-400">{member.email || "이메일 없음"}{member.businessName && member.nickname !== member.businessName ? ` · ${member.businessName}` : ""}</p>
+                    {member.hasRoleProfile ? null : (
+                      <p className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-amber-600">
+                        <AlertTriangle size={12} />
+                        {member.role === "business" ? "가게 프로필 미작성" : "크리에이터 프로필 미작성"}
+                      </p>
+                    )}
                   </td>
                   <td className="px-3 py-4">
                     <span className="inline-flex flex-wrap gap-1">

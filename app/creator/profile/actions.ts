@@ -292,6 +292,15 @@ export async function saveCreatorProfile(formData: FormData) {
 
   if (existingCreatorError) redirectWithError(formData, existingCreatorError.message);
 
+  // 관리자가 회원 인증을 먼저 승인한 뒤 프로필을 만드는 경우도 있어, 회원 정보의
+  // 인증 상태를 그대로 가져온다.
+  const { data: memberProfile } = await supabase
+    .from("profiles")
+    .select("verification_status")
+    .eq("id", user.id)
+    .maybeSingle();
+  const memberVerification = memberProfile?.verification_status ?? "pending";
+
   const uploadedPaths: string[] = [];
   let avatarUrl = existingCreator?.avatar_url ?? null;
 
@@ -316,7 +325,9 @@ export async function saveCreatorProfile(formData: FormData) {
       available_days: availableDays,
       bio,
       avatar_url: avatarUrl,
-      verification_status: "pending"
+      // 인증 상태는 회원 정보(profiles)를 따른다. 여기서 pending으로 덮으면
+      // 관리자가 승인해둔 인증이 프로필 수정만으로 풀려 공개 목록에서 사라진다.
+      verification_status: memberVerification
     }, { onConflict: "user_id" })
     .select("id")
     .single();

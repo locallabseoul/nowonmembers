@@ -214,11 +214,19 @@ export async function saveBusinessProfile(formData: FormData) {
 
   const { data: existingBusiness, error: existingBusinessError } = await supabase
     .from("business_profiles")
-    .select("id,cover_image_url")
+    .select("id,cover_image_url,is_public")
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (existingBusinessError) redirectWithError(formData, existingBusinessError.message);
+
+  // 인증 상태는 회원 정보를 따르고 공개 여부는 기존 값을 지킨다. 저장할 때마다
+  // pending·false로 되돌리면 프로필을 고쳤다는 이유로 인증이 풀린다.
+  const { data: memberProfile } = await supabase
+    .from("profiles")
+    .select("verification_status")
+    .eq("id", user.id)
+    .maybeSingle();
   if (!coverImage && !existingBusiness?.cover_image_url) redirectWithError(formData, "대표 이미지를 등록해주세요.");
 
   const uploadedPaths: string[] = [];
@@ -257,8 +265,8 @@ export async function saveBusinessProfile(formData: FormData) {
     website_url: websiteUrl,
     social_urls: socialUrls,
     cover_image_url: coverImageUrl,
-    verification_status: "pending",
-    is_public: false
+    verification_status: memberProfile?.verification_status ?? "pending",
+    is_public: existingBusiness?.is_public ?? false
   }, { onConflict: "user_id" });
 
   if (error) {
