@@ -1918,6 +1918,140 @@ export async function getAdminPointsData(): Promise<AdminPointsData> {
   };
 }
 
+export type AdminMemberDetail = {
+  id: string;
+  nickname: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  isAdmin: boolean;
+  status: string;
+  verificationStatus: string;
+  marketingOptIn: boolean;
+  createdAt: string;
+  creator: {
+    bio: string;
+    avatarUrl: string;
+    activityAreas: string[];
+    interests: string[];
+    contentTypes: string[];
+    availableDays: string[];
+    completionRate: number;
+    deadlineRate: number;
+    channels: { platform: string; channelName: string; channelUrl: string; followerCount: number }[];
+    portfolios: { title: string; contentType: string; url: string }[];
+    applicationCount: number;
+    collaborationCount: number;
+  } | null;
+  business: {
+    businessName: string;
+    category: string;
+    address: string;
+    contact: string;
+    businessHours: string;
+    isPublic: boolean;
+    campaignCount: number;
+    availablePoints: number;
+    reservedPoints: number;
+  } | null;
+};
+
+export async function getAdminMemberDetail(userId: string): Promise<AdminMemberDetail | null> {
+  const supabase = await createSupabaseServerClient();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id,nickname,name,email,phone,role,is_admin,status,verification_status,marketing_opt_in,created_at")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!profile) return null;
+
+  const [creatorRow, businessRow] = await Promise.all([
+    supabase
+      .from("creator_profiles")
+      .select("id,bio,avatar_url,activity_areas,interests,content_types,available_days,completion_rate,deadline_rate,creator_channels(platform,channel_name,channel_url,follower_count),portfolios(title,content_type,url)")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    supabase
+      .from("business_profiles")
+      .select("id,business_name,category,address,address_detail,contact,business_hours,is_public")
+      .eq("user_id", userId)
+      .maybeSingle()
+  ]);
+
+  // 활동량은 카운트만 쓴다. 상세 목록까지 담으면 조회가 무거워진다.
+  const [applicationCount, collaborationCount, campaignCount, wallet] = await Promise.all([
+    creatorRow.data
+      ? supabase.from("campaign_applications").select("id", { count: "exact", head: true }).eq("creator_id", creatorRow.data.id)
+      : Promise.resolve({ count: 0 }),
+    creatorRow.data
+      ? supabase.from("collaborations").select("id", { count: "exact", head: true }).eq("creator_id", creatorRow.data.id)
+      : Promise.resolve({ count: 0 }),
+    businessRow.data
+      ? supabase.from("campaigns").select("id", { count: "exact", head: true }).eq("business_id", businessRow.data.id)
+      : Promise.resolve({ count: 0 }),
+    businessRow.data
+      ? supabase.from("point_wallets").select("available_points,reserved_points").eq("business_id", businessRow.data.id).maybeSingle()
+      : Promise.resolve({ data: null })
+  ]);
+
+  const creator = creatorRow.data;
+  const business = businessRow.data;
+
+  return {
+    id: profile.id,
+    nickname: profile.nickname ?? "",
+    name: profile.name ?? "",
+    email: profile.email ?? "",
+    phone: profile.phone ?? "",
+    role: profile.role,
+    isAdmin: Boolean(profile.is_admin),
+    status: profile.status,
+    verificationStatus: profile.verification_status,
+    marketingOptIn: Boolean(profile.marketing_opt_in),
+    createdAt: profile.created_at,
+    creator: creator
+      ? {
+        bio: creator.bio ?? "",
+        avatarUrl: creator.avatar_url ?? "",
+        activityAreas: asStringArray(creator.activity_areas),
+        interests: asStringArray(creator.interests),
+        contentTypes: asStringArray(creator.content_types),
+        availableDays: asStringArray(creator.available_days),
+        completionRate: Number(creator.completion_rate ?? 0),
+        deadlineRate: Number(creator.deadline_rate ?? 0),
+        channels: (creator.creator_channels ?? []).map((channel) => ({
+          platform: channel.platform ?? "",
+          channelName: channel.channel_name ?? "",
+          channelUrl: channel.channel_url ?? "",
+          followerCount: Number(channel.follower_count ?? 0)
+        })),
+        portfolios: (creator.portfolios ?? []).map((item) => ({
+          title: item.title ?? "",
+          contentType: item.content_type ?? "",
+          url: item.url ?? ""
+        })),
+        applicationCount: applicationCount.count ?? 0,
+        collaborationCount: collaborationCount.count ?? 0
+      }
+      : null,
+    business: business
+      ? {
+        businessName: business.business_name ?? "",
+        category: business.category ?? "",
+        address: [business.address, business.address_detail].filter(Boolean).join(" "),
+        contact: business.contact ?? "",
+        businessHours: getBusinessHoursText(business.business_hours as BusinessHoursValue, "summary"),
+        isPublic: Boolean(business.is_public),
+        campaignCount: campaignCount.count ?? 0,
+        availablePoints: Number(wallet.data?.available_points ?? 0),
+        reservedPoints: Number(wallet.data?.reserved_points ?? 0)
+      }
+      : null
+  };
+}
+
 const ADMIN_MEMBER_PAGE_SIZE = 20;
 
 export async function getAdminMembers(options: AdminMemberListOptions = {}): Promise<AdminMembersData> {

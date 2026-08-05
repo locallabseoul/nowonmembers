@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { Badge } from "@/app/components/ui";
 import { getCurrentSessionProfile } from "@/lib/auth/guards";
-import { getAdminMembers } from "@/lib/supabase/queries";
+import { getAdminMemberDetail, getAdminMembers } from "@/lib/supabase/queries";
 import { AlertTriangle, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { FormBanner } from "@/app/components/form-field";
 import { MemberActions } from "./member-actions";
+import { MemberDetailModal } from "./member-detail-modal";
 
 const roleTabs = [
   ["", "전체"],
@@ -51,12 +52,13 @@ function formatJoinedAt(value: string) {
   return `${year}.${month}.${day}`;
 }
 
-function memberHref(role: string, verification: string, searchQuery: string, page: number) {
+function memberHref(role: string, verification: string, searchQuery: string, page: number, memberId?: string) {
   const params = new URLSearchParams();
   if (role) params.set("role", role);
   if (verification) params.set("verification", verification);
   if (searchQuery) params.set("q", searchQuery);
   if (page > 1) params.set("page", String(page));
+  if (memberId) params.set("member", memberId);
   const query = params.toString();
 
   return query ? `/admin/members?${query}` : "/admin/members";
@@ -110,8 +112,8 @@ function Pagination({
   );
 }
 
-export default async function AdminMembersPage({ searchParams }: { searchParams: Promise<{ error?: string; message?: string; role?: string; verification?: string; q?: string; page?: string }> }) {
-  const { error, message, role, verification, q, page } = await searchParams;
+export default async function AdminMembersPage({ searchParams }: { searchParams: Promise<{ error?: string; message?: string; role?: string; verification?: string; q?: string; page?: string; member?: string }> }) {
+  const { error, message, role, verification, q, page, member } = await searchParams;
   const roleFilter = roleTabs.some(([value]) => value === role) ? role ?? "" : "";
   const verificationFilter = verificationTabs.some(([value]) => value === verification) ? verification ?? "" : "";
   const searchQuery = (q ?? "").trim();
@@ -124,6 +126,7 @@ export default async function AdminMembersPage({ searchParams }: { searchParams:
     page: currentPageInput
   });
   const returnTo = memberHref(roleFilter, verificationFilter, searchQuery, currentPage);
+  const memberDetail = member ? await getAdminMemberDetail(member) : null;
 
   return (
     <main>
@@ -190,7 +193,12 @@ export default async function AdminMembersPage({ searchParams }: { searchParams:
                 <tr key={member.id} className={member.status === "suspended" ? "bg-red-50/40" : undefined}>
                   <td className="px-5 py-4">
                     <p className="font-bold text-charcoal">
-                      {member.nickname || member.businessName || "(이름 없음)"}
+                      <Link
+                        href={memberHref(roleFilter, verificationFilter, searchQuery, currentPage, member.id)}
+                        className="underline decoration-gray-300 underline-offset-4 transition-colors hover:text-primary hover:decoration-primary"
+                      >
+                        {member.nickname || member.businessName || "(이름 없음)"}
+                      </Link>
                       {member.status === "suspended" ? <Badge tone="red">정지됨</Badge> : null}
                     </p>
                     <p className="mt-0.5 text-xs text-gray-400">{member.email || "이메일 없음"}{member.businessName && member.nickname !== member.businessName ? ` · ${member.businessName}` : ""}</p>
@@ -229,6 +237,8 @@ export default async function AdminMembersPage({ searchParams }: { searchParams:
           <Pagination currentPage={currentPage} totalPages={totalPages} role={roleFilter} verification={verificationFilter} searchQuery={searchQuery} />
         ) : null}
       </section>
+
+      {memberDetail ? <MemberDetailModal member={memberDetail} closeHref={returnTo} /> : null}
     </main>
   );
 }
