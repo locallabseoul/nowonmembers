@@ -1,7 +1,7 @@
 "use client";
 
 import type { AdminMember } from "@/lib/supabase/queries";
-import { ConfirmButton } from "../components/confirm-button";
+import { ConfirmButton } from "@/app/components/confirm-button";
 import { setMemberAdmin, setMemberStatus, setMemberVerification } from "../actions";
 
 const subtleButton = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 transition-colors hover:bg-gray-50";

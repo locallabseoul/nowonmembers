@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, ExternalLink, ImageIcon, Pencil, Plus, Search, Star, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, ImageIcon, Pencil, Plus, Search, Star, Trash2, X } from "lucide-react";
 import { Badge } from "@/app/components/ui";
 import { OperatorSidebar } from "@/app/business/components/operator-sidebar";
 import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import { LAUNCH_BONUS_POINTS, LAUNCH_BONUS_VALID_DAYS, POINTS_PER_RECRUIT, formatPoints } from "@/lib/points";
 import { getBusinessDashboard, type DashboardApplication, type DashboardCampaign, type DashboardSubmission } from "@/lib/supabase/queries";
 import { requireRole } from "@/lib/auth/guards";
-import { approveRecommendedApplication, cancelCampaignBeforePublish, finalizeCampaignSelection, saveBusinessProfile, submitDraftCampaignForReview, withdrawCampaignFromReview } from "./actions";
+import { approveRecommendedApplication, cancelCampaignBeforePublish, deleteDraftCampaign, finalizeCampaignSelection, saveBusinessProfile, submitDraftCampaignForReview, withdrawCampaignFromReview } from "./actions";
+import { ConfirmButton } from "@/app/components/confirm-button";
 import { BusinessProfileWizard } from "./business-profile-wizard";
 import { FormBanner } from "@/app/components/form-field";
 
@@ -347,13 +348,19 @@ function CampaignManagementRow({
       <td className="px-6 py-5 text-right">
         {canWithdraw ? (
           <div className="flex items-center justify-end gap-2">
-            <form action={withdrawCampaignFromReview}>
-              <input type="hidden" name="campaign_id" value={campaign.id} />
-              <button className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-charcoal shadow-sm transition-colors hover:bg-gray-50 hover:text-primary">
-                <Pencil size={13} />
-                수정
-              </button>
-            </form>
+            <ConfirmButton
+              label="회수 후 수정"
+              confirmLabel="검수 요청을 회수하고 수정 화면으로 이동합니다"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-charcoal shadow-sm transition-colors hover:bg-gray-50 hover:text-primary"
+            >
+              <form action={withdrawCampaignFromReview} className="inline">
+                <input type="hidden" name="campaign_id" value={campaign.id} />
+                <button className="inline-flex items-center gap-1.5 rounded-lg bg-charcoal px-3 py-1.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-slate-800">
+                  <Pencil size={13} />
+                  회수하고 수정
+                </button>
+              </form>
+            </ConfirmButton>
             <Link
               href={actionHref}
               className="inline-flex rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-charcoal shadow-sm transition-colors hover:bg-gray-50 hover:text-primary"
@@ -371,12 +378,27 @@ function CampaignManagementRow({
               수정
             </Link>
             {campaign.status === "draft" ? (
-              <form action={submitDraftCampaignForReview}>
-                <input type="hidden" name="campaign_id" value={campaign.id} />
-                <button className="inline-flex rounded-lg bg-primary px-3 py-1.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primaryHover">
-                  {campaignActionLabel(campaign)}
-                </button>
-              </form>
+              <>
+                <form action={submitDraftCampaignForReview}>
+                  <input type="hidden" name="campaign_id" value={campaign.id} />
+                  <button className="inline-flex rounded-lg bg-primary px-3 py-1.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primaryHover">
+                    {campaignActionLabel(campaign)}
+                  </button>
+                </form>
+                <ConfirmButton
+                  label="삭제"
+                  confirmLabel="초안 캠페인을 삭제하고 예약 포인트를 반환합니다"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 shadow-sm transition-colors hover:bg-red-50"
+                >
+                  <form action={deleteDraftCampaign} className="inline">
+                    <input type="hidden" name="campaign_id" value={campaign.id} />
+                    <button className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-red-700">
+                      <Trash2 size={13} />
+                      삭제 확정
+                    </button>
+                  </form>
+                </ConfirmButton>
+              </>
             ) : null}
           </div>
         ) : (

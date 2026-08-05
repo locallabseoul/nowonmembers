@@ -354,6 +354,44 @@ export async function finalizeCampaignSelection(formData: FormData) {
   redirect(`/business/dashboard?campaign=${campaignId}&message=${encodeURIComponent("크리에이터 선정을 완료했습니다.")}`);
 }
 
+const CAMPAIGN_IMAGE_BUCKET = "campaign-images";
+
+// 스토리지 public URL에서 버킷 뒤의 경로만 뽑는다. 형식이 다르면 건너뛴다.
+function toStoragePath(url: string) {
+  const marker = `/storage/v1/object/public/${CAMPAIGN_IMAGE_BUCKET}/`;
+  const index = url.indexOf(marker);
+
+  return index === -1 ? null : decodeURIComponent(url.slice(index + marker.length));
+}
+
+export async function deleteDraftCampaign(formData: FormData) {
+  const campaignId = String(formData.get("campaign_id") ?? "");
+  const { supabase } = await requireRole("business", "/business/dashboard");
+
+  const { data, error } = await supabase.rpc("delete_draft_campaign", {
+    target_campaign_id: campaignId
+  });
+
+  if (error) {
+    redirect(`/business/dashboard?error=${encodeURIComponent(error.message)}`);
+  }
+
+  // 캠페인이 사라진 뒤 이미지만 남으면 스토리지에 쓰레기가 쌓인다.
+  const deleted = Array.isArray(data) ? data[0] : data;
+  const paths = [deleted?.cover_image_url, ...(deleted?.reference_image_urls ?? [])]
+    .filter((url): url is string => Boolean(url))
+    .map(toStoragePath)
+    .filter((path): path is string => Boolean(path));
+
+  if (paths.length) {
+    await supabase.storage.from(CAMPAIGN_IMAGE_BUCKET).remove(paths);
+  }
+
+  revalidatePath("/business/dashboard");
+  revalidatePath("/admin");
+  redirect(`/business/dashboard?message=${encodeURIComponent("초안 캠페인을 삭제하고 예약 포인트를 반환했습니다.")}`);
+}
+
 export async function cancelCampaignBeforePublish(formData: FormData) {
   const campaignId = String(formData.get("campaign_id") ?? "");
   const { supabase } = await requireRole("business", "/business/dashboard");

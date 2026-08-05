@@ -3,7 +3,7 @@ import { formatPoints } from "@/lib/points";
 import { getAdminPointsData, type AdminReservation, type AdminWallet } from "@/lib/supabase/queries";
 import { AlertTriangle, Coins, CreditCard, Lock, RotateCcw } from "lucide-react";
 import { adjustBusinessPoints, releaseCampaignReservation } from "../actions";
-import { ConfirmButton } from "../components/confirm-button";
+import { ConfirmButton } from "@/app/components/confirm-button";
 import { FormBanner } from "@/app/components/form-field";
 
 const RETURN_TO = "/admin/points";
