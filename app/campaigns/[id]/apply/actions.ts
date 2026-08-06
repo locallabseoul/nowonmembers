@@ -1,5 +1,6 @@
 "use server";
 
+import { campaignContentTypeLabel } from "@/lib/campaign-options";
 import { track } from "@vercel/analytics/server";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
@@ -55,7 +56,7 @@ export async function applyCampaign(_prevState: FormState, formData: FormData): 
 
   const { data: campaign, error: campaignError } = await supabase
     .from("campaigns")
-    .select("id,status,recruit_count,recruit_end,selection_date,submission_due,applicant_count")
+    .select("id,status,campaign_type,recruit_count,recruit_end,selection_date,submission_due,applicant_count")
     .eq("id", campaignId)
     .maybeSingle();
 
@@ -80,7 +81,7 @@ export async function applyCampaign(_prevState: FormState, formData: FormData): 
   const maxDate = parseDateInput(campaign.submission_due);
   const availableDates = normalizeAvailableDates(formData);
 
-  const kept = keepValues(formData, ["applicant_name", "channel_url", "proposed_content_type", "message"]);
+  const kept = keepValues(formData, ["applicant_name", "channel_url", "message"]);
 
   if (!minDate || !maxDate || minDate > maxDate) {
     return { formError: "캠페인 방문 가능 기간이 올바르지 않습니다. 운영자에게 문의해주세요.", values: kept };
@@ -112,7 +113,9 @@ export async function applyCampaign(_prevState: FormState, formData: FormData): 
   }
 
   const message = String(formData.get("message") ?? "");
-  const contentType = String(formData.get("proposed_content_type") ?? "");
+  // 콘텐츠 형식은 캠페인이 정한다. 폼에서 온 값을 쓰면 요청을 조작해 다른 형식으로
+  // 신청할 수 있다.
+  const contentType = campaignContentTypeLabel(campaign.campaign_type ?? "");
 
   const { error } = await supabase.from("campaign_applications").insert({
     campaign_id: campaignId,

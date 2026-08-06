@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
 import { getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { campaignContentTypeLabel } from "@/lib/campaign-options";
 import { getPublicCampaign } from "@/lib/supabase/queries";
 import { ApplicationForm } from "./application-form";
 
@@ -28,6 +29,7 @@ export default async function CampaignApplyPage({ params }: { params: Promise<{ 
       <p className="mt-2 text-gray-500">{campaign.title}</p>
       <ApplicationForm
         campaignId={campaign.id}
+        contentTypeLabel={campaignContentTypeLabel(campaign.campaignType)}
         selectionDate={campaign.selectionDate}
         submissionDue={campaign.submissionDue}
         defaults={defaults}

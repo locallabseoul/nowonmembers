@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { FileText } from "lucide-react";
 import { emptyFormState } from "@/lib/form-errors";
 import { FieldError, FieldLabel, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
 import { ApplicationDatePicker } from "./application-date-picker";
@@ -16,11 +17,13 @@ type ApplicationDefaults = {
 
 export function ApplicationForm({
   campaignId,
+  contentTypeLabel,
   selectionDate,
   submissionDue,
   defaults
 }: {
   campaignId: string;
+  contentTypeLabel: string;
   selectionDate: string;
   submissionDue: string;
   defaults: ApplicationDefaults;
@@ -57,21 +60,16 @@ export function ApplicationForm({
         <FieldError>{fieldErrors.available_dates}</FieldError>
       </div>
 
-      <label className="block">
-        <FieldLabel>제작하려는 콘텐츠 형식</FieldLabel>
-        <select
-          name="proposed_content_type"
-          defaultValue={state.values?.proposed_content_type ?? defaults.proposedContentType}
-          className={fieldControlClassName(fieldErrors.proposed_content_type)}
-        >
-          <option>블로그</option>
-          <option>인스타그램 피드</option>
-          <option>릴스·쇼츠</option>
-          <option>사진 콘텐츠</option>
-          <option>인터뷰</option>
-        </select>
-        <FieldError>{fieldErrors.proposed_content_type}</FieldError>
-      </label>
+      {/* 콘텐츠 형식은 가게가 캠페인을 만들 때 정한다. 신청자가 고르는 값이 아니라
+          지켜야 할 조건이므로 안내만 한다. */}
+      <div>
+        <FieldLabel>제작할 콘텐츠</FieldLabel>
+        <p className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primaryLight px-4 py-3.5 text-sm font-bold text-primaryHover">
+          <FileText size={16} className="shrink-0" />
+          {contentTypeLabel}
+        </p>
+        <p className="mt-2 text-xs leading-5 text-slate-500">이 캠페인은 위 형식으로 콘텐츠를 제작합니다.</p>
+      </div>
 
       <label className="block">
         <FieldLabel>신청 한마디</FieldLabel>
