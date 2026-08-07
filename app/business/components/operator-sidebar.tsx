@@ -27,7 +27,7 @@ export function OperatorSidebar({ business, active }: { business: OperatorBusine
           )}
         </div>
         <h2 className="text-lg font-bold text-charcoal">{business.businessName}</h2>
-        <p className="mb-4 mt-1 text-sm text-gray-500">사업자 회원</p>
+        <p className="mb-4 mt-1 text-sm text-gray-500">가게·브랜드 회원</p>
         <Link href="/business/dashboard?profile=edit" className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100">
           프로필 수정
         </Link>

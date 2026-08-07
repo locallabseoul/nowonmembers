@@ -398,7 +398,7 @@ export default async function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-14 text-center">
             <h2 className="mb-3 text-3xl font-black text-charcoal">누구를 위한 서비스인가요?</h2>
-            <p className="text-slate-500">크리에이터와 캠페인 운영자 모두를 위한 플랫폼입니다.</p>
+            <p className="text-slate-500">크리에이터와 가게·브랜드 모두를 위한 플랫폼입니다.</p>
           </div>
 
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">

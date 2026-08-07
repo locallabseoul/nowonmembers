@@ -16,7 +16,7 @@ type AccountMenuProps = {
 };
 
 function getRoleLabel(role?: string | null, isAdmin?: boolean) {
-  const base = role === "business" ? "캠페인 운영자" : role === "creator" ? "크리에이터" : "회원";
+  const base = role === "business" ? "가게·브랜드" : role === "creator" ? "크리에이터" : "회원";
 
   return isAdmin ? `${base} · 관리자` : base;
 }

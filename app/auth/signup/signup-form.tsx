@@ -391,15 +391,15 @@ export function SignupForm({
               selectedRole={role}
               icon={<Camera size={26} />}
               title="크리에이터"
-              description="캠페인 참여 및 콘텐츠 제출"
+              description="캠페인에 참여해 콘텐츠를 만들어요"
               onSelect={setRole}
             />
             <RoleCard
               role="business"
               selectedRole={role}
               icon={<BriefcaseBusiness size={26} />}
-              title="캠페인 운영자"
-              description="캠페인 등록 및 지원자 관리"
+              title="가게·브랜드"
+              description="캠페인을 열어 크리에이터를 모집해요"
               onSelect={setRole}
             />
           </div>
@@ -428,7 +428,7 @@ export function SignupForm({
         <hr className="border-gray-100" />
 
         <section className="space-y-5">
-          <SectionTitle number={3}>{role === "business" ? "운영자 정보" : "크리에이터 정보"}</SectionTitle>
+          <SectionTitle number={3}>{role === "business" ? "가게 정보" : "크리에이터 정보"}</SectionTitle>
           {role === "business" ? (
             <>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">

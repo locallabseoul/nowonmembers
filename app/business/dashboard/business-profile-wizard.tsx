@@ -505,7 +505,7 @@ function BusinessProfileCreateWizard({
       <div className="mb-8">
         <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-black text-primary">
           <Building2 size={14} />
-          사업자 회원
+          가게·브랜드 회원
         </div>
         <h1 className="mt-4 text-3xl font-black text-charcoal sm:text-4xl">{title}</h1>
         <p className="mt-3 text-sm leading-6 text-slate-500 sm:text-base">
@@ -1006,7 +1006,7 @@ function BusinessProfileEditForm({
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-black text-primary">
             <Building2 size={14} />
-            사업자 회원
+            가게·브랜드 회원
           </div>
           <h1 className="mt-4 text-3xl font-black text-charcoal sm:text-4xl">가게 프로필 수정</h1>
           <p className="mt-3 text-sm leading-6 text-slate-500 sm:text-base">
