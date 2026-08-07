@@ -2,8 +2,13 @@ import { signUp } from "../actions";
 import { SignupForm } from "./signup-form";
 import { SignupPhoneVerification } from "./signup-phone-verification";
 
-function normalizeRole(value?: string): "creator" | "business" {
-  return value === "business" ? "business" : "creator";
+// 고르지 않은 상태를 그대로 넘긴다. 예전에는 값이 없으면 크리에이터로 채워서,
+// 사장님이 회원 유형을 지나치면 크리에이터로 가입됐다.
+function normalizeRole(value?: string): "creator" | "business" | null {
+  if (value === "business") return "business";
+  if (value === "creator") return "creator";
+
+  return null;
 }
 
 export default async function SignupPage({
@@ -19,7 +24,7 @@ export default async function SignupPage({
   return (
     <main className="flex items-center justify-center bg-[#F8F9FA] px-4 py-12 sm:px-6 lg:px-8">
       {verify === "phone" ? (
-        <SignupPhoneVerification role={safeRole} phone={phone} />
+        <SignupPhoneVerification role={safeRole ?? "creator"} phone={phone} />
       ) : (
         <SignupForm action={signUp} initialRole={safeRole} />
       )}

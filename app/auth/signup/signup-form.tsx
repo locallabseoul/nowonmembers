@@ -186,7 +186,7 @@ function RoleCard({
   onSelect
 }: {
   role: SignupRole;
-  selectedRole: SignupRole;
+  selectedRole: SignupRole | null;
   icon: ReactNode;
   title: string;
   description: string;
@@ -301,11 +301,11 @@ export function SignupForm({
   initialRole
 }: {
   action: SignupAction;
-  initialRole: SignupRole;
+  initialRole: SignupRole | null;
 }) {
   const [state, formAction, isPending] = useActionState(action, emptyFormState);
   const fieldErrors = state.fieldErrors ?? {};
-  const [role, setRole] = useState<SignupRole>(initialRole);
+  const [role, setRole] = useState<SignupRole | null>(initialRole);
   const [creatorNickname, setCreatorNickname] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [businessRegistrationNumber, setBusinessRegistrationNumber] = useState("");
@@ -314,7 +314,7 @@ export function SignupForm({
   const [nicknameMessage, setNicknameMessage] = useState("");
   const [legalModal, setLegalModal] = useState<LegalModalType | null>(null);
   const activeNickname = useMemo(
-    () => (role === "business" ? businessName : creatorNickname).trim(),
+    () => (role === null ? "" : role === "business" ? businessName : creatorNickname).trim(),
     [businessName, creatorNickname, role]
   );
 
@@ -363,7 +363,8 @@ export function SignupForm({
     };
   }, [activeNickname]);
 
-  const canSubmit = nicknameStatus === "available";
+  // 회원 유형을 고르지 않으면 진행할 수 없다.
+  const canSubmit = role !== null && nicknameStatus === "available";
 
   return (
     <div className="w-full max-w-2xl rounded-[20px] border border-gray-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:p-10">
@@ -380,7 +381,7 @@ export function SignupForm({
       {state.formError ? <div className="mb-6"><FormBanner>{state.formError}</FormBanner></div> : null}
 
       <form action={formAction} className="space-y-8">
-        <input type="hidden" name="role" value={role} />
+        <input type="hidden" name="role" value={role ?? ""} />
 
         <section>
           <SectionTitle number={1}>회원 유형 선택</SectionTitle>
@@ -402,8 +403,15 @@ export function SignupForm({
               onSelect={setRole}
             />
           </div>
+          {role === null ? (
+            <p className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-center text-sm font-bold text-gray-500">
+              위에서 회원 유형을 선택하면 다음 단계가 이어집니다.
+            </p>
+          ) : null}
         </section>
 
+        {role === null ? null : (
+        <>
         <hr className="border-gray-100" />
 
         <section className="space-y-5">
@@ -491,6 +499,8 @@ export function SignupForm({
           </label>
           <FieldError>{fieldErrors.agreement}</FieldError>
         </section>
+        </>
+        )}
 
         <div className="pt-2">
           <button
@@ -498,7 +508,7 @@ export function SignupForm({
             disabled={!canSubmit || isPending}
             className="w-full rounded-xl bg-primary px-5 py-4 font-black text-white shadow-sm transition-colors hover:bg-primaryHover disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
           >
-            {isPending ? "인증 문자 보내는 중..." : "인증 문자 보내기"}
+            {isPending ? "인증 문자 보내는 중..." : role === null ? "회원 유형을 선택해주세요" : "인증 문자 보내기"}
           </button>
           <p className="mt-3 text-center text-xs font-bold text-gray-400">입력한 전화번호로 인증번호를 보낸 뒤, 같은 회원가입 페이지에서 인증을 완료합니다.</p>
           <p className="mt-4 text-center text-sm text-gray-500">

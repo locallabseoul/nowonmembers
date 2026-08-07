@@ -153,8 +153,14 @@ export async function signIn(_prevState: FormState, formData: FormData): Promise
 }
 
 export async function signUp(_prevState: FormState, formData: FormData): Promise<FormState> {
-  const rawRole = String(formData.get("role") ?? "creator");
-  const role: "business" | "creator" = rawRole === "business" ? "business" : "creator";
+  const rawRole = String(formData.get("role") ?? "");
+  // 고르지 않은 채로 넘어오면 크리에이터로 채우지 않는다. 사장님이 회원 유형을
+  // 지나쳐 크리에이터로 가입되는 일이 반복됐다.
+  if (rawRole !== "business" && rawRole !== "creator") {
+    return { formError: "회원 유형을 선택해주세요." };
+  }
+
+  const role: "business" | "creator" = rawRole;
   const isBusiness = role === "business";
   const nicknameField = isBusiness ? "business_name" : "nickname";
   const nameField = isBusiness ? "manager_name" : "name";
