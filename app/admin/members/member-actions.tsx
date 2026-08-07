@@ -2,7 +2,7 @@
 
 import type { AdminMember } from "@/lib/supabase/queries";
 import { ConfirmButton } from "@/app/components/confirm-button";
-import { setMemberAdmin, setMemberStatus, setMemberVerification } from "../actions";
+import { setMemberAdmin, setMemberRole, setMemberStatus, setMemberVerification } from "../actions";
 
 const subtleButton = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 transition-colors hover:bg-gray-50";
 const primaryButton = "rounded-lg bg-primary px-2.5 py-1.5 text-xs font-black text-white transition-colors hover:bg-primaryHover";
@@ -50,6 +50,21 @@ export function MemberActions({ member, returnTo, isSelf = false }: { member: Ad
           <button className={subtleButton}>인증 해제</button>
         </form>
       ) : null}
+
+      {/* 가게 사장님이 크리에이터로 잘못 가입하는 일이 잦다. 지원 이력이 있으면
+          서버가 막으므로 여기서는 버튼만 보여준다. */}
+      <ConfirmButton
+        label={member.role === "creator" ? "가게로 변경" : "크리에이터로 변경"}
+        confirmLabel="회원 역할을 변경합니다"
+        className={subtleButton}
+      >
+        <form action={setMemberRole} className="inline">
+          <input type="hidden" name="user_id" value={member.id} />
+          <input type="hidden" name="role" value={member.role === "creator" ? "business" : "creator"} />
+          <input type="hidden" name="return_to" value={returnTo} />
+          <button className={primaryButton}>변경 확정</button>
+        </form>
+      </ConfirmButton>
 
       {member.isAdmin ? (
         <ConfirmButton label="관리자 해제" confirmLabel="관리자 권한을 해제합니다" className={subtleButton}>

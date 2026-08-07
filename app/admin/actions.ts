@@ -443,6 +443,23 @@ export async function releaseCampaignReservation(formData: FormData) {
 
 // ─── 회원 관리 ───
 
+export async function setMemberRole(formData: FormData) {
+  const supabase = await requireAdmin();
+  const userId = String(formData.get("user_id") ?? "");
+  const role = String(formData.get("role") ?? "");
+
+  const { error } = await supabase.rpc("admin_set_user_role", {
+    target_user_id: userId,
+    new_role: role
+  });
+
+  if (error) redirect(backTo(formData, "/admin/members", { error: error.message }));
+  revalidatePath("/admin", "layout");
+  redirect(backTo(formData, "/admin/members", {
+    message: role === "business" ? "가게 회원으로 변경했습니다. 본인이 로그인하면 가게 프로필을 등록하게 됩니다." : "크리에이터 회원으로 변경했습니다."
+  }));
+}
+
 export async function setMemberAdmin(formData: FormData) {
   const supabase = await requireAdmin();
   const userId = String(formData.get("user_id") ?? "");
