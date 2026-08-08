@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/guards";
 import { normalizeKoreanAuthPhone, toKoreanE164Phone } from "@/lib/auth/phone";
@@ -119,4 +120,32 @@ export async function deleteAccount(_prevState: FormState, formData: FormData): 
 
   await supabase.auth.signOut();
   redirect(`/auth?message=${encodeURIComponent("탈퇴가 완료되었습니다. 그동안 노원멤버스를 이용해주셔서 감사합니다.")}`);
+}
+
+// 광고 문자에 적는 수신거부 방법이다. 회원이 스스로 끌 수 있어야 동의 철회가 성립한다.
+// 역할·상태 같은 권한 필드는 트리거가 막고 있어, 본인 프로필의 이 값만 바뀐다.
+export async function setMarketingOptIn(_prevState: FormState, formData: FormData): Promise<FormState> {
+  const { supabase, user } = await requireUser("/account/notifications");
+  const optIn = formData.get("marketing_opt_in") === "on";
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      marketing_opt_in: optIn,
+      // 동의한 시점은 남기고, 철회하면 지운다.
+      marketing_opt_in_at: optIn ? new Date().toISOString() : null
+    })
+    .eq("id", user.id);
+
+  if (error) {
+    return { formError: "설정을 저장하지 못했습니다. 잠시 후 다시 시도해주세요." };
+  }
+
+  revalidatePath("/account/notifications");
+
+  return {
+    successMessage: optIn
+      ? "마케팅 정보 수신에 동의했습니다."
+      : "마케팅 정보 수신을 거부했습니다. 앞으로 광고 문자를 보내지 않습니다."
+  };
 }

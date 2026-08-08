@@ -5,6 +5,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin as requireAdminSession } from "@/lib/auth/guards";
 import { getKoreaTodayString } from "@/lib/campaign-lifecycle";
+import { buildSmsText } from "@/lib/messages";
+import { PUBLIC_SITE_URL } from "@/lib/site";
+import { isSmsConfigured, sendSms } from "@/lib/sms";
 
 async function requireAdmin() {
   const { supabase } = await requireAdminSession();
@@ -439,6 +442,87 @@ export async function releaseCampaignReservation(formData: FormData) {
   revalidatePath("/business/points");
   revalidatePath("/business/dashboard");
   redirect(backTo(formData, "/admin/points", { message: `예약 포인트 ${Number(releasedPoints ?? 0).toLocaleString("ko-KR")}P를 반환했습니다.` }));
+}
+
+// ─── 회원 메시지 ───
+
+export async function sendAdminMessage(formData: FormData) {
+  const supabase = await requireAdmin();
+  const kind = String(formData.get("kind") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const link = String(formData.get("link") ?? "").trim();
+  const role = String(formData.get("target_role") ?? "all");
+  const verification = String(formData.get("target_verification") ?? "all");
+  const allowWithoutConsent = formData.get("allow_without_consent") === "on";
+
+  if (!isSmsConfigured()) {
+    redirect(backTo(formData, "/admin/messages", { error: "문자 발송 설정이 없습니다. 관리자에게 문의해주세요." }));
+  }
+
+  if (!title || !body) {
+    redirect(backTo(formData, "/admin/messages", { error: "제목과 내용을 입력해주세요." }));
+  }
+
+  // 연결할 곳은 사이트 내부 경로만 받는다. 외부 주소가 문자에 실리면 안 된다.
+  if (link && (!link.startsWith("/") || link.startsWith("//"))) {
+    redirect(backTo(formData, "/admin/messages", { error: "연결할 곳은 /campaigns 처럼 사이트 안의 경로만 입력할 수 있습니다." }));
+  }
+
+  // 보낼 대상을 먼저 확정한다. 광고 여부·수신 동의·야간 제한은 여기서 걸린다.
+  const { data: messageId, error } = await supabase.rpc("admin_send_message", {
+    target_kind: kind,
+    target_channels: ["sms"],
+    target_title: title,
+    target_body: body,
+    target_link: link || null,
+    target_role: role,
+    target_verification: verification,
+    allow_without_consent: allowWithoutConsent
+  });
+
+  if (error) redirect(backTo(formData, "/admin/messages", { error: error.message }));
+
+  const { data: recipients } = await supabase
+    .from("admin_message_recipients")
+    .select("phone")
+    .eq("message_id", messageId)
+    .eq("channel", "sms")
+    .eq("status", "pending");
+
+  const numbers = (recipients ?? []).map((row) => String(row.phone ?? "")).filter(Boolean);
+  const text = buildSmsText({
+    kind: kind === "promotional" ? "promotional" : "transactional",
+    title,
+    body,
+    link,
+    // 개발 서버에서 보내더라도 문자에는 공개 주소가 들어가야 한다.
+    siteUrl: PUBLIC_SITE_URL
+  });
+
+  let sendError = "";
+  try {
+    const result = await sendSms({ receivers: numbers, title, text });
+    await supabase.rpc("admin_finish_sms_send", {
+      target_message_id: messageId,
+      succeeded: true,
+      provider_id: result.providerMessageId,
+      error_text: null
+    });
+  } catch (smsError) {
+    sendError = smsError instanceof Error ? smsError.message : "문자 발송에 실패했습니다.";
+    // 실패해도 발송 건은 남긴다. 무엇을 누구에게 보내려다 실패했는지 알아야 한다.
+    await supabase.rpc("admin_finish_sms_send", {
+      target_message_id: messageId,
+      succeeded: false,
+      provider_id: null,
+      error_text: sendError
+    });
+  }
+
+  revalidatePath("/admin", "layout");
+  if (sendError) redirect(backTo(formData, "/admin/messages", { error: sendError }));
+  redirect(backTo(formData, "/admin/messages", { messageSent: String(numbers.length) }));
 }
 
 // ─── 회원 관리 ───
