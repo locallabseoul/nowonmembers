@@ -5,16 +5,20 @@ import { AlertTriangle, MessageSquare } from "lucide-react";
 import {
   MESSAGE_KINDS,
   MESSAGE_ROLE_TARGETS,
+  MESSAGE_TEMPLATES,
   MESSAGE_VERIFICATION_TARGETS,
   SMS_BYTE_LIMIT,
   buildSmsText,
   euckrByteLength,
   resolveSmsType,
+  formatMonthDay,
   type MessageKind,
   type MessageRoleTarget,
+  type MessageTemplate,
+  type MessageTemplateCampaign,
   type MessageVerificationTarget
 } from "@/lib/messages";
-import type { AdminMessageAudienceBucket } from "@/lib/supabase/queries";
+import type { AdminMessageMember } from "@/lib/supabase/queries";
 
 const cardClassName = "rounded-[20px] border border-gray-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]";
 const inputClassName = "w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-charcoal outline-none transition-colors focus:border-primary";
@@ -28,12 +32,14 @@ function chipClassName(isActive: boolean) {
 
 export function MessageComposer({
   audience,
+  campaigns,
   sendAction,
   returnTo,
   smsReady,
   siteUrl
 }: {
-  audience: AdminMessageAudienceBucket[];
+  audience: AdminMessageMember[];
+  campaigns: MessageTemplateCampaign[];
   sendAction: (formData: FormData) => void;
   returnTo: string;
   smsReady: boolean;
@@ -43,38 +49,56 @@ export function MessageComposer({
   const [role, setRole] = useState<MessageRoleTarget>("all");
   const [verification, setVerification] = useState<MessageVerificationTarget>("all");
   const [allowWithoutConsent, setAllowWithoutConsent] = useState(false);
+  // 거래관계 예외는 법이 허용하는 범위라 기본으로 켜둔다.
+  const [includeRecentCustomers, setIncludeRecentCustomers] = useState(true);
   const [warningOpen, setWarningOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [link, setLink] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [showPreparingNotice, setShowPreparingNotice] = useState(false);
 
   const isPromotional = kind === "promotional";
   // 광고는 동의자에게만 가는 게 기본이다. 경고를 확인해야 풀린다.
   const consentOverride = isPromotional && allowWithoutConsent;
+  const includeRecent = isPromotional && !consentOverride && includeRecentCustomers;
   const marketingOnly = isPromotional && !consentOverride;
 
-  const matching = audience.filter(
-    (bucket) =>
-      (role === "all" || bucket.role === role) &&
-      (verification === "all" || bucket.verification === verification) &&
-      (!marketingOnly || bucket.marketingOptIn)
+  const canReceive = (member: AdminMessageMember) =>
+    !marketingOnly || member.marketingOptIn || (includeRecent && member.recentCustomer);
+
+  const inScope = audience.filter(
+    (member) => (role === "all" || member.role === role) && (verification === "all" || member.verification === verification)
   );
-  const sum = (rows: AdminMessageAudienceBucket[]) => rows.reduce((total, bucket) => total + bucket.count, 0);
+  const allowed = inScope.filter(canReceive);
 
   // 문자는 번호가 있어야 간다.
-  const recipientCount = sum(matching.filter((bucket) => bucket.hasPhone));
-  const withoutPhoneCount = sum(matching) - recipientCount;
+  const recipients = allowed.filter((member) => member.hasPhone);
+  const recipientCount = recipients.length;
+  const withoutPhoneCount = allowed.length - recipientCount;
 
-  // 광고 대상 안내에 쓰는 수는 동의 여부와 무관하게 조건에 맞는 전체를 기준으로 센다.
-  const inScope = audience.filter(
-    (bucket) => (role === "all" || bucket.role === role) && (verification === "all" || bucket.verification === verification)
-  );
-  const consentedCount = sum(inScope.filter((bucket) => bucket.marketingOptIn));
-  const withoutConsentCount = sum(inScope) - consentedCount;
+  const consentedCount = inScope.filter((member) => member.marketingOptIn).length;
+  const withoutConsentCount = inScope.length - consentedCount;
+  // 동의는 안 했지만 거래관계로 보낼 수 있는 인원.
+  const recentCustomerCount = inScope.filter((member) => !member.marketingOptIn && member.recentCustomer).length;
 
   // 실제로 발송되는 문구를 그대로 만든다.
+  // 템플릿을 고른 뒤 문구를 고치면 더는 그 템플릿이 아니다. 값이 그대로일 때만
+  // 선택 표시를 남긴다.
+  const activeTemplate = MESSAGE_TEMPLATES.find((template) => template.id === selectedTemplate);
+  const expected = activeTemplate
+    ? fillTemplate(activeTemplate, campaigns.find((item) => item.id === selectedCampaignId))
+    : null;
+  const templateIntact =
+    Boolean(expected) &&
+    activeTemplate?.kind === kind &&
+    activeTemplate?.role === role &&
+    expected?.title === title &&
+    expected?.body === body &&
+    expected?.link === link;
+
   const previewText = buildSmsText({
     kind,
     title: title || "제목",
@@ -85,6 +109,32 @@ export function MessageComposer({
   const previewBytes = euckrByteLength(previewText);
   const previewType = resolveSmsType(previewText);
   const canSend = Boolean(title.trim() && body.trim() && recipientCount > 0);
+
+  // 캠페인을 고르면 가게 이름과 마감일이 들어간 문구가, 아니면 일반 문구가 나온다.
+  function fillTemplate(template: MessageTemplate, campaign?: MessageTemplateCampaign) {
+    if (template.withCampaign && campaign) return template.withCampaign(campaign);
+
+    return { title: template.title, body: template.body, link: template.link };
+  }
+
+  // 템플릿은 폼을 채워줄 뿐이다. 고른 뒤에도 얼마든지 고쳐 쓸 수 있다.
+  function applyTemplate(template: MessageTemplate, campaignId = selectedCampaignId) {
+    const campaign = campaigns.find((item) => item.id === campaignId);
+    const filled = fillTemplate(template, campaign);
+
+    setSelectedTemplate(template.id);
+    setSelectedCampaignId(template.withCampaign ? campaignId : "");
+    setKind(template.kind);
+    setRole(template.role);
+    setTitle(filled.title);
+    setBody(filled.body);
+    setLink(filled.link);
+    setConfirming(false);
+    if (template.kind !== "promotional") {
+      setAllowWithoutConsent(false);
+      setWarningOpen(false);
+    }
+  }
 
   function changeKind(next: MessageKind) {
     setKind(next);
@@ -115,7 +165,72 @@ export function MessageComposer({
         <input type="hidden" name="channels" value="sms" />
         <input type="hidden" name="target_role" value={role} />
         <input type="hidden" name="target_verification" value={verification} />
-        {consentOverride ? <input type="hidden" name="allow_without_consent" value="on" /> : null}
+          {consentOverride ? <input type="hidden" name="allow_without_consent" value="on" /> : null}
+        {includeRecent ? <input type="hidden" name="allow_recent_customers" value="on" /> : null}
+
+        <section className={cardClassName}>
+          <span className={legendClassName}>자주 보내는 안내</span>
+          <p className="-mt-2 mb-3 break-keep text-xs text-gray-500">
+            고르면 유형·대상·문구가 한 번에 채워집니다. 보내기 전에 고쳐 쓸 수 있어요.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {MESSAGE_TEMPLATES.map((template) => {
+              const isActive = templateIntact && selectedTemplate === template.id;
+              return (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => applyTemplate(template)}
+                  aria-pressed={isActive}
+                  className={`whitespace-normal rounded-xl border p-3.5 text-left transition-colors ${
+                    isActive ? "border-primary bg-primary/5" : "border-gray-100 hover:bg-gray-50"
+                  }`}
+                >
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <span className={`text-sm font-bold ${isActive ? "text-primary" : "text-charcoal"}`}>{template.label}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                      template.kind === "promotional" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"
+                    }`}>
+                      {template.kind === "promotional" ? "광고" : "거래 안내"}
+                    </span>
+                  </span>
+                  <span className="mt-1 block break-keep text-xs leading-relaxed text-gray-500">{template.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 캠페인을 고르면 가게 이름과 마감일이 문구에 들어가고 링크가 그 캠페인을 가리킨다. */}
+          {activeTemplate?.withCampaign ? (
+            <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <label htmlFor="template-campaign" className="mb-2 block text-xs font-bold text-gray-400">
+                어떤 캠페인인가요? (선택)
+              </label>
+              {campaigns.length ? (
+                <>
+                  <select
+                    id="template-campaign"
+                    value={selectedCampaignId}
+                    onChange={(event) => applyTemplate(activeTemplate, event.target.value)}
+                    className={inputClassName}
+                  >
+                    <option value="">캠페인을 고르지 않고 일반 안내로 보내기</option>
+                    {campaigns.map((campaign) => (
+                      <option key={campaign.id} value={campaign.id}>
+                        {campaign.businessName} · {campaign.title} (~{formatMonthDay(campaign.recruitEnd)})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1.5 break-keep text-xs text-gray-400">
+                    고르면 가게 이름과 마감일이 문구에 들어가고, 링크가 그 캠페인으로 바뀝니다.
+                  </p>
+                </>
+              ) : (
+                <p className="break-keep text-xs text-gray-500">지금 모집중인 캠페인이 없습니다. 일반 안내 문구로 나갑니다.</p>
+              )}
+            </div>
+          ) : null}
+        </section>
 
         <section className={cardClassName}>
           <span className={legendClassName}>어떤 내용인가요?</span>
@@ -178,6 +293,29 @@ export function MessageComposer({
                   미동의자는 {withoutConsentCount}명입니다.
                 </p>
 
+                {/* 정보통신망법 제50조 제1항 단서. 거래관계로 연락처를 받았다면 6개월 안에는
+                    같은 종류의 광고를 동의 없이 보낼 수 있다. */}
+                {consentOverride ? null : (
+                  <label className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-white p-3">
+                    <input
+                      type="checkbox"
+                      checked={includeRecentCustomers}
+                      onChange={(event) => {
+                        setIncludeRecentCustomers(event.target.checked);
+                        setConfirming(false);
+                      }}
+                      className="mt-0.5 h-4 w-4 accent-primary"
+                    />
+                    <span className="min-w-0 break-keep text-xs leading-relaxed text-charcoal">
+                      <b className="font-bold">최근 6개월 안에 지원·협업한 크리에이터도 포함</b>
+                      <span className="mt-0.5 block text-gray-500">
+                        캠페인에 지원한 적이 있으면 거래관계가 생겨, 같은 종류의 소식은 동의 없이 보낼 수 있습니다.
+                        {recentCustomerCount > 0 ? ` 지금 조건에서 ${recentCustomerCount}명이 늘어납니다.` : " 지금 조건에서는 해당자가 없습니다."}
+                      </span>
+                    </span>
+                  </label>
+                )}
+
                 {warningOpen || consentOverride ? (
                   <label className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-white p-3">
                     <input
@@ -213,6 +351,27 @@ export function MessageComposer({
               </p>
               {withoutPhoneCount > 0 ? (
                 <p className="mt-1 break-keep text-xs text-gray-400">번호가 없는 {withoutPhoneCount}명은 문자를 받을 수 없어 제외했습니다.</p>
+              ) : null}
+
+              {/* 돈이 나가고 실제 사람에게 닿는 일이라, 보내기 전에 누구인지 볼 수 있어야 한다. */}
+              {recipientCount > 0 ? (
+                <details className="mt-3 rounded-xl border border-gray-100">
+                  <summary className="cursor-pointer px-4 py-2.5 text-xs font-bold text-gray-600">받는 사람 명단 보기</summary>
+                  <ul className="max-h-64 overflow-y-auto border-t border-gray-100 px-4 py-2">
+                    {recipients.map((member) => (
+                      <li key={member.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 py-1.5 text-xs">
+                        <span className="font-bold text-charcoal">{member.name}</span>
+                        <span className="text-gray-400">{member.maskedPhone}</span>
+                        <span className="text-gray-400">{member.role === "business" ? "가게·브랜드" : "크리에이터"}</span>
+                        {isPromotional && !member.marketingOptIn ? (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 font-bold text-amber-700">
+                            {member.recentCustomer ? "거래관계" : "미동의"}
+                          </span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               ) : null}
             </div>
           </div>

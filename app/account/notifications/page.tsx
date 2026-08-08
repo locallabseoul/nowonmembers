@@ -11,7 +11,7 @@ export default async function NotificationSettingsPage() {
   const { supabase, user } = await requireUser("/account/notifications");
   const { data: profile } = await supabase
     .from("profiles")
-    .select("marketing_opt_in")
+    .select("role,marketing_opt_in")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -33,7 +33,10 @@ export default async function NotificationSettingsPage() {
           서비스 이용에 꼭 필요한 내용이기 때문입니다.
         </p>
 
-        <MarketingForm optIn={Boolean(profile?.marketing_opt_in)} />
+        <MarketingForm
+          optIn={Boolean(profile?.marketing_opt_in)}
+          role={profile?.role === "business" ? "business" : "creator"}
+        />
 
         <Link href="/account/delete" className="mt-6 block text-center text-xs text-gray-400 underline hover:text-gray-500">
           회원 탈퇴

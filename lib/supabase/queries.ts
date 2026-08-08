@@ -1,6 +1,6 @@
 import { normalizeKoreanAuthPhone } from "@/lib/auth/phone";
 import { getKoreaTodayString } from "@/lib/campaign-lifecycle";
-import type { MessageChannel, MessageKind, MessageRoleTarget, MessageVerificationTarget } from "@/lib/messages";
+import type { MessageChannel, MessageKind, MessageRoleTarget, MessageTemplateCampaign, MessageVerificationTarget } from "@/lib/messages";
 import type { AppNotification, Campaign, HeaderFeedItem, LocalStory, Notice } from "@/lib/types";
 import { createSupabaseServerClient } from "./server";
 
@@ -521,15 +521,28 @@ export type AdminMessageTarget = {
   role: MessageRoleTarget;
   verification: MessageVerificationTarget;
   marketingOnly: boolean;
+  recentCustomers: boolean;
 };
 
-// 활성 회원을 조건별로 묶은 것. 화면에서 고른 조건에 맞는 것만 더하면 대상 인원이 된다.
-export type AdminMessageAudienceBucket = {
-  role: MessageRoleTarget;
+// 발송 대상이 될 수 있는 활성 회원. 화면에서 조건에 맞는 것만 골라 인원과 명단을 낸다.
+export type AdminMessageMember = {
+  id: string;
+  name: string;
+  role: "creator" | "business";
   verification: MessageVerificationTarget;
   marketingOptIn: boolean;
+  // 6개월 안에 지원했거나 협업한 크리에이터. 거래관계가 있어 동의 없이도 같은 종류의
+  // 광고를 보낼 수 있다(정보통신망법 제50조 제1항 단서).
+  recentCustomer: boolean;
+  // 화면에는 가운데를 가려 보여준다. 정확한 번호는 회원 관리에서 본다.
+  maskedPhone: string;
   hasPhone: boolean;
-  count: number;
+};
+
+export type AdminMessageRecipient = {
+  name: string;
+  maskedPhone: string;
+  status: string;
 };
 
 export type AdminMessage = {
@@ -548,6 +561,7 @@ export type AdminMessage = {
   smsFailedCount: number;
   status: string;
   error: string;
+  recipients: AdminMessageRecipient[];
   // 알리고가 발송 요청에 붙여준 접수 번호. 전달 결과를 조회할 때 쓴다.
   providerMessageId: string;
   createdAt: string;
@@ -2266,28 +2280,73 @@ export async function getAdminMembers(options: AdminMemberListOptions = {}): Pro
 // 조건을 바꿀 때마다 대상 인원이 바뀐다. 조합마다 서버를 다시 부르는 대신, 활성 회원을
 // 조건별로 묶어 한 번에 넘긴다. 화면에서 곧바로 더해 쓸 수 있다.
 // getAdminMembers는 페이지 단위라 이 용도로는 쓸 수 없다.
-export async function getAdminMessageAudience(): Promise<AdminMessageAudienceBucket[]> {
-  const supabase = await createSupabaseServerClient();
-  const { data } = await supabase
-    .from("profiles")
-    .select("role,verification_status,marketing_opt_in,phone")
-    .eq("status", "active");
+// 번호는 화면에 그대로 두지 않는다. 누구인지 알아볼 정도만 남긴다.
+function maskPhone(value: string) {
+  const digits = (value ?? "").replace(/\D/g, "");
+  if (digits.length < 8) return "";
 
-  const buckets = new Map<string, AdminMessageAudienceBucket>();
-  for (const row of data ?? []) {
-    const bucket = {
-      role: row.role as MessageRoleTarget,
-      verification: row.verification_status as MessageVerificationTarget,
-      marketingOptIn: Boolean(row.marketing_opt_in),
-      hasPhone: Boolean((row.phone ?? "").trim())
-    };
-    const key = `${bucket.role}|${bucket.verification}|${bucket.marketingOptIn}|${bucket.hasPhone}`;
-    const existing = buckets.get(key);
-    if (existing) existing.count += 1;
-    else buckets.set(key, { ...bucket, count: 1 });
+  return `${digits.slice(0, 3)}-****-${digits.slice(-4)}`;
+}
+
+export async function getAdminMessageAudience(): Promise<AdminMessageMember[]> {
+  const supabase = await createSupabaseServerClient();
+  const since = new Date(Date.now() - 182 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [profiles, applications, collaborations] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id,nickname,role,verification_status,marketing_opt_in,phone,business_profiles(business_name)")
+      .eq("status", "active")
+      .order("created_at", { ascending: false }),
+    supabase.from("campaign_applications").select("creator_profiles(user_id)").gte("applied_at", since),
+    supabase.from("collaborations").select("creator_profiles(user_id)").gte("created_at", since)
+  ]);
+
+  // 6개월 안에 거래관계가 생긴 회원.
+  const recentCustomers = new Set<string>();
+  for (const rows of [applications.data ?? [], collaborations.data ?? []]) {
+    for (const row of rows) {
+      const creator = asRelation(row.creator_profiles) as { user_id?: string } | null;
+      if (creator?.user_id) recentCustomers.add(creator.user_id);
+    }
   }
 
-  return [...buckets.values()];
+  return (profiles.data ?? []).map((row) => {
+    const business = asRelation(row.business_profiles) as { business_name?: string } | null;
+    const phone = (row.phone ?? "").trim();
+    return {
+      id: row.id,
+      name: row.nickname || business?.business_name || "(이름 없음)",
+      role: row.role === "business" ? "business" : "creator",
+      verification: row.verification_status as MessageVerificationTarget,
+      marketingOptIn: Boolean(row.marketing_opt_in),
+      recentCustomer: recentCustomers.has(row.id),
+      maskedPhone: maskPhone(phone),
+      hasPhone: Boolean(phone)
+    };
+  });
+}
+
+// 캠페인 소식을 보낼 때 어떤 캠페인인지 고를 수 있게 한다. 모집중인 것만 뜬다 —
+// 이미 마감된 캠페인을 알리는 문자는 보낼 일이 없다.
+export async function getRecruitingCampaignOptions(): Promise<MessageTemplateCampaign[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("campaigns")
+    .select("id,title,recruit_end,business_profiles(business_name)")
+    .eq("status", "recruiting")
+    .gte("recruit_end", getKoreaTodayString())
+    .order("recruit_end", { ascending: true });
+
+  return (data ?? []).map((row) => {
+    const business = asRelation(row.business_profiles) as { business_name?: string } | null;
+    return {
+      id: row.id,
+      title: row.title ?? "",
+      businessName: business?.business_name ?? "",
+      recruitEnd: row.recruit_end ?? ""
+    };
+  });
 }
 
 export async function getAdminMessages(limit = 30): Promise<AdminMessage[]> {
@@ -2298,8 +2357,30 @@ export async function getAdminMessages(limit = 30): Promise<AdminMessage[]> {
     .order("created_at", { ascending: false })
     .limit(limit);
 
+  // 누구에게 갔는지 확인할 수 있어야 한다. 발송 건마다 따로 묻지 않고 한 번에 가져온다.
+  const messageIds = (data ?? []).map((row) => row.id);
+  const recipientsByMessage = new Map<string, AdminMessageRecipient[]>();
+  if (messageIds.length) {
+    const { data: recipientRows } = await supabase
+      .from("admin_message_recipients")
+      .select("message_id,phone,status,profiles(nickname,business_profiles(business_name))")
+      .in("message_id", messageIds);
+
+    for (const row of recipientRows ?? []) {
+      const profile = asRelation(row.profiles) as { nickname?: string; business_profiles?: unknown } | null;
+      const business = asRelation(profile?.business_profiles) as { business_name?: string } | null;
+      const list = recipientsByMessage.get(row.message_id) ?? [];
+      list.push({
+        name: profile?.nickname || business?.business_name || "(탈퇴한 회원)",
+        maskedPhone: maskPhone(row.phone ?? ""),
+        status: row.status ?? ""
+      });
+      recipientsByMessage.set(row.message_id, list);
+    }
+  }
+
   return (data ?? []).map((row) => {
-    const target = (row.target ?? {}) as { role?: string; verification?: string; marketingOnly?: boolean };
+    const target = (row.target ?? {}) as { role?: string; verification?: string; marketingOnly?: boolean; recentCustomers?: boolean };
     return {
       id: row.id,
       kind: row.kind as MessageKind,
@@ -2310,7 +2391,8 @@ export async function getAdminMessages(limit = 30): Promise<AdminMessage[]> {
       target: {
         role: (target.role ?? "all") as MessageRoleTarget,
         verification: (target.verification ?? "all") as MessageVerificationTarget,
-        marketingOnly: Boolean(target.marketingOnly)
+        marketingOnly: Boolean(target.marketingOnly),
+        recentCustomers: Boolean(target.recentCustomers)
       },
       consentOverride: Boolean(row.consent_override),
       recipientCount: Number(row.recipient_count ?? 0),
@@ -2321,6 +2403,7 @@ export async function getAdminMessages(limit = 30): Promise<AdminMessage[]> {
       status: row.status ?? "sent",
       error: row.error ?? "",
       providerMessageId: row.provider_message_id ?? "",
+      recipients: recipientsByMessage.get(row.id) ?? [],
       createdAt: row.created_at
     };
   });

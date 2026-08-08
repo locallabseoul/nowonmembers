@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 import { BriefcaseBusiness, Camera, CheckCircle2, UserPlus, X } from "lucide-react";
 import { LEGAL_EFFECTIVE_DATE, marketingSections, privacySections, termsSections, type LegalSection } from "@/lib/legal";
+import { MARKETING_CONSENT_COPY, MARKETING_CONSENT_FOOTNOTE } from "@/lib/messages";
 import { emptyFormState, type FormState } from "@/lib/form-errors";
 import { FieldError, FieldLabel, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
 
@@ -491,10 +492,17 @@ export function SignupForm({
               (필수) <button type="button" onClick={(event) => { event.preventDefault(); setLegalModal("privacy"); }} className="text-primary underline underline-offset-2">개인정보 수집 및 이용</button> 동의
             </span>
           </label>
+          {/* 받게 될 내용이 곧 가입 이유인데 '마케팅 정보 수신'이라고만 적혀 있어 아무도
+              누르지 않았다. 무엇을 받는지 그대로 적고, 필수 항목과 같은 무게로 보이게 한다.
+              가게는 캠페인을 여는 쪽이라 크리에이터와 받을 내용이 다르다. */}
           <label className="flex cursor-pointer items-start gap-3">
             <input name="agreement_marketing" type="checkbox" className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
-            <span className="text-sm text-gray-600">
-              (선택) <button type="button" onClick={(event) => { event.preventDefault(); setLegalModal("marketing"); }} className="text-primary underline underline-offset-2">마케팅 정보 수신</button> 동의
+            <span className="text-sm font-bold text-charcoal">
+              (선택) {MARKETING_CONSENT_COPY[role].title}
+              <span className="mt-1 block break-keep text-xs font-medium leading-relaxed text-gray-500">
+                {MARKETING_CONSENT_COPY[role].description} {MARKETING_CONSENT_FOOTNOTE}{" "}
+                <button type="button" onClick={(event) => { event.preventDefault(); setLegalModal("marketing"); }} className="text-primary underline underline-offset-2">마케팅 정보 수신 동의</button> 내용 보기
+              </span>
             </span>
           </label>
           <FieldError>{fieldErrors.agreement}</FieldError>

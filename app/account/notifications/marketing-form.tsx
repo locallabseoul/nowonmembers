@@ -4,9 +4,10 @@ import { useState } from "react";
 import { useActionState } from "react";
 import { Loader2 } from "lucide-react";
 import { emptyFormState } from "@/lib/form-errors";
+import { MARKETING_CONSENT_COPY } from "@/lib/messages";
 import { setMarketingOptIn } from "../actions";
 
-export function MarketingForm({ optIn }: { optIn: boolean }) {
+export function MarketingForm({ optIn, role }: { optIn: boolean; role: "creator" | "business" }) {
   const [state, formAction, isPending] = useActionState(setMarketingOptIn, emptyFormState);
   const [checked, setChecked] = useState(optIn);
 
@@ -28,9 +29,9 @@ export function MarketingForm({ optIn }: { optIn: boolean }) {
           className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <span className="min-w-0">
-          <span className="block font-bold text-charcoal">마케팅 정보 수신에 동의합니다</span>
+          <span className="block break-keep font-bold text-charcoal">{MARKETING_CONSENT_COPY[role].title}</span>
           <span className="mt-1 block break-keep text-sm leading-6 text-gray-500">
-            새로 열린 캠페인 소식과 이벤트 안내를 문자로 받습니다. 동의하지 않아도 서비스 이용에는 아무 제한이 없습니다.
+            {MARKETING_CONSENT_COPY[role].description} 동의하지 않아도 서비스 이용에는 아무 제한이 없습니다.
           </span>
         </span>
       </label>

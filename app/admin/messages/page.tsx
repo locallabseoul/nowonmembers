@@ -4,7 +4,7 @@ import { Badge } from "@/app/components/ui";
 import { describeMessageTarget } from "@/lib/messages";
 import { PUBLIC_SITE_URL } from "@/lib/site";
 import { getSmsBalance, isSmsConfigured } from "@/lib/sms";
-import { getAdminMessageAudience, getAdminMessages } from "@/lib/supabase/queries";
+import { getAdminMessageAudience, getAdminMessages, getRecruitingCampaignOptions } from "@/lib/supabase/queries";
 import { sendAdminMessage } from "../actions";
 import { MessageComposer } from "./message-composer";
 
@@ -41,8 +41,9 @@ export default async function AdminMessagesPage({
   searchParams: Promise<{ error?: string; messageSent?: string }>;
 }) {
   const { error, messageSent } = await searchParams;
-  const [audience, messages, balance] = await Promise.all([
+  const [audience, campaigns, messages, balance] = await Promise.all([
     getAdminMessageAudience(),
+    getRecruitingCampaignOptions(),
     getAdminMessages(),
     loadSmsBalance()
   ]);
@@ -85,6 +86,7 @@ export default async function AdminMessagesPage({
 
       <MessageComposer
         audience={audience}
+        campaigns={campaigns}
         sendAction={sendAdminMessage}
         returnTo="/admin/messages"
         smsReady={smsReady}
@@ -134,6 +136,24 @@ export default async function AdminMessagesPage({
                     ) : null}
                   </div>
                   {message.error ? <p className="mt-2 break-keep text-xs font-bold text-red-600">{message.error}</p> : null}
+
+                  {message.recipients.length ? (
+                    <details className="mt-3 rounded-xl border border-gray-100">
+                      <summary className="cursor-pointer px-4 py-2 text-xs font-bold text-gray-600">
+                        받는 사람 {message.recipients.length}명 보기
+                      </summary>
+                      <ul className="max-h-64 overflow-y-auto border-t border-gray-100 px-4 py-2">
+                        {message.recipients.map((recipient, index) => (
+                          <li key={`${recipient.name}-${index}`} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 py-1.5 text-xs">
+                            <span className="font-bold text-charcoal">{recipient.name}</span>
+                            <span className="text-gray-400">{recipient.maskedPhone}</span>
+                            {recipient.status === "failed" ? <span className="font-bold text-red-600">실패</span> : null}
+                            {recipient.status === "pending" ? <span className="font-bold text-amber-700">대기</span> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : null}
                 </li>
               ))}
             </ul>

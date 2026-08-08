@@ -455,6 +455,7 @@ export async function sendAdminMessage(formData: FormData) {
   const role = String(formData.get("target_role") ?? "all");
   const verification = String(formData.get("target_verification") ?? "all");
   const allowWithoutConsent = formData.get("allow_without_consent") === "on";
+  const allowRecentCustomers = formData.get("allow_recent_customers") === "on";
 
   if (!isSmsConfigured()) {
     redirect(backTo(formData, "/admin/messages", { error: "문자 발송 설정이 없습니다. 관리자에게 문의해주세요." }));
@@ -478,7 +479,8 @@ export async function sendAdminMessage(formData: FormData) {
     target_link: link || null,
     target_role: role,
     target_verification: verification,
-    allow_without_consent: allowWithoutConsent
+    allow_without_consent: allowWithoutConsent,
+    allow_recent_customers: allowRecentCustomers
   });
 
   if (error) redirect(backTo(formData, "/admin/messages", { error: error.message }));

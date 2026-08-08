@@ -33,7 +33,8 @@ function getAligoCredentials() {
     throw new Error("문자 발송 설정이 없습니다. ALIGO_API_KEY, ALIGO_USER_ID, ALIGO_SENDER를 확인해주세요.");
   }
 
-  return { apiKey, userId, sender };
+  // 02-123-4567처럼 하이픈을 넣어도 되게 한다. 알리고는 숫자만 받는다.
+  return { apiKey, userId, sender: sender.replace(/\D/g, "") };
 }
 
 export function isSmsConfigured() {
