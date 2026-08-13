@@ -545,6 +545,30 @@ export type AdminMessageRecipient = {
   status: string;
 };
 
+// 자동 알림 이벤트 정의. 문구와 켜고 끄기를 관리자가 고친다.
+export type NotificationEvent = {
+  key: string;
+  label: string;
+  audience: "business" | "creator";
+  appEnabled: boolean;
+  smsEnabled: boolean;
+  title: string;
+  body: string;
+};
+
+export type SmsOutboxEntry = {
+  id: string;
+  eventKey: string;
+  eventLabel: string;
+  name: string;
+  maskedPhone: string;
+  title: string;
+  body: string;
+  status: string;
+  error: string;
+  createdAt: string;
+};
+
 export type AdminMessage = {
   id: string;
   kind: MessageKind;
@@ -2323,6 +2347,52 @@ export async function getAdminMessageAudience(): Promise<AdminMessageMember[]> {
       recentCustomer: recentCustomers.has(row.id),
       maskedPhone: maskPhone(phone),
       hasPhone: Boolean(phone)
+    };
+  });
+}
+
+export async function getNotificationEvents(): Promise<NotificationEvent[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("notification_events")
+    .select("key,label,audience,app_enabled,sms_enabled,title,body")
+    .order("sort_order", { ascending: true });
+
+  return (data ?? []).map((row) => ({
+    key: row.key,
+    label: row.label ?? "",
+    audience: row.audience === "business" ? "business" : "creator",
+    appEnabled: Boolean(row.app_enabled),
+    smsEnabled: Boolean(row.sms_enabled),
+    title: row.title ?? "",
+    body: row.body ?? ""
+  }));
+}
+
+// 보낼 문자가 쌓이는 곳. 대기 중인 것을 먼저 보여주고, 처리된 건 최근 것만 남긴다.
+export async function getSmsOutbox(limit = 100): Promise<SmsOutboxEntry[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("sms_outbox")
+    .select("id,event_key,phone,title,body,status,error,created_at,notification_events(label),profiles(nickname,business_profiles(business_name))")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  return (data ?? []).map((row) => {
+    const event = asRelation(row.notification_events) as { label?: string } | null;
+    const profile = asRelation(row.profiles) as { nickname?: string; business_profiles?: unknown } | null;
+    const business = asRelation(profile?.business_profiles) as { business_name?: string } | null;
+    return {
+      id: row.id,
+      eventKey: row.event_key,
+      eventLabel: event?.label ?? row.event_key,
+      name: profile?.nickname || business?.business_name || "(탈퇴한 회원)",
+      maskedPhone: maskPhone(row.phone ?? ""),
+      title: row.title ?? "",
+      body: row.body ?? "",
+      status: row.status ?? "",
+      error: row.error ?? "",
+      createdAt: row.created_at
     };
   });
 }

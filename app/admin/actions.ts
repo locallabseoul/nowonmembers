@@ -9,6 +9,7 @@ import { buildSmsText } from "@/lib/messages";
 import { PUBLIC_SITE_URL } from "@/lib/site";
 import { isSmsConfigured, sendSms } from "@/lib/sms";
 
+
 async function requireAdmin() {
   const { supabase } = await requireAdminSession();
   return supabase;
@@ -525,6 +526,118 @@ export async function sendAdminMessage(formData: FormData) {
   revalidatePath("/admin", "layout");
   if (sendError) redirect(backTo(formData, "/admin/messages", { error: sendError }));
   redirect(backTo(formData, "/admin/messages", { messageSent: String(numbers.length) }));
+}
+
+// ─── 자동 알림 ───
+
+export async function setNotificationChannel(formData: FormData) {
+  const supabase = await requireAdmin();
+  const key = String(formData.get("event_key") ?? "");
+  const channel = String(formData.get("channel") ?? "");
+  const enabled = String(formData.get("enabled") ?? "") === "true";
+
+  if (channel !== "app" && channel !== "sms") {
+    redirect(backTo(formData, "/admin/notifications", { error: "알 수 없는 채널입니다." }));
+  }
+
+  const { error } = await supabase
+    .from("notification_events")
+    .update({ [channel === "app" ? "app_enabled" : "sms_enabled"]: enabled, updated_at: new Date().toISOString() })
+    .eq("key", key);
+
+  if (error) redirect(backTo(formData, "/admin/notifications", { error: error.message }));
+  revalidatePath("/admin", "layout");
+  redirect(backTo(formData, "/admin/notifications", {}));
+}
+
+export async function updateNotificationEvent(formData: FormData) {
+  const supabase = await requireAdmin();
+  const key = String(formData.get("event_key") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+
+  if (!key || !title || !body) {
+    redirect(backTo(formData, "/admin/notifications", { error: "제목과 내용을 입력해주세요." }));
+  }
+
+  const { error } = await supabase
+    .from("notification_events")
+    .update({ title, body, updated_at: new Date().toISOString() })
+    .eq("key", key);
+
+  if (error) redirect(backTo(formData, "/admin/notifications", { error: error.message }));
+  revalidatePath("/admin", "layout");
+  redirect(backTo(formData, "/admin/notifications", { eventUpdated: "1" }));
+}
+
+export async function setOutboxStatus(formData: FormData) {
+  const supabase = await requireAdmin();
+  const id = String(formData.get("outbox_id") ?? "");
+  const status = String(formData.get("status") ?? "");
+
+  const { error } = await supabase.rpc("admin_set_outbox_status", { target_id: id, new_status: status });
+
+  if (error) redirect(backTo(formData, "/admin/notifications", { error: error.message }));
+  revalidatePath("/admin", "layout");
+  redirect(backTo(formData, "/admin/notifications", {}));
+}
+
+// 한 번에 보낼 최대 건수. 액션이 너무 오래 걸리지 않게 끊고, 남은 건 다음 클릭에 보낸다.
+const OUTBOX_FLUSH_LIMIT = 100;
+
+export async function flushSmsOutbox(formData: FormData) {
+  const supabase = await requireAdmin();
+
+  if (!isSmsConfigured()) {
+    redirect(backTo(formData, "/admin/notifications", { error: "이 화면에서는 문자를 보낼 수 없습니다. 운영자 PC에서 보내주세요." }));
+  }
+
+  const { data: pending } = await supabase
+    .from("sms_outbox")
+    .select("id,phone,title,body")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true })
+    .limit(OUTBOX_FLUSH_LIMIT);
+
+  const queued = pending ?? [];
+  if (!queued.length) {
+    redirect(backTo(formData, "/admin/notifications", { error: "보낼 문자가 없습니다." }));
+  }
+
+  let sentCount = 0;
+  let failedCount = 0;
+
+  // 사람마다 캠페인 이름이 달라 문구가 다르다. 묶어 보낼 수 없어 한 건씩 보낸다.
+  for (const entry of queued) {
+    try {
+      const result = await sendSms({
+        receivers: [String(entry.phone ?? "")],
+        title: String(entry.title ?? ""),
+        text: `${entry.title}\n\n${entry.body}`
+      });
+      await supabase.rpc("admin_mark_outbox_result", {
+        target_id: entry.id,
+        succeeded: true,
+        provider_id: result.providerMessageId,
+        error_text: null
+      });
+      sentCount += 1;
+    } catch (smsError) {
+      // 한 건이 실패해도 나머지는 계속 보낸다.
+      await supabase.rpc("admin_mark_outbox_result", {
+        target_id: entry.id,
+        succeeded: false,
+        provider_id: null,
+        error_text: smsError instanceof Error ? smsError.message : "문자 발송에 실패했습니다."
+      });
+      failedCount += 1;
+    }
+  }
+
+  revalidatePath("/admin", "layout");
+  redirect(backTo(formData, "/admin/notifications", {
+    message: failedCount ? `${sentCount}건을 보냈고 ${failedCount}건이 실패했습니다.` : `${sentCount}건을 보냈습니다.`
+  }));
 }
 
 // ─── 회원 관리 ───
