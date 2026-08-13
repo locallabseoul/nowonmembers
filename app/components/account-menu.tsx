@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BellRing, ChevronDown, LayoutDashboard, LogOut, Settings, ShieldCheck } from "lucide-react";
+import { BellRing, ChevronDown, LayoutDashboard, LogOut, Settings, ShieldCheck, Ticket } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 type AccountMenuProps = {
@@ -105,6 +105,10 @@ export function AccountMenu({ displayName, role, isAdmin = false, accountPath, p
             <Link href="/account/notifications" role="menuitem" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-primary">
               <BellRing size={17} />
               수신 설정
+            </Link>
+            <Link href="/my/coupons" role="menuitem" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-primary">
+              <Ticket size={17} />
+              내 쿠폰함
             </Link>
             {isAdmin ? (
               <Link href="/admin" role="menuitem" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-primary">
