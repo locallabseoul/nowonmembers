@@ -305,6 +305,7 @@ export type DashboardSubmission = {
 
 export type BusinessDashboardBusiness = {
     id: string;
+    slug: string | null;
     businessName: string;
     category: string;
     shortIntro: string;
@@ -349,6 +350,53 @@ export type BusinessDashboardData = {
   selectedCampaignSubmissions: DashboardSubmission[];
   recommendedApplications: DashboardApplication[];
 };
+
+export type PublicBusinessProfile = {
+  slug: string;
+  businessName: string;
+  category: string;
+  shortIntro: string;
+  description: string;
+  address: string;
+  addressDetail: string;
+  district: string;
+  contact: string;
+  businessHours: string;
+  websiteUrl: string;
+  socialUrls: string[];
+  coverImage: string;
+  updatedAt: string;
+};
+
+export async function getPublicBusinessProfileBySlug(slug: string): Promise<PublicBusinessProfile | null> {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("business_profiles")
+    .select("slug,business_name,category,short_intro,description,address,address_detail,district,contact,business_hours,website_url,social_urls,cover_image_url,updated_at")
+    .eq("slug", slug)
+    .eq("is_public", true)
+    .eq("verification_status", "verified")
+    .maybeSingle();
+
+  if (!data?.slug) return null;
+
+  return {
+    slug: data.slug,
+    businessName: data.business_name,
+    category: data.category,
+    shortIntro: data.short_intro ?? "",
+    description: data.description ?? "",
+    address: data.address ?? "",
+    addressDetail: data.address_detail ?? "",
+    district: data.district ?? "",
+    contact: data.contact ?? "",
+    businessHours: getBusinessHoursText(data.business_hours as BusinessHoursValue, "summary"),
+    websiteUrl: data.website_url ?? "",
+    socialUrls: Array.isArray(data.social_urls) ? data.social_urls.filter(Boolean) : [],
+    coverImage: data.cover_image_url ?? "",
+    updatedAt: data.updated_at
+  };
+}
 
 export type BusinessCreatorReviewItem = {
   collaborationId: string;
@@ -433,6 +481,7 @@ function buildBusinessProfileDefaults({
 }): BusinessDashboardBusiness {
   return {
     id: "signup-defaults",
+    slug: null,
     businessName: profile?.nickname ?? "",
     category: "",
     shortIntro: "",
@@ -1557,7 +1606,7 @@ export async function getBusinessDashboard(
   const [{ data: business }, { data: profile }] = await Promise.all([
     supabase
       .from("business_profiles")
-      .select("id,business_name,category,short_intro,description,address,address_detail,latitude,longitude,district,contact,business_hours,website_url,social_urls,verification_status,is_public,cover_image_url")
+      .select("id,slug,business_name,category,short_intro,description,address,address_detail,latitude,longitude,district,contact,business_hours,website_url,social_urls,verification_status,is_public,cover_image_url")
       .eq("user_id", user.id)
       .maybeSingle(),
     supabase
@@ -1662,6 +1711,7 @@ export async function getBusinessDashboard(
   return {
     business: {
       id: business.id,
+      slug: business.slug ?? null,
       businessName: business.business_name,
       category: business.category,
       shortIntro: business.short_intro ?? "",
@@ -1747,7 +1797,7 @@ export async function getBusinessCreatorManagement({
   const [{ data: business }, { data: profile }] = await Promise.all([
     supabase
       .from("business_profiles")
-      .select("id,business_name,category,short_intro,description,address,address_detail,latitude,longitude,district,contact,business_hours,website_url,social_urls,verification_status,is_public,cover_image_url")
+      .select("id,slug,business_name,category,short_intro,description,address,address_detail,latitude,longitude,district,contact,business_hours,website_url,social_urls,verification_status,is_public,cover_image_url")
       .eq("user_id", user.id)
       .maybeSingle(),
     supabase
@@ -1761,6 +1811,7 @@ export async function getBusinessCreatorManagement({
 
   const businessSummary: BusinessCreatorManagementData["business"] = {
     id: business.id,
+    slug: business.slug ?? null,
     businessName: business.business_name,
     category: business.category,
     shortIntro: business.short_intro ?? "",

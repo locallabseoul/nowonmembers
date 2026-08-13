@@ -36,6 +36,12 @@ body {
   flex: 1 0 auto;
 }
 
+/* 최상위 레이아웃은 서비스 공통 셸을 제공하지만 미니홈은 가게 자체 화면으로 보인다. */
+body:has(.minihome-shell) > header,
+body:has(.minihome-shell) > footer {
+  display: none;
+}
+
 button,
 a,
 input,

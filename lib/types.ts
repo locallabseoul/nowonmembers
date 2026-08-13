@@ -29,6 +29,7 @@ export type NoticeStatus = "draft" | "published";
 
 export type BusinessProfile = {
   id: string;
+  slug: string | null;
   businessName: string;
   category: string;
   shortIntro: string;
@@ -43,6 +44,7 @@ export type BusinessProfile = {
   websiteUrl?: string;
   socialUrls: string[];
   verificationStatus: VerificationStatus;
+  isPublic: boolean;
   coverImage: string;
 };
 

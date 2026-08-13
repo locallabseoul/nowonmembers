@@ -20,13 +20,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // 공개 목록에 노출되는 것만 담는다. 조회에 실패해도 정적 페이지는 내보낸다.
   try {
     const supabase = await createSupabaseServerClient();
-    const [campaignRows, couponRows, storyRows] = await Promise.all([
+    const [campaignRows, couponRows, storyRows, businessRows] = await Promise.all([
       supabase
         .from("campaigns")
         .select("id,updated_at")
         .in("status", ["recruiting", "selecting", "in_progress", "submission_review", "completed"]),
       supabase.from("coupons").select("id,updated_at").eq("status", "approved"),
-      supabase.from("local_stories").select("id,published_at").not("published_at", "is", null)
+      supabase.from("local_stories").select("id,published_at").not("published_at", "is", null),
+      supabase
+        .from("business_profiles")
+        .select("slug,updated_at")
+        .eq("is_public", true)
+        .eq("verification_status", "verified")
+        .not("slug", "is", null)
     ]);
 
     const campaigns: MetadataRoute.Sitemap = (campaignRows.data ?? []).map((campaign) => ({
@@ -47,8 +53,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "daily",
       priority: 0.8
     }));
+    const businesses: MetadataRoute.Sitemap = (businessRows.data ?? [])
+      .filter((business): business is typeof business & { slug: string } => Boolean(business.slug))
+      .map((business) => ({
+        url: `${BASE_URL}/${business.slug}`,
+        lastModified: business.updated_at ?? undefined,
+        changeFrequency: "weekly",
+        priority: 0.7
+      }));
 
-    return [...staticPages, ...campaigns, ...coupons, ...stories];
+    return [...staticPages, ...businesses, ...campaigns, ...coupons, ...stories];
   } catch {
     return staticPages;
   }

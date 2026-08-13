@@ -27,6 +27,7 @@ import { BUSINESS_IMAGE_BUCKET } from "@/lib/business-images";
 import { replaceHeicSelection, uploadableImageTypes } from "@/lib/heic";
 import { createClient } from "@/lib/supabase";
 import type { BusinessDashboardData } from "@/lib/supabase/queries";
+import { getBusinessSlugError, normalizeBusinessSlug } from "@/lib/business-slug";
 
 type InitialBusinessProfile = NonNullable<BusinessDashboardData["business"]>;
 
@@ -42,6 +43,7 @@ type BusinessProfileWizardProps = {
 };
 
 type BusinessProfileDraft = {
+  slug: string;
   business_name: string;
   manager_name: string;
   manager_phone: string;
@@ -181,6 +183,7 @@ function createInitialDraft(initial?: InitialBusinessProfile): BusinessProfileDr
   const businessHours = getDefaultBusinessHours(initial);
 
   return {
+    slug: initial?.slug ?? "",
     business_name: initial?.businessName ?? "",
     manager_name: initial?.managerName ?? "",
     manager_phone: formatPhone(initial?.managerPhone ?? ""),
@@ -372,6 +375,7 @@ function BusinessProfileCreateWizard({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submissionError, setSubmissionError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [slugAvailability, setSlugAvailability] = useState<"idle" | "checking" | "available" | "unavailable">("idle");
   const [draftLoaded, setDraftLoaded] = useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const isEditMode = mode === "edit";
@@ -416,6 +420,31 @@ function BusinessProfileCreateWizard({
     if (coverImagePreview) URL.revokeObjectURL(coverImagePreview.url);
   }, [coverImagePreview]);
 
+  useEffect(() => {
+    const slugError = getBusinessSlugError(draft.slug);
+    if (slugError) {
+      setSlugAvailability("idle");
+      return;
+    }
+
+    setSlugAvailability("checking");
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/business/slug-availability?slug=${encodeURIComponent(draft.slug)}`, { signal: controller.signal });
+        const result = await response.json() as { available?: boolean };
+        setSlugAvailability(response.ok && result.available ? "available" : "unavailable");
+      } catch (fetchError) {
+        if (!(fetchError instanceof DOMException && fetchError.name === "AbortError")) setSlugAvailability("idle");
+      }
+    }, 350);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [draft.slug]);
+
   function updateDraftField(name: keyof BusinessProfileDraft, value: string) {
     setDraft((current) => ({
       ...current,
@@ -434,6 +463,7 @@ function BusinessProfileCreateWizard({
   function collectProfileErrors(stepIndex?: number) {
     const hasCoverImage = Boolean(coverImagePreview || initialBusiness?.coverImage);
     const stepZero: Record<string, string> = {
+      slug: getBusinessSlugError(draft.slug) || (slugAvailability === "unavailable" ? "이미 사용 중인 미니홈 주소입니다." : ""),
       cover_image: hasCoverImage ? "" : "대표 이미지를 등록해주세요.",
       business_name: draft.business_name.trim() ? "" : "가게명을 입력해주세요.",
       category: draft.category.trim() ? "" : "업종을 선택해주세요.",
@@ -691,6 +721,30 @@ function BusinessProfileCreateWizard({
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block sm:col-span-2">
+                    <FieldLabel required>미니홈 주소</FieldLabel>
+                    <div className={`flex items-center rounded-xl border bg-white ${fieldErrors.slug ? "border-red-300" : "border-slate-200 focus-within:border-primary"}`}>
+                      <span className="shrink-0 pl-4 text-sm font-bold text-slate-400">nowon-me.kr/</span>
+                      <input
+                        name="slug"
+                        value={draft.slug}
+                        onChange={(event) => {
+                          updateDraftField("slug", normalizeBusinessSlug(event.target.value));
+                          setFieldErrors((current) => ({ ...current, slug: "" }));
+                        }}
+                        placeholder="cafe-ordinary"
+                        maxLength={40}
+                        autoCapitalize="none"
+                        className="min-w-0 flex-1 rounded-xl px-1 py-3.5 text-sm font-black text-charcoal outline-none"
+                      />
+                    </div>
+                    <FieldError>{fieldErrors.slug}</FieldError>
+                    {!fieldErrors.slug ? (
+                      <p className={`mt-2 text-xs font-bold ${slugAvailability === "available" ? "text-emerald-600" : slugAvailability === "unavailable" ? "text-red-600" : "text-slate-500"}`}>
+                        {slugAvailability === "checking" ? "주소 중복 확인 중…" : slugAvailability === "available" ? "사용할 수 있는 주소입니다." : slugAvailability === "unavailable" ? "이미 사용 중인 주소입니다." : "영문 소문자, 숫자, 하이픈으로 3~40자"}
+                      </p>
+                    ) : null}
+                  </label>
                   <TextField
                     name="business_name"
                     label="가게명"
@@ -985,6 +1039,7 @@ function BusinessProfileEditForm({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submissionError, setSubmissionError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [slugAvailability, setSlugAvailability] = useState<"idle" | "checking" | "available" | "unavailable">("idle");
   const coverInputRef = useRef<HTMLInputElement>(null);
   const businessHoursSummary = useMemo(() => getBusinessHoursSummary(draft), [draft]);
   const displayImageUrl = coverImagePreview?.url ?? initialBusiness.coverImage ?? "";
@@ -992,6 +1047,35 @@ function BusinessProfileEditForm({
   useEffect(() => () => {
     if (coverImagePreview) URL.revokeObjectURL(coverImagePreview.url);
   }, [coverImagePreview]);
+
+  useEffect(() => {
+    const slugError = getBusinessSlugError(draft.slug);
+    if (slugError) {
+      setSlugAvailability("idle");
+      return;
+    }
+    if (normalizeBusinessSlug(draft.slug) === initialBusiness.slug) {
+      setSlugAvailability("available");
+      return;
+    }
+
+    setSlugAvailability("checking");
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/business/slug-availability?slug=${encodeURIComponent(draft.slug)}`, { signal: controller.signal });
+        const result = await response.json() as { available?: boolean };
+        setSlugAvailability(response.ok && result.available ? "available" : "unavailable");
+      } catch (fetchError) {
+        if (!(fetchError instanceof DOMException && fetchError.name === "AbortError")) setSlugAvailability("idle");
+      }
+    }, 350);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [draft.slug, initialBusiness.slug]);
 
   function updateDraftField(name: keyof BusinessProfileDraft, value: string) {
     setDraft((current) => ({
@@ -1071,6 +1155,7 @@ function BusinessProfileEditForm({
 
   function collectEditErrors() {
     const errors: Record<string, string> = {
+      slug: getBusinessSlugError(draft.slug) || (slugAvailability === "unavailable" ? "이미 사용 중인 미니홈 주소입니다." : ""),
       cover_image: displayImageUrl ? "" : "대표 이미지를 등록해주세요.",
       business_name: draft.business_name.trim() ? "" : "가게명을 입력해주세요.",
       category: draft.category.trim() ? "" : "업종을 선택해주세요.",
@@ -1178,6 +1263,30 @@ function BusinessProfileEditForm({
         <FormCard>
           <SectionHeading title="가게 기본 정보" description="가게명은 운영자 계정의 상호와 함께 동기화됩니다." />
           <div className="grid gap-5 sm:grid-cols-2">
+            <label className="block sm:col-span-2">
+              <FieldLabel required>미니홈 주소</FieldLabel>
+              <div className={`flex items-center rounded-xl border bg-white ${fieldErrors.slug ? "border-red-300" : "border-slate-200 focus-within:border-primary"}`}>
+                <span className="shrink-0 pl-4 text-sm font-bold text-slate-400">nowon-me.kr/</span>
+                <input
+                  name="slug"
+                  value={draft.slug}
+                  onChange={(event) => {
+                    updateDraftField("slug", normalizeBusinessSlug(event.target.value));
+                    setFieldErrors((current) => ({ ...current, slug: "" }));
+                  }}
+                  placeholder="cafe-ordinary"
+                  maxLength={40}
+                  autoCapitalize="none"
+                  className="min-w-0 flex-1 rounded-xl px-1 py-3.5 text-sm font-black text-charcoal outline-none"
+                />
+              </div>
+              <FieldError>{fieldErrors.slug}</FieldError>
+              {!fieldErrors.slug ? (
+                <p className={`mt-2 text-xs font-bold ${slugAvailability === "available" ? "text-emerald-600" : slugAvailability === "unavailable" ? "text-red-600" : "text-slate-500"}`}>
+                  {slugAvailability === "checking" ? "주소 중복 확인 중…" : slugAvailability === "available" ? "사용할 수 있는 주소입니다." : slugAvailability === "unavailable" ? "이미 사용 중인 주소입니다." : "영문 소문자, 숫자, 하이픈으로 3~40자"}
+                </p>
+              ) : null}
+            </label>
             <TextField name="business_name" label="가게명/상호" value={draft.business_name} onChange={(value) => updateDraftField("business_name", value)} placeholder="카페 오디너리" icon={<Store size={17} />} requiredMark
                     error={fieldErrors.business_name}
                   />

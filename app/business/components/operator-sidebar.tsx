@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { BarChart3, CreditCard, ListChecks, Ticket, Users } from "lucide-react";
+import { BarChart3, CreditCard, House, ListChecks, Ticket, Users } from "lucide-react";
 import { NewBadge } from "@/app/components/ui";
 import type { BusinessDashboardData } from "@/lib/supabase/queries";
 
 type OperatorBusiness = NonNullable<BusinessDashboardData["business"]>;
-type OperatorSection = "campaigns" | "coupons" | "creators" | "points" | "reports";
+type OperatorSection = "campaigns" | "minihome" | "coupons" | "creators" | "points" | "reports";
 
 function navClassName(isActive: boolean) {
   return `flex items-center gap-3 border-l-4 px-6 py-4 transition-colors ${
@@ -36,6 +36,12 @@ export function OperatorSidebar({ business, active }: { business: OperatorBusine
 
       <nav className="overflow-hidden rounded-[20px] border border-gray-100 bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)]" aria-label="가게 대시보드 메뉴">
         <ul className="flex flex-col">
+          <li>
+            <Link href="/business/minihome" className={navClassName(active === "minihome")}>
+              <House size={20} />
+              미니홈 관리
+            </Link>
+          </li>
           <li>
             <Link href="/business/dashboard" className={navClassName(active === "campaigns")}>
               <ListChecks size={20} />

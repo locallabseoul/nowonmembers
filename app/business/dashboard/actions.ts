@@ -8,6 +8,7 @@ import { BUSINESS_IMAGE_BUCKET, isOwnedBusinessImagePath } from "@/lib/business-
 import { logEvent } from "@/lib/events";
 import { BUSINESS_PROFILE_DELEGATION_COOKIE, getBusinessProfileDelegation } from "@/lib/auth/business-profile-delegation";
 import { READ_ONLY_PREVIEW_COOKIE } from "@/lib/auth/read-only-preview";
+import { getBusinessSlugError, normalizeBusinessSlug } from "@/lib/business-slug";
 
 function splitList(value: FormDataEntryValue | null) {
   return String(value ?? "")
@@ -70,6 +71,10 @@ function getProfileDuplicateMessage(error: { code?: string; message?: string } |
 
   if (message.includes("profiles_phone_normalized_unique") || message.includes("phone")) {
     return "이미 가입된 담당자 전화번호입니다.";
+  }
+
+  if (message.includes("business_profiles_slug_lower_unique") || message.includes("slug")) {
+    return "이미 사용 중인 미니홈 주소입니다.";
   }
 
   if (error?.code === "23505" || message.includes("duplicate") || message.includes("unique")) {
@@ -148,6 +153,12 @@ export async function saveBusinessProfile(formData: FormData) {
   const businessHoursClose = String(formData.get("business_hours_close_value") ?? "").trim();
   const websiteUrlRaw = String(formData.get("website_url") ?? "").trim();
   const socialUrlValues = splitList(formData.get("social_urls"));
+  const hasSlugField = formData.has("slug");
+  const slug = hasSlugField ? normalizeBusinessSlug(String(formData.get("slug") ?? "")) : null;
+  if (hasSlugField) {
+    const slugError = getBusinessSlugError(slug ?? "");
+    if (slugError) redirectWithError(formData, slugError);
+  }
   let websiteUrl: string | null = null;
   let socialUrls: string[] = [];
 
@@ -177,7 +188,7 @@ export async function saveBusinessProfile(formData: FormData) {
 
   const { data: existingBusiness, error: existingBusinessError } = await supabase
     .from("business_profiles")
-    .select("id,cover_image_url,is_public")
+    .select("id,slug,cover_image_url,is_public")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -223,13 +234,14 @@ export async function saveBusinessProfile(formData: FormData) {
     website_url: websiteUrl,
     social_urls: socialUrls,
     cover_image_url: coverImageUrl,
+    ...(hasSlugField ? { slug } : { slug: existingBusiness?.slug ?? null }),
     verification_status: memberProfile?.verification_status ?? "pending",
     is_public: existingBusiness?.is_public ?? false
   }, { onConflict: "user_id" });
 
   if (error) {
     if (uploadedImagePath) await supabase.storage.from(BUSINESS_IMAGE_BUCKET).remove([uploadedImagePath]);
-    redirectWithError(formData, error.message);
+    redirectWithError(formData, getProfileDuplicateMessage(error) ?? error.message);
   }
 
   const { error: profileError } = await supabase.from("profiles").update({
@@ -288,6 +300,10 @@ export async function saveBusinessProfile(formData: FormData) {
     hasCoordinates: latitude !== null && longitude !== null
   });
   revalidatePath("/business/dashboard");
+  revalidatePath("/business/minihome");
+  revalidatePath("/sitemap.xml");
+  if (existingBusiness?.slug) revalidatePath(`/${existingBusiness.slug}`);
+  if (slug) revalidatePath(`/${slug}`);
   const next = getSafeNext(formData.get("next"));
   if (delegation) redirect("/admin/members?message=" + encodeURIComponent("가게 프로필 작성 대행을 완료했습니다."));
   redirect(next || "/business/dashboard");
@@ -298,6 +314,47 @@ export async function logBusinessProfileUploadFailure(message: string) {
   logEvent("business_profile.upload_failed", {
     error: message.slice(0, 300)
   });
+}
+
+export async function updateBusinessMinihomeVisibility(formData: FormData) {
+  const { supabase, user } = await requireRole("business", "/business/minihome");
+  const shouldPublish = String(formData.get("publish") ?? "") === "true";
+  const { data: business, error: businessError } = await supabase
+    .from("business_profiles")
+    .select("slug,business_name,category,short_intro,address,contact,business_hours,cover_image_url,verification_status,is_public")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (businessError || !business) redirect("/business/minihome?error=가게 프로필을 먼저 저장해주세요.");
+
+  if (shouldPublish) {
+    const missing: string[] = [];
+    if (business.verification_status !== "verified") missing.push("사업자 인증");
+    if (!business.slug) missing.push("미니홈 주소");
+    if (!business.business_name) missing.push("가게명");
+    if (!business.category) missing.push("업종");
+    if (!business.short_intro) missing.push("한 줄 소개");
+    if (!business.address) missing.push("주소");
+    if (!business.contact) missing.push("매장 연락처");
+    if (!business.cover_image_url) missing.push("대표 이미지");
+    const hours = business.business_hours as { summary?: string } | null;
+    if (!hours?.summary) missing.push("영업시간");
+    if (missing.length) {
+      redirect(`/business/minihome?error=${encodeURIComponent(`미니홈 공개에 필요한 항목: ${missing.join(", ")}`)}`);
+    }
+  }
+
+  const { error } = await supabase
+    .from("business_profiles")
+    .update({ is_public: shouldPublish })
+    .eq("user_id", user.id);
+  if (error) redirect(`/business/minihome?error=${encodeURIComponent(error.message)}`);
+
+  revalidatePath("/business/dashboard");
+  revalidatePath("/business/minihome");
+  revalidatePath("/sitemap.xml");
+  if (business.slug) revalidatePath(`/${business.slug}`);
+  redirect(`/business/minihome?message=${encodeURIComponent(shouldPublish ? "미니홈을 공개했습니다." : "미니홈을 비공개로 전환했습니다.")}`);
 }
 
 export async function approveRecommendedApplication(formData: FormData) {
