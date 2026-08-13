@@ -7,3 +7,18 @@ node_modules/
 .DS_Store
 supabase/.temp/
 .vercel
+
+# 작업하다 생긴 산출물과 임시 파일. 저장소에 남길 것이 아니다.
+/output/
+/tmp/
+
+# 문서의 그림은 원본에서 다시 만들 수 있다. 이미지가 바뀔 때마다 저장소가 무거워지므로
+# 문서(.md)만 남긴다.
+docs/*.png
+docs/*.svg
+
+# 목표 문서는 개인 메모라 저장소에 두지 않는다.
+docs/goals-2026h2.md
+
+# 개발 서버를 띄울 때만 쓰는 설정이라 사람마다 다르다.
+.claude/launch.json
