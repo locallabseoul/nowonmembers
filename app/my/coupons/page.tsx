@@ -1,17 +1,18 @@
 import Link from "next/link";
-import { CalendarDays, CheckCircle2, Clock3, Copy, Ticket, XCircle } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock3, KeyRound, LockKeyhole, Ticket, XCircle } from "lucide-react";
 import { ConfirmButton } from "@/app/components/confirm-button";
+import { CouponImage } from "@/app/components/coupon-card";
 import { FormBanner } from "@/app/components/form-field";
 import { Badge } from "@/app/components/ui";
 import { getKoreaTodayString } from "@/lib/campaign-lifecycle";
 import { getCouponBenefitLabel, getMyCouponClaims, type CouponClaim } from "@/lib/coupons";
 import { requireUser } from "@/lib/auth/guards";
-import { cancelCouponClaim } from "./actions";
+import { cancelCouponClaim, redeemMyCouponClaim } from "./actions";
 
 function claimViewStatus(claim: CouponClaim) {
   if (claim.status === "redeemed") return "redeemed";
   if (claim.status === "cancelled") return "cancelled";
-  if (getKoreaTodayString() > claim.coupon.useEnd) return "expired";
+  if (getKoreaTodayString() > claim.coupon.endDate) return "expired";
   return "available";
 }
 
@@ -22,8 +23,8 @@ const statusInfo = {
   expired: { label: "기간 만료", tone: "gray" as const, icon: CalendarDays }
 };
 
-export default async function MyCouponsPage({ searchParams }: { searchParams: Promise<{ error?: string; message?: string }> }) {
-  const [{ error, message }, { user }] = await Promise.all([searchParams, requireUser("/my/coupons")]);
+export default async function MyCouponsPage({ searchParams }: { searchParams: Promise<{ error?: string; message?: string; claim?: string }> }) {
+  const [{ error, message, claim: errorClaim }, { user }] = await Promise.all([searchParams, requireUser("/my/coupons")]);
   const claims = await getMyCouponClaims(user.id);
 
   return (
@@ -32,11 +33,11 @@ export default async function MyCouponsPage({ searchParams }: { searchParams: Pr
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-3xl font-black text-charcoal">내 쿠폰함</h1>
-            <p className="mt-2 text-gray-500">매장에서 사용 가능한 쿠폰 코드를 확인하세요.</p>
+            <p className="mt-2 text-gray-500">매장에서 직원이 사용 코드를 입력하면 쿠폰 사용이 완료됩니다.</p>
           </div>
           <Link href="/coupons" className="rounded-xl border border-primary px-5 py-3 text-center text-sm font-black text-primary">쿠폰 더 보기</Link>
         </div>
-        {error ? <div className="mt-6"><FormBanner>{error}</FormBanner></div> : null}
+        {error && !errorClaim ? <div className="mt-6"><FormBanner>{error}</FormBanner></div> : null}
         {message ? <p className="mt-6 rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</p> : null}
 
         {claims.length ? (
@@ -45,12 +46,14 @@ export default async function MyCouponsPage({ searchParams }: { searchParams: Pr
               const viewStatus = claimViewStatus(claim);
               const info = statusInfo[viewStatus];
               const StatusIcon = info.icon;
-              const canCancel = claim.status === "issued" && getKoreaTodayString() < claim.coupon.useStart;
+              const canCancel = claim.status === "issued";
+              const canEnterCode = viewStatus === "available" && getKoreaTodayString() >= claim.coupon.startDate && claim.coupon.redemptionCodeConfigured;
+              const locked = Boolean(claim.redemptionLockedUntil && new Date(claim.redemptionLockedUntil).getTime() > Date.now());
               return (
                 <article key={claim.id} className="overflow-hidden rounded-[20px] border border-slate-100 bg-white shadow-sm">
                   <div className="grid sm:grid-cols-[180px_1fr]">
-                    <div className="flex min-h-36 items-center justify-center bg-gradient-to-br from-primary/10 to-amber-100 text-primary">
-                      <Ticket size={48} strokeWidth={1.5} />
+                    <div className="min-h-36 overflow-hidden sm:min-h-full">
+                      <CouponImage coupon={claim.coupon} className="h-36 w-full sm:h-full" />
                     </div>
                     <div className="p-5 sm:p-6">
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -61,16 +64,28 @@ export default async function MyCouponsPage({ searchParams }: { searchParams: Pr
                         </div>
                         <Link href={`/coupons/${claim.coupon.id}`} className="text-sm font-bold text-gray-400 hover:text-primary">상세 보기</Link>
                       </div>
-                      <p className="mt-4 text-xs text-gray-500">사용 기간 {claim.coupon.useStart} ~ {claim.coupon.useEnd}</p>
-                      {viewStatus === "available" ? (
-                        <div className="mt-5 rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5 p-5 text-center">
-                          <p className="text-xs font-black text-gray-500">매장 직원에게 이 코드를 보여주세요</p>
-                          <p className="mt-2 flex items-center justify-center gap-2 font-mono text-2xl font-black tracking-[0.2em] text-charcoal"><Copy size={18} />{claim.redemptionCode}</p>
+                      <p className="mt-4 text-xs text-gray-500">사용 기간 {claim.coupon.startDate} ~ {claim.coupon.endDate}</p>
+                      {viewStatus === "available" && !claim.coupon.redemptionCodeConfigured ? (
+                        <div className="mt-5 rounded-2xl bg-amber-50 p-5 text-sm font-bold text-amber-700">가게에서 사용 코드를 준비 중입니다.</div>
+                      ) : null}
+                      {canEnterCode ? (
+                        <div className="mt-5 rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5 p-5">
+                          <p className="flex items-center justify-center gap-2 text-xs font-black text-gray-500"><KeyRound size={15} />매장 직원이 아래 사용 코드를 입력해주세요</p>
+                          {locked ? (
+                            <p className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-red-50 p-3 text-center text-sm font-bold text-red-700"><LockKeyhole size={16} />입력 실패로 10분간 잠겼습니다.</p>
+                          ) : (
+                            <form action={redeemMyCouponClaim} className="mx-auto mt-4 flex max-w-sm gap-2">
+                              <input type="hidden" name="claim_id" value={claim.id} />
+                              <input name="redemption_code" type="password" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} required autoComplete="off" aria-label="쿠폰 사용 코드" placeholder="숫자 6자리" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-center font-mono text-lg tracking-[0.2em] outline-none focus:border-primary" />
+                              <button className="shrink-0 rounded-xl bg-primary px-5 text-sm font-black text-white">사용 완료</button>
+                            </form>
+                          )}
+                          {error && errorClaim === claim.id ? <p role="alert" className="mt-3 text-center text-xs font-bold text-red-600">{error}</p> : null}
                         </div>
                       ) : null}
                       {canCancel ? (
                         <div className="mt-4 text-right">
-                          <ConfirmButton label="발급 취소" confirmLabel="사용 시작 전 쿠폰만 취소할 수 있으며 수량은 다시 반환됩니다." className="text-sm font-bold text-gray-400 hover:text-red-600">
+                          <ConfirmButton label="발급 취소" confirmLabel="아직 사용하지 않은 쿠폰을 반납합니다. 수량은 다시 반환됩니다." className="text-sm font-bold text-gray-400 hover:text-red-600">
                             <form action={cancelCouponClaim}>
                               <input type="hidden" name="claim_id" value={claim.id} />
                               <button className="rounded-lg bg-red-600 px-4 py-2 text-sm font-black text-white">취소 확정</button>

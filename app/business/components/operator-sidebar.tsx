@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BarChart3, CreditCard, ListChecks, Ticket, Users } from "lucide-react";
+import { NewBadge } from "@/app/components/ui";
 import type { BusinessDashboardData } from "@/lib/supabase/queries";
 
 type OperatorBusiness = NonNullable<BusinessDashboardData["business"]>;
@@ -50,7 +51,10 @@ export function OperatorSidebar({ business, active }: { business: OperatorBusine
           <li>
             <Link href="/business/coupons" className={navClassName(active === "coupons")}>
               <Ticket size={20} />
-              쿠폰 관리
+              <span className="relative">
+                쿠폰 관리
+                <NewBadge />
+              </span>
             </Link>
           </li>
           <li>

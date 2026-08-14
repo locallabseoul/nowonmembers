@@ -12,5 +12,5 @@ export async function claimCoupon(formData: FormData) {
   if (error) redirect(`/coupons/${couponId}?error=${encodeURIComponent(error.message)}`);
   revalidatePath("/coupons");
   revalidatePath(`/coupons/${couponId}`);
-  redirect("/my/coupons?message=" + encodeURIComponent("쿠폰을 받았습니다. 매장에서 사용 코드를 보여주세요."));
+  redirect("/my/coupons?message=" + encodeURIComponent("쿠폰을 받았습니다. 매장에서 직원이 사용 코드를 입력해드립니다."));
 }

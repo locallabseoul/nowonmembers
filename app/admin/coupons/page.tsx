@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { CalendarDays, Store, Ticket, Users } from "lucide-react";
 import { ConfirmButton } from "@/app/components/confirm-button";
+import { getCouponStatusStyle } from "@/app/components/coupon-card";
 import { FormBanner } from "@/app/components/form-field";
 import { Badge } from "@/app/components/ui";
 import { getAdminCoupons, getCouponBenefitLabel } from "@/lib/coupons";
 import { approveCoupon, cancelCoupon, requestCouponRevision } from "./actions";
 
-const statusLabel = { draft: "초안", in_review: "검수 대기", revision_requested: "수정 요청", approved: "승인", cancelled: "취소" };
-const statusTone = { draft: "gray", in_review: "amber", revision_requested: "red", approved: "green", cancelled: "gray" } as const;
 
 export default async function AdminCouponsPage({ searchParams }: { searchParams: Promise<{ status?: string; error?: string; message?: string }> }) {
   const { status = "in_review", error, message } = await searchParams;
@@ -29,11 +28,11 @@ export default async function AdminCouponsPage({ searchParams }: { searchParams:
             <article key={coupon.id} className="rounded-[20px] border border-slate-100 bg-white p-6 shadow-sm">
               <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap gap-2"><Badge tone={statusTone[coupon.status]}>{statusLabel[coupon.status]}</Badge><Badge tone="red">{getCouponBenefitLabel(coupon)}</Badge></div>
+                  <div className="flex flex-wrap gap-2"><Badge tone={getCouponStatusStyle(coupon.status).tone}>{getCouponStatusStyle(coupon.status).label}</Badge><Badge tone="blue">{getCouponBenefitLabel(coupon)}</Badge><Badge tone={coupon.redemptionCodeConfigured ? "green" : "amber"}>{coupon.redemptionCodeConfigured ? "사용 코드 설정됨" : "사용 코드 미설정"}</Badge></div>
                   <h2 className="mt-3 text-xl font-black text-charcoal">{coupon.title}</h2>
-                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-gray-500"><span className="flex items-center gap-1.5"><Store size={15} />{coupon.businessName}</span><span className="flex items-center gap-1.5"><Users size={15} />총 {coupon.totalQuantity.toLocaleString()}장</span><span className="flex items-center gap-1.5"><CalendarDays size={15} />발급 {coupon.claimStart} ~ {coupon.claimEnd}</span></div>
+                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-gray-500"><span className="flex items-center gap-1.5"><Store size={15} />{coupon.businessName}</span><span className="flex items-center gap-1.5"><Users size={15} />총 {coupon.totalQuantity.toLocaleString()}장</span><span className="flex items-center gap-1.5"><CalendarDays size={15} />{coupon.startDate} ~ {coupon.endDate}</span></div>
                   <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-gray-600">{coupon.description}</p>
-                  <div className="mt-4 rounded-xl bg-slate-50 p-4"><p className="text-xs font-black text-gray-500">이용 조건</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-600">{coupon.terms}</p><p className="mt-3 text-xs font-bold text-gray-400">사용 기간 {coupon.useStart} ~ {coupon.useEnd}</p></div>
+                  <div className="mt-4 rounded-xl bg-slate-50 p-4"><p className="text-xs font-black text-gray-500">이용 조건</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-600">{coupon.terms}</p><p className="mt-3 text-xs font-bold text-gray-400">사용 기간 {coupon.startDate} ~ {coupon.endDate}</p></div>
                   {coupon.adminMemo ? <p className="mt-3 text-sm font-bold text-red-600">이전 메모: {coupon.adminMemo}</p> : null}
                 </div>
                 {canReview ? (

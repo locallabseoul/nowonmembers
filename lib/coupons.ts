@@ -22,19 +22,19 @@ export type Coupon = {
   totalQuantity: number;
   claimedQuantity: number;
   remainingQuantity: number;
-  claimStart: string;
-  claimEnd: string;
-  useStart: string;
-  useEnd: string;
+  startDate: string;
+  endDate: string;
   status: CouponReviewStatus;
+  redemptionCodeConfigured: boolean;
   adminMemo: string;
   createdAt: string;
 };
 
 export type CouponClaim = {
   id: string;
-  redemptionCode: string;
   status: CouponClaimStatus;
+  failedRedemptionAttempts: number;
+  redemptionLockedUntil: string;
   claimedAt: string;
   redeemedAt: string;
   cancelledAt: string;
@@ -54,11 +54,10 @@ type CouponRow = {
   terms: string;
   total_quantity: number;
   claimed_quantity: number;
-  claim_start: string;
-  claim_end: string;
-  use_start: string;
-  use_end: string;
+  start_date: string;
+  end_date: string;
   status: CouponReviewStatus;
+  redemption_code_configured: boolean;
   admin_memo: string | null;
   created_at: string;
   business_profiles?: Relation<{
@@ -71,7 +70,7 @@ type CouponRow = {
   }>;
 };
 
-const couponSelect = "id,business_id,title,description,cover_image_url,benefit_type,benefit_value,terms,total_quantity,claimed_quantity,claim_start,claim_end,use_start,use_end,status,admin_memo,created_at,business_profiles(business_name,category,address,address_detail,contact,cover_image_url)";
+const couponSelect = "id,business_id,title,description,cover_image_url,benefit_type,benefit_value,terms,total_quantity,claimed_quantity,start_date,end_date,status,redemption_code_configured,admin_memo,created_at,business_profiles(business_name,category,address,address_detail,contact,cover_image_url)";
 
 function one<T>(relation: Relation<T>): T | null {
   return Array.isArray(relation) ? relation[0] ?? null : relation ?? null;
@@ -96,11 +95,10 @@ function mapCoupon(row: CouponRow): Coupon {
     totalQuantity: Number(row.total_quantity),
     claimedQuantity: Number(row.claimed_quantity),
     remainingQuantity: Math.max(Number(row.total_quantity) - Number(row.claimed_quantity), 0),
-    claimStart: row.claim_start,
-    claimEnd: row.claim_end,
-    useStart: row.use_start,
-    useEnd: row.use_end,
+    startDate: row.start_date,
+    endDate: row.end_date,
     status: row.status,
+    redemptionCodeConfigured: Boolean(row.redemption_code_configured),
     adminMemo: row.admin_memo ?? "",
     createdAt: row.created_at
   };
@@ -109,10 +107,22 @@ function mapCoupon(row: CouponRow): Coupon {
 export function getCouponDisplayStatus(coupon: Coupon) {
   const today = getKoreaTodayString();
   if (coupon.status !== "approved") return coupon.status;
-  if (today > coupon.useEnd) return "expired";
-  if (today < coupon.claimStart) return "scheduled";
-  if (today > coupon.claimEnd || coupon.remainingQuantity <= 0) return "claim_closed";
+  if (today > coupon.endDate) return "expired";
+  if (!coupon.redemptionCodeConfigured) return "setup_pending";
+  if (today < coupon.startDate) return "scheduled";
+  if (coupon.remainingQuantity <= 0) return "claim_closed";
   return "claiming";
+}
+
+const benefitTypeLabels: Record<CouponBenefitType, string> = {
+  fixed_amount: "정액 할인",
+  percentage: "정률 할인",
+  free_item: "무료 제공",
+  other: "기타 혜택"
+};
+
+export function getCouponBenefitTypeLabel(coupon: Pick<Coupon, "benefitType">) {
+  return benefitTypeLabels[coupon.benefitType] ?? "혜택";
 }
 
 export function getCouponBenefitLabel(coupon: Pick<Coupon, "benefitType" | "benefitValue">) {
@@ -140,7 +150,7 @@ export async function getMyCouponClaims(userId: string) {
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase
     .from("coupon_claims")
-    .select(`id,redemption_code,status,claimed_at,redeemed_at,cancelled_at,coupons(${couponSelect})`)
+    .select(`id,status,failed_redemption_attempts,redemption_locked_until,claimed_at,redeemed_at,cancelled_at,coupons(${couponSelect})`)
     .eq("user_id", userId)
     .order("claimed_at", { ascending: false });
 
@@ -149,8 +159,9 @@ export async function getMyCouponClaims(userId: string) {
     if (!coupon) return [];
     return [{
       id: row.id,
-      redemptionCode: row.redemption_code,
       status: row.status as CouponClaimStatus,
+      failedRedemptionAttempts: Number(row.failed_redemption_attempts ?? 0),
+      redemptionLockedUntil: row.redemption_locked_until ?? "",
       claimedAt: row.claimed_at,
       redeemedAt: row.redeemed_at ?? "",
       cancelledAt: row.cancelled_at ?? "",

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Menu, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { navItems } from "./header-nav";
+import { NewBadge } from "./ui";
 
 export function MobileNav({ isBusiness }: { isBusiness: boolean }) {
   const [open, setOpen] = useState(false);
@@ -61,7 +62,10 @@ export function MobileNav({ isBusiness }: { isBusiness: boolean }) {
                   onClick={() => setOpen(false)}
                   className={`block rounded-xl px-3 py-2.5 text-sm font-bold transition-colors hover:bg-slate-50 hover:text-primary ${active ? "bg-slate-50 text-charcoal" : "text-slate-600"}`}
                 >
-                  {item.label}
+                  <span className="relative">
+                    {item.label}
+                    {item.isNew ? <NewBadge /> : null}
+                  </span>
                 </Link>
               );
             })}

@@ -60,6 +60,8 @@ type FormFieldProps = {
   min?: number | string;
   max?: number | string;
   minLength?: number;
+  maxLength?: number;
+  pattern?: string;
   step?: number | string;
   inputMode?: "text" | "numeric" | "tel" | "email" | "url";
   autoComplete?: string;
@@ -83,6 +85,8 @@ export function FormField({
   min,
   max,
   minLength,
+  maxLength,
+  pattern,
   step,
   inputMode,
   autoComplete,
@@ -108,6 +112,8 @@ export function FormField({
           min={min}
           max={max}
           minLength={minLength}
+          maxLength={maxLength}
+          pattern={pattern}
           step={step}
           inputMode={inputMode}
           autoComplete={autoComplete}

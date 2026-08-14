@@ -2,6 +2,19 @@ import Link from "next/link";
 import { CalendarDays, CheckCircle2, Clock, MapPin, ShieldCheck, Users } from "lucide-react";
 import type { Campaign } from "@/lib/types";
 
+// 새로 연 메뉴를 알리는 표식. 쿠폰북이 자리를 잡으면 붙인 곳에서 함께 걷어낸다.
+// 글자 흐름을 밀지 않도록 라벨 오른쪽 위에 띄운다.
+export function NewBadge({ className = "" }: { className?: string }) {
+  return (
+    <span
+      aria-label="새로운 메뉴"
+      className={`pointer-events-none absolute -right-1 -top-1 translate-x-full rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-black leading-none tracking-wide text-white shadow-sm ${className}`}
+    >
+      NEW
+    </span>
+  );
+}
+
 export function SectionHeader({ title, description, action }: { title: string; description?: string; action?: React.ReactNode }) {
   return (
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

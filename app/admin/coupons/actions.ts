@@ -12,6 +12,10 @@ async function updateStatus(formData: FormData, status: "approved" | "revision_r
   if (!coupon || (coupon.status !== "in_review" && coupon.status !== "revision_requested")) {
     redirect("/admin/coupons?error=" + encodeURIComponent("현재 상태에서는 심사 결과를 변경할 수 없습니다."));
   }
+  if (status === "approved") {
+    const { data: codeState } = await supabase.from("coupons").select("redemption_code_configured").eq("id", id).maybeSingle();
+    if (!codeState?.redemption_code_configured) redirect("/admin/coupons?error=" + encodeURIComponent("사용 코드가 설정된 쿠폰만 승인할 수 있습니다."));
+  }
   if (status === "revision_requested" && !memo) redirect("/admin/coupons?error=" + encodeURIComponent("수정 요청 사유를 입력해주세요."));
   const { error } = await supabase.from("coupons").update({ status, admin_memo: memo || null, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) redirect("/admin/coupons?error=" + encodeURIComponent(error.message));
