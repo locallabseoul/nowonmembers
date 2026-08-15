@@ -3,6 +3,7 @@ import { ExternalLink, X } from "lucide-react";
 import { Badge } from "@/app/components/ui";
 import { formatPoints } from "@/lib/points";
 import type { AdminMemberDetail } from "@/lib/supabase/queries";
+import { startReadOnlyPreview } from "./preview-actions";
 
 function formatDateTime(value: string) {
   if (!value) return "-";
@@ -86,6 +87,15 @@ export function MemberDetailModal({ member, closeHref }: { member: AdminMemberDe
             <X size={18} />
           </Link>
         </div>
+
+        {member.status !== "suspended" && !member.isAdmin ? (
+          <form action={startReadOnlyPreview} className="border-b border-gray-100 bg-amber-50 px-5 py-3">
+            <input type="hidden" name="user_id" value={member.id} />
+            <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-black text-amber-950 transition-colors hover:bg-amber-500">
+              <ExternalLink size={15} /> 회원 화면 읽기 전용으로 보기
+            </button>
+          </form>
+        ) : null}
 
         <div className="overflow-y-auto">
           <Section title="계정">

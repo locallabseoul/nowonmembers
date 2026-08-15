@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 import type { UserRole } from "@/lib/types";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getReadOnlyPreview } from "@/lib/auth/read-only-preview";
 
 export function getAccountPath(role?: UserRole | string | null) {
   if (role === "business") return "/business/dashboard";
@@ -59,16 +60,29 @@ export async function requireUser(next = "/") {
   };
 }
 
-export async function requireRole(roles: UserRole | UserRole[], next = "/") {
+export async function requireRole(roles: UserRole | UserRole[], next = "/", allowReadOnlyPreview = false) {
   const allowedRoles = Array.isArray(roles) ? roles : [roles];
   const session = await requireUser(next);
-  const role = session.profile?.role as UserRole | undefined;
+  const preview = await getReadOnlyPreview();
+
+  if (preview && !allowReadOnlyPreview) {
+    redirect(withError(preview.role === "business" ? "/business/dashboard" : "/creator/dashboard", "읽기 전용 미리보기에서는 변경할 수 없습니다"));
+  }
+
+  const role = (preview?.role ?? session.profile?.role) as UserRole | undefined;
 
   if (!role || !allowedRoles.includes(role)) {
     redirect(withError(getAccountPath(role), "해당 계정으로 접근할 수 없는 페이지입니다"));
   }
 
-  return session;
+  if (!preview) return { ...session, readOnlyPreview: null };
+
+  return {
+    ...session,
+    user: { ...session.user, id: preview.targetId },
+    profile: { ...session.profile, id: preview.targetId, nickname: preview.nickname, role: preview.role, is_admin: false },
+    readOnlyPreview: preview
+  };
 }
 
 // 관리자는 별도 역할이 아니라 크리에이터/가게 계정에 붙는 플래그다. 마이페이지는

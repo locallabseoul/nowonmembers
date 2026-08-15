@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentSessionProfile } from "@/lib/auth/guards";
+import { getReadOnlyPreview } from "@/lib/auth/read-only-preview";
 
 export async function markNoticeRead(noticeId: string) {
+  if (await getReadOnlyPreview()) return;
   const { supabase, user } = await getCurrentSessionProfile();
   if (!user || !noticeId) return;
 

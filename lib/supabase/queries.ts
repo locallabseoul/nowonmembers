@@ -1130,7 +1130,10 @@ async function getCurrentSupabaseUser(supabase: Awaited<ReturnType<typeof create
     error: new Error("Failed to read current user")
   }));
 
-  return error ? null : data.user;
+  if (error || !data.user) return null;
+  const { getReadOnlyPreview } = await import("@/lib/auth/read-only-preview");
+  const preview = await getReadOnlyPreview();
+  return preview ? { ...data.user, id: preview.targetId } : data.user;
 }
 
 async function getSelectedCampaignSubmissions(

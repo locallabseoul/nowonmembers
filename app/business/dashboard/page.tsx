@@ -768,7 +768,7 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
   const campaignFilter = normalizeCampaignListFilter(status);
   const sortOrder = normalizeCampaignSort(sort);
   const searchQuery = q?.trim() ?? "";
-  const { supabase } = await requireRole("business", "/business/dashboard");
+  const { supabase, readOnlyPreview } = await requireRole("business", "/business/dashboard", true);
   const [dashboard, { data: walletRows }] = await Promise.all([
     getBusinessDashboard(campaign, {
       filter: campaignFilter,
@@ -777,7 +777,14 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
       page: normalizePage(page),
       perPage: CAMPAIGNS_PER_PAGE
     }),
-    supabase.rpc("get_my_point_wallet")
+    // 미리보기에서는 본인 지갑 RPC를 쓸 수 없다(auth.uid()가 관리자다). 관리자 읽기
+    // 권한으로 대상 가게의 지갑을 직접 읽는다. 만료 정리는 건너뛰지만 조회용이라 충분하다.
+    readOnlyPreview
+      ? supabase
+        .from("point_wallets")
+        .select("available_points,reserved_points,business_profiles!inner(user_id)")
+        .eq("business_profiles.user_id", readOnlyPreview.targetId)
+      : supabase.rpc("get_my_point_wallet")
   ]);
   const {
     business,

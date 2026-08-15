@@ -276,7 +276,7 @@ function EmptyState({ title, description }: { title: string; description: string
 }
 
 export default async function CreatorDashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
-  await requireRole("creator", "/creator/dashboard");
+  await requireRole("creator", "/creator/dashboard", true);
   const { tab } = await searchParams;
   const activeTab = normalizeTab(tab);
   const { creator, applications, collaborations, submissions } = await getCreatorDashboard();

@@ -10,7 +10,9 @@ import { MobileNav } from "@/app/components/mobile-nav";
 import { NoticeMenu } from "@/app/components/notice-menu";
 import { markNotificationsRead } from "@/app/notifications/actions";
 import { PinnedNoticeBar } from "@/app/components/pinned-notice-bar";
+import { ReadOnlyPreviewBanner } from "@/app/components/read-only-preview-banner";
 import { getAccountPath, getCurrentSessionProfile } from "@/lib/auth/guards";
+import { getReadOnlyPreview } from "@/lib/auth/read-only-preview";
 import { COMPANY_INFO } from "@/lib/legal";
 import { getHeaderFeedData, getPinnedNotice } from "@/lib/supabase/queries";
 import "./globals.css";
@@ -37,6 +39,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="ko">
       <body className="flex min-h-dvh flex-col bg-white antialiased">
+        <ReadOnlyPreviewBanner />
         <Header />
         <div className="site-content">
           {children}
@@ -50,14 +53,16 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
 
 async function Header() {
   const { user, profile } = await getCurrentSessionProfile();
-  const displayName = profile?.nickname || user?.email?.split("@")[0] || user?.phone || "내 계정";
-  const role = profile?.role;
+  const preview = await getReadOnlyPreview();
+  const displayName = preview?.nickname || profile?.nickname || user?.email?.split("@")[0] || user?.phone || "내 계정";
+  const role = preview?.role ?? profile?.role;
   const isLoggedIn = Boolean(user);
   const accountPath = getAccountPath(role);
   const profileEditPath = getProfileEditPath(role);
-  const avatarUrl = isLoggedIn ? await getHeaderAvatarUrl(role, user?.id) : "";
+  const effectiveUserId = preview?.targetId ?? user?.id;
+  const avatarUrl = isLoggedIn ? await getHeaderAvatarUrl(role, effectiveUserId) : "";
   const [feedData, pinnedNotice] = await Promise.all([
-    isLoggedIn && user ? getHeaderFeedData(user.id) : Promise.resolve({ items: [], unreadCount: 0 }),
+    isLoggedIn && effectiveUserId ? getHeaderFeedData(effectiveUserId) : Promise.resolve({ items: [], unreadCount: 0 }),
     getPinnedNotice()
   ]);
 
@@ -83,8 +88,8 @@ async function Header() {
                   <Plus size={13} /> 캠페인 만들기
                 </Link>
               ) : null}
-              <NoticeMenu items={feedData.items} unreadCount={feedData.unreadCount} onOpen={markNotificationsRead} />
-              <AccountMenu displayName={displayName} role={role} isAdmin={Boolean(profile?.is_admin)} accountPath={accountPath} profileEditPath={profileEditPath} avatarUrl={avatarUrl} signOutAction={signOut} />
+              <NoticeMenu items={feedData.items} unreadCount={feedData.unreadCount} onOpen={preview ? undefined : markNotificationsRead} />
+              <AccountMenu displayName={displayName} role={role} isAdmin={!preview && Boolean(profile?.is_admin)} accountPath={accountPath} profileEditPath={preview ? null : profileEditPath} avatarUrl={avatarUrl} signOutAction={signOut} />
             </>
           ) : (
             <Link href="/auth" className="flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-primary hover:text-primary">

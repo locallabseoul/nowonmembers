@@ -64,3 +64,8 @@ a.inline-flex {
 .content-card-overlay {
   background: linear-gradient(to top, rgba(15, 23, 42, 0.88) 0%, transparent 60%);
 }
+/* 대리 미리보기에서는 변경 form을 시각적으로도 잠근다. 조회 필터는 GET form이라 유지한다. */
+.read-only-preview-banner ~ .site-content form:not([method="get"]) {
+  pointer-events: none;
+  opacity: 0.55;
+}
