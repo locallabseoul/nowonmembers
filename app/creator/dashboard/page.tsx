@@ -251,7 +251,9 @@ function ApplicationCard({ application }: { application: CreatorApplication }) {
         </div>
         <h4 className="mb-1 line-clamp-1 text-sm font-bold text-charcoal">{application.campaignTitle}</h4>
         <p className="text-xs text-gray-500">
-          {application.selectionDate ? `${formatDateShort(application.selectionDate)} 선정 결과 발표 예정` : application.campaignRegion || "선정 결과를 기다리고 있습니다."}
+          {application.status === "rejected"
+            ? "이번에는 선정되지 않았습니다. 비슷한 캠페인에 다시 지원해보세요."
+            : application.selectionDate ? `${formatDateShort(application.selectionDate)} 선정 결과 발표 예정` : application.campaignRegion || "선정 결과를 기다리고 있습니다."}
         </p>
       </div>
       <div className="flex w-full shrink-0 flex-col gap-1 sm:w-auto">
@@ -284,12 +286,14 @@ export default async function CreatorDashboardPage({ searchParams }: { searchPar
   }
 
   const activeApplications = applications.filter((item) => item.status === "submitted" || item.status === "recommended");
+  // 미선정 지원도 흔적이 남아야 한다. 조용히 사라지면 크리에이터는 결과를 알 수 없다.
+  const rejectedApplications = applications.filter((item) => item.status === "rejected");
   const activeCollaborations = collaborations.filter((item) => item.status !== "cancelled" && item.status !== "no_show" && !isFinishedCollaboration(item));
   const actionRequiredCollaborations = activeCollaborations.filter(requiresSubmissionAction);
   const reviewingCollaborations = activeCollaborations.filter((item) => !requiresSubmissionAction(item));
   const completedCollaborations = collaborations.filter(isFinishedCollaboration);
   const activeCount = activeApplications.length + activeCollaborations.length;
-  const completedCount = completedCollaborations.length;
+  const completedCount = completedCollaborations.length + rejectedApplications.length;
 
   return (
     <main className="bg-[#F8F9FA]">
@@ -378,6 +382,17 @@ export default async function CreatorDashboardPage({ searchParams }: { searchPar
                     <EmptyState title="완료된 캠페인이 없습니다" description="콘텐츠가 승인되면 완료 내역이 여기에 표시됩니다." />
                   ) : null}
                 </div>
+                {rejectedApplications.length ? (
+                  <div className="mt-10">
+                    <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-charcoal">
+                      <Send size={18} className="text-gray-400" />
+                      미선정된 지원
+                    </h2>
+                    <div className="space-y-4">
+                      {rejectedApplications.map((application) => <ApplicationCard key={application.id} application={application} />)}
+                    </div>
+                  </div>
+                ) : null}
               </section>
             )}
           </section>

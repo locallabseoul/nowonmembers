@@ -6,6 +6,7 @@ node_modules/
 *.tsbuildinfo
 .DS_Store
 supabase/.temp/
+supabase/.branches/
 .vercel
 
 # 작업하다 생긴 산출물과 임시 파일. 저장소에 남길 것이 아니다.
