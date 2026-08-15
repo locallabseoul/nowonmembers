@@ -838,7 +838,7 @@ export function CampaignCreateWizard({
                   <FieldLabel>캠페인 일정 설정 <Required /></FieldLabel>
                   <div className="grid gap-4 sm:grid-cols-3">
                     <TextField name="recruit_end" label="모집 마감일" type="date" min={defaultSchedule.today} defaultValue={defaultSchedule.recruitEnd} requiredMark error={fieldErrors.recruit_end} />
-                    <TextField name="selection_date" label="크리에이터 선정 발표일" type="date" min={selectionDateMin} defaultValue={defaultSchedule.selectionDate} error={fieldErrors.selection_date} />
+                    <TextField name="selection_date" label="크리에이터 선정 발표일" type="date" min={selectionDateMin} defaultValue={defaultSchedule.selectionDate} requiredMark error={fieldErrors.selection_date} />
                     <TextField name="submission_due" label="콘텐츠 등록 마감일" type="date" min={submissionDueMin} defaultValue={defaultSchedule.submissionDue} error={fieldErrors.submission_due} />
                   </div>
                   <p className="mt-2 text-xs text-slate-400">선정 발표일은 모집 마감일 이후, 콘텐츠 등록 마감일은 선정 발표일 이후로 설정해주세요.</p>

@@ -1,5 +1,5 @@
 import { normalizeKoreanAuthPhone } from "@/lib/auth/phone";
-import { getKoreaTodayString } from "@/lib/campaign-lifecycle";
+import { getKoreaTodayString, isCampaignSelectionOverdue } from "@/lib/campaign-lifecycle";
 import type { MessageChannel, MessageKind, MessageRoleTarget, MessageTemplateCampaign, MessageVerificationTarget } from "@/lib/messages";
 import type { AppNotification, Campaign, HeaderFeedItem, LocalStory, Notice } from "@/lib/types";
 import { createSupabaseServerClient } from "./server";
@@ -20,6 +20,7 @@ type CampaignRow = {
   recruit_start: string | null;
   recruit_end: string | null;
   selection_date: string | null;
+  selection_reminded_at?: string | null;
   visit_start: string | null;
   visit_end: string | null;
   submission_due: string | null;
@@ -233,6 +234,8 @@ export type DashboardCampaign = Campaign & CampaignApplicationStats & {
   billingMode: "legacy_free" | "points_v1";
   // 운영자가 수정 요청을 하면서 남긴 사유. 가게가 무엇을 고쳐야 하는지 알아야 한다.
   adminMemo: string;
+  // 선정 지연으로 마지막에 독촉한 시각. 같은 가게를 며칠째 쪼고 있는지 보여야 한다.
+  selectionRemindedAt: string;
   pointReservation: {
     requestedHeadcount: number;
     reservedPoints: number;
@@ -471,6 +474,7 @@ export type AdminOverviewStats = {
   pendingReviewCampaigns: number;
   pendingSubmissions: number;
   pendingVerifications: number;
+  overdueSelections: number;
 };
 
 export type AdminCampaignsData = {
@@ -951,6 +955,7 @@ function mapDashboardCampaign(row: CampaignRow, stats?: CampaignApplicationStats
   return {
     ...campaign,
     adminMemo: row.admin_memo ?? "",
+    selectionRemindedAt: row.selection_reminded_at ?? "",
     applicationCount: stats?.applicationCount ?? campaign.appliedCount,
     recommendedCount: stats?.recommendedCount ?? 0,
     selectedCount: stats?.selectedCount ?? 0,
@@ -1888,7 +1893,8 @@ export async function getAdminOverview(): Promise<AdminOverviewStats> {
     pendingReviewCount,
     pendingSubmissionCount,
     pendingVerificationCount,
-    unverifiedCreatorCount
+    unverifiedCreatorCount,
+    selectingCampaignRows
   ] = await Promise.all([
     supabase.from("business_profiles").select("id", { count: "exact", head: true }),
     // 인증과 미인증을 나눠 센다. 심사가 밀리고 있는지 한눈에 보이게 한다.
@@ -1899,8 +1905,18 @@ export async function getAdminOverview(): Promise<AdminOverviewStats> {
     supabase.from("campaigns").select("id", { count: "exact", head: true }).in("status", ["in_review", "revision_requested"]),
     supabase.from("content_submissions").select("id", { count: "exact", head: true }).eq("review_status", "submitted"),
     supabase.from("profiles").select("id", { count: "exact", head: true }).eq("verification_status", "pending"),
-    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "creator").eq("status", "active").neq("verification_status", "verified")
+    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "creator").eq("status", "active").neq("verification_status", "verified"),
+    // 기존 캠페인 중 발표일이 비어 있는 데이터는 지연으로 오인하지 않고 집계에서 제외한다.
+    supabase.from("campaigns").select("selection_date,recruit_end").eq("status", "selecting")
   ]);
+
+  const overdueSelections = (selectingCampaignRows.data ?? []).filter((row) =>
+    isCampaignSelectionOverdue({
+      status: "selecting",
+      selectionDate: row.selection_date ?? "",
+      recruitEnd: row.recruit_end ?? ""
+    })
+  ).length;
 
   return {
     businesses: businessCount.count ?? 0,
@@ -1911,7 +1927,8 @@ export async function getAdminOverview(): Promise<AdminOverviewStats> {
     totalSubmissions: totalSubmissionCount.count ?? 0,
     pendingReviewCampaigns: pendingReviewCount.count ?? 0,
     pendingSubmissions: pendingSubmissionCount.count ?? 0,
-    pendingVerifications: pendingVerificationCount.count ?? 0
+    pendingVerifications: pendingVerificationCount.count ?? 0,
+    overdueSelections
   };
 }
 

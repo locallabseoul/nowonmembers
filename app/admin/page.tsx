@@ -1,17 +1,17 @@
 import Link from "next/link";
 import { StatCard } from "@/app/components/ui";
 import { getAdminOverview } from "@/lib/supabase/queries";
-import { ArrowRight, CheckCircle2, ClipboardCheck, FileCheck, Send, UserCheck, Users } from "lucide-react";
+import { ArrowRight, CalendarClock, CheckCircle2, ClipboardCheck, FileCheck, Send, UserCheck, Users } from "lucide-react";
 import { FormBanner } from "@/app/components/form-field";
 
-function TodoCard({ href, label, count, icon }: { href: string; label: string; count: number; icon: React.ReactNode }) {
+function TodoCard({ href, label, count, icon, pendingLabel = "건 대기중" }: { href: string; label: string; count: number; icon: React.ReactNode; pendingLabel?: string }) {
   return (
     <Link href={href} className={`flex items-center justify-between rounded-lg border p-5 transition-colors ${count > 0 ? "border-primary/30 bg-primary/5 hover:bg-primary/10" : "border-line bg-white hover:bg-gray-50"}`}>
       <div className="flex items-center gap-3">
         <div className={count > 0 ? "text-primary" : "text-gray-300"}>{icon}</div>
         <div>
           <p className="font-black text-charcoal">{label}</p>
-          <p className={`mt-0.5 text-sm font-bold ${count > 0 ? "text-primary" : "text-gray-400"}`}>{count > 0 ? `${count}건 대기중` : "대기 없음"}</p>
+          <p className={`mt-0.5 text-sm font-bold ${count > 0 ? "text-primary" : "text-gray-400"}`}>{count > 0 ? `${count}${pendingLabel}` : "대기 없음"}</p>
         </div>
       </div>
       <ArrowRight size={18} className="text-gray-300" />
@@ -36,8 +36,10 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
 
       <section className="mb-8">
         <h2 className="mb-4 font-black text-charcoal">처리할 일</h2>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <TodoCard href="/admin/campaigns" label="캠페인 심사" count={stats.pendingReviewCampaigns} icon={<ClipboardCheck size={22} />} />
+          {/* 가게가 선정을 미루면 크리에이터는 약속받은 발표일을 넘겨 기다린다. 운영자가 먼저 알아야 한다. */}
+          <TodoCard href="/admin/campaigns" label="선정 지연" count={stats.overdueSelections} pendingLabel="건 발표일 초과" icon={<CalendarClock size={22} />} />
           <TodoCard href="/admin/submissions" label="콘텐츠 검수" count={stats.pendingSubmissions} icon={<FileCheck size={22} />} />
           <TodoCard href="/admin/members?verification=pending" label="인증 심사" count={stats.pendingVerifications} icon={<UserCheck size={22} />} />
         </div>

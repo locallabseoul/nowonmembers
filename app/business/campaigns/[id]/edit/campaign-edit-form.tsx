@@ -134,6 +134,7 @@ export function CampaignEditForm({ campaign }: { campaign: CampaignEditValues })
             name="selection_date"
             label="선정 발표일"
             type="date"
+            required
             defaultValue={values.selection_date ?? campaign.selectionDate}
             error={fieldErrors.selection_date}
           />

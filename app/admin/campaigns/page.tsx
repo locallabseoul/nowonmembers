@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { Badge } from "@/app/components/ui";
-import { getCampaignLifecycle } from "@/lib/campaign-lifecycle";
+import { getCampaignLifecycle, getCampaignSelectionPeriod, isCampaignSelectionOverdue } from "@/lib/campaign-lifecycle";
 import { formatPoints } from "@/lib/points";
 import { getAdminCampaigns, type DashboardApplication, type DashboardCampaign, type DashboardSubmission } from "@/lib/supabase/queries";
 import { ExternalLink, ImageIcon, X } from "lucide-react";
-import { adjustBusinessPoints, approveCampaign, approveSubmission, publishLocalStory, recommendApplication, rejectCampaign, requestCampaignRevision, requestSubmissionRevision, unrecommendApplication } from "../actions";
+import { adjustBusinessPoints, approveCampaign, approveSubmission, publishLocalStory, recommendApplication, rejectCampaign, remindCampaignSelection, requestCampaignRevision, requestSubmissionRevision, unrecommendApplication } from "../actions";
 import { ConfirmButton } from "@/app/components/confirm-button";
 import { FormBanner } from "@/app/components/form-field";
 
@@ -109,6 +109,22 @@ function campaignSubmissionText(campaign: DashboardCampaign) {
   };
 }
 
+// 모집중일 때는 앞으로 지켜야 할 약속이고, 선정중일 때는 지금 감시해야 할 마감이다.
+function campaignSelectionMeta(campaign: DashboardCampaign) {
+  if (campaign.status !== "recruiting" && campaign.status !== "selecting") return null;
+
+  const period = getCampaignSelectionPeriod(campaign);
+  const overdue = isCampaignSelectionOverdue(campaign);
+  if (!period.end) return { text: "선정 기간 미정", overdueLabel: "" };
+
+  const range = `선정 기간 ${formatDateShort(period.start)} ~ ${formatDateShort(period.end)}`;
+
+  return {
+    text: campaign.status === "selecting" ? `${range} · ${period.label}` : range,
+    overdueLabel: overdue ? period.label : ""
+  };
+}
+
 function formatDateShort(value: string) {
   if (!value) return "미정";
   const [year, month, day] = value.slice(0, 10).split("-");
@@ -176,12 +192,14 @@ function CampaignManagementRow({
   const canReview = campaign.status === "in_review" || campaign.status === "revision_requested";
   const actionTab: ModalTab = campaign.status === "submission_review" || campaign.status === "completed" ? "submissions" : "applications";
   const submissionText = campaignSubmissionText(campaign);
+  const selection = campaignSelectionMeta(campaign);
 
   return (
     <div className={`grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center ${selected ? "bg-primary/5" : ""}`}>
       <Link href={dashboardHref(campaign.id, statusFilter)} className="block">
         <div className="mb-2 flex flex-wrap gap-2">
           <Badge tone={lifecycle.badgeTone}>{lifecycle.label}</Badge>
+          {selection?.overdueLabel ? <Badge tone="red">{selection.overdueLabel}</Badge> : null}
           <Badge>{campaign.campaignType}</Badge>
           {selected ? <Badge tone="green">선택됨</Badge> : null}
           {campaign.pointReservation ? (
@@ -194,6 +212,9 @@ function CampaignManagementRow({
         </div>
         <h3 className="font-black text-charcoal">{campaign.title}</h3>
         <p className="mt-2 text-sm text-gray-500">{campaign.businessName ?? "가게명 미등록"} · 모집 {campaign.recruitStart || "승인 시 시작"} - {campaign.recruitEnd || "미정"}</p>
+        {selection ? (
+          <p className={`mt-1 text-xs font-bold ${selection.overdueLabel ? "text-red-600" : "text-gray-500"}`}>{selection.text}</p>
+        ) : null}
         <p className="mt-2 text-xs font-bold text-gray-500">
           전체 지원 {campaign.applicationCount}명 · 추천 {campaign.recommendedCount}명 · 선정 {campaign.selectedCount}/{campaign.recruitCount}명
         </p>
@@ -232,9 +253,30 @@ function CampaignManagementRow({
       ) : campaign.status === "draft" ? (
         <span className="rounded-lg bg-gray-50 px-4 py-2 text-sm font-bold text-gray-400">가게가 작성 중</span>
       ) : (
-        <Link href={dashboardHref(campaign.id, statusFilter, actionTab)} className="rounded-lg bg-white px-4 py-2 text-sm font-black text-primary ring-1 ring-primary/20">
-          {campaignActionLabel(campaign)}
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {selection?.overdueLabel ? (
+            <div className="text-right">
+              {/* 선정은 가게가 한다. 운영자가 할 수 있는 건 발표일이 지났다고 알리는 것뿐이다. */}
+              <ConfirmButton
+                label="선정 독촉"
+                confirmLabel="가게에 선정을 마무리해달라는 알림을 보냅니다"
+                className="rounded-lg border border-red-200 px-4 py-2 text-sm font-black text-red-600"
+              >
+                <form action={remindCampaignSelection} className="inline">
+                  <input type="hidden" name="campaign_id" value={campaign.id} />
+                  <input type="hidden" name="return_to" value={dashboardHref(campaign.id, statusFilter, actionTab)} />
+                  <button className="rounded-lg bg-red-600 px-4 py-2 text-sm font-black text-white">독촉 보내기</button>
+                </form>
+              </ConfirmButton>
+              {campaign.selectionRemindedAt ? (
+                <p className="mt-1 text-xs font-bold text-gray-400">마지막 독촉 {formatDateTimeShort(campaign.selectionRemindedAt)}</p>
+              ) : null}
+            </div>
+          ) : null}
+          <Link href={dashboardHref(campaign.id, statusFilter, actionTab)} className="rounded-lg bg-white px-4 py-2 text-sm font-black text-primary ring-1 ring-primary/20">
+            {campaignActionLabel(campaign)}
+          </Link>
+        </div>
       )}
     </div>
   );
@@ -353,6 +395,7 @@ function ApplicantModal({
   activeTab: ModalTab;
 }) {
   const modalReturnTo = dashboardHref(campaign.id, statusFilter, activeTab);
+  const selection = campaignSelectionMeta(campaign);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center px-4 py-6 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="admin-applicant-modal-title">
@@ -365,9 +408,31 @@ function ApplicantModal({
               <Badge tone="gray">전체 {campaign.applicationCount}명</Badge>
               <Badge tone="amber">추천 {campaign.recommendedCount}명</Badge>
               <Badge tone="green">선정 {campaign.selectedCount}/{campaign.recruitCount}명</Badge>
+              {selection?.overdueLabel ? <Badge tone="red">{selection.overdueLabel}</Badge> : null}
             </div>
             <h2 id="admin-applicant-modal-title" className="text-xl font-black text-charcoal">{campaign.title}</h2>
             <p className="mt-1 text-sm text-gray-500">{campaign.businessName ?? "가게명 미등록"} · 지원자와 제출 콘텐츠</p>
+            {selection ? (
+              <p className={`mt-1 text-sm font-bold ${selection.overdueLabel ? "text-red-600" : "text-gray-500"}`}>{selection.text}</p>
+            ) : null}
+            {selection?.overdueLabel ? (
+              <div className="mt-3">
+                <ConfirmButton
+                  label="선정 독촉"
+                  confirmLabel="가게에 선정을 마무리해달라는 알림을 보냅니다"
+                  className="rounded-lg border border-red-200 px-4 py-2 text-sm font-black text-red-600"
+                >
+                  <form action={remindCampaignSelection} className="inline">
+                    <input type="hidden" name="campaign_id" value={campaign.id} />
+                    <input type="hidden" name="return_to" value={modalReturnTo} />
+                    <button className="rounded-lg bg-red-600 px-4 py-2 text-sm font-black text-white">독촉 보내기</button>
+                  </form>
+                </ConfirmButton>
+                {campaign.selectionRemindedAt ? (
+                  <p className="mt-1 text-xs font-bold text-gray-400">마지막 독촉 {formatDateTimeShort(campaign.selectionRemindedAt)}</p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <Link href="/admin/campaigns" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100" aria-label="닫기">
             <X size={20} />
@@ -449,6 +514,11 @@ export default async function AdminCampaignsPage({ searchParams }: { searchParam
   const activeModalTab = normalizeModalTab(tab);
   const { campaigns, selectedCampaign, selectedCampaignApplications, selectedCampaignSubmissions } = await getAdminCampaigns(campaign);
   const filteredApplications = filterApplications(selectedCampaignApplications, statusFilter);
+  // 발표일을 넘긴 캠페인은 크리에이터가 이미 기다리는 중이다. 등록순에 묻히지 않게 위로 올린다.
+  const sortedCampaigns = campaigns
+    .map((item) => ({ item, overdueDays: isCampaignSelectionOverdue(item) ? getCampaignSelectionPeriod(item).overdueDays : 0 }))
+    .sort((a, b) => b.overdueDays - a.overdueDays)
+    .map(({ item }) => item);
 
   return (
     <main>
@@ -465,7 +535,7 @@ export default async function AdminCampaignsPage({ searchParams }: { searchParam
           <p className="mt-1 text-sm text-gray-500">캠페인의 `지원자 보기`를 누르면 해당 캠페인의 지원자 팝업이 열립니다.</p>
         </div>
         <div className="divide-y divide-line">
-          {campaigns.map((item) => (
+          {sortedCampaigns.map((item) => (
             <CampaignManagementRow key={item.id} campaign={item} selected={selectedCampaign?.id === item.id} statusFilter={statusFilter} />
           ))}
           {campaigns.length === 0 ? <p className="p-5 text-sm text-gray-500">관리할 캠페인이 없습니다.</p> : null}

@@ -157,9 +157,11 @@ export async function updateCampaign(_prevState: FormState, formData: FormData):
         ? "모집 마감일은 오늘 또는 이후 날짜로 설정해주세요."
         : null,
     selection_date:
-      selectionDate && selectionDate < recruitEnd
-        ? "선정 발표일은 모집 마감일과 같거나 이후 날짜로 설정해주세요."
-        : null,
+      !selectionDate
+        ? "선정 발표일을 선택해주세요."
+        : selectionDate < recruitEnd
+          ? "선정 발표일은 모집 마감일과 같거나 이후 날짜로 설정해주세요."
+          : null,
     submission_due:
       submissionDue && selectionDate && submissionDue < selectionDate
         ? "콘텐츠 등록 마감일은 선정 발표일과 같거나 이후 날짜로 설정해주세요."
@@ -233,7 +235,7 @@ export async function updateCampaign(_prevState: FormState, formData: FormData):
       longitude,
       category: String(formData.get("category") ?? ""),
       recruit_end: recruitEnd,
-      selection_date: selectionDate || null,
+      selection_date: selectionDate,
       submission_due: submissionDue || null,
       benefit_type: String(formData.get("benefit_type") ?? ""),
       benefit_value: benefitValue,

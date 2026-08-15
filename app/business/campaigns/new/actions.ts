@@ -124,8 +124,8 @@ export async function createCampaign(formData: FormData) {
   const agreedToCampaign = formData.get("final_agree") === "on";
   const agreedToPointPolicy = formData.get("point_policy_agree") === "on";
 
-  if (!title || !region || !description || !benefitValue || !recruitCount || !recruitEnd) {
-    redirectWithError("캠페인 제목, 주소, 선정 인원, 모집 마감일, 제공 내역, 상세 설명을 입력해주세요.");
+  if (!title || !region || !description || !benefitValue || !recruitCount || !recruitEnd || !selectionDate) {
+    redirectWithError("캠페인 제목, 주소, 선정 인원, 모집 마감일, 선정 발표일, 제공 내역, 상세 설명을 입력해주세요.");
   }
 
   if (!Number.isInteger(recruitCount) || recruitCount < 1 || recruitCount > 100) {
@@ -148,7 +148,7 @@ export async function createCampaign(formData: FormData) {
     redirectWithError("모집 마감일은 오늘 또는 이후 날짜로 설정해주세요.");
   }
 
-  if (selectionDate && selectionDate < recruitEnd) {
+  if (selectionDate < recruitEnd) {
     redirectWithError("선정 발표일은 모집 마감일과 같거나 이후 날짜로 설정해주세요.");
   }
 
@@ -207,7 +207,7 @@ export async function createCampaign(formData: FormData) {
     recruit_count: recruitCount,
     recruit_start: String(formData.get("recruit_start") ?? "") || null,
     recruit_end: recruitEnd,
-    selection_date: selectionDate || null,
+    selection_date: selectionDate,
     visit_start: String(formData.get("visit_start") ?? "") || null,
     visit_end: String(formData.get("visit_end") ?? "") || null,
     submission_due: submissionDue || null,

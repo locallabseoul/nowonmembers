@@ -244,6 +244,25 @@ export async function updateNotice(formData: FormData) {
   redirect(backTo(formData, "/admin/notices", { noticeUpdated: "1" }));
 }
 
+// 선정을 대신 확정해주지는 않는다. 누구를 뽑을지는 가게가 정할 일이고, 운영자는 쪼기만 한다.
+export async function remindCampaignSelection(formData: FormData) {
+  const supabase = await requireAdmin();
+  const id = String(formData.get("campaign_id") ?? "");
+
+  const { data: overdueDays, error } = await supabase.rpc("admin_remind_campaign_selection", {
+    target_campaign_id: id
+  });
+
+  if (error) redirect(backTo(formData, "/admin/campaigns", { error: error.message }));
+
+  revalidatePath("/admin", "layout");
+  revalidatePath("/business/dashboard");
+  // 문자는 여기서 나가지 않는다. 자동 알림에서 문자를 켜두었다면 대기열에 쌓이고, 운영자가 모아 보낸다.
+  redirect(backTo(formData, "/admin/campaigns", {
+    message: `선정 발표일을 ${overdueDays}일 넘긴 가게에 독촉 알림을 보냈습니다. 문자를 켜두었다면 발송 대기열에서 보내주세요.`
+  }));
+}
+
 export async function recommendApplication(formData: FormData) {
   const supabase = await requireAdmin();
   const id = String(formData.get("application_id") ?? "");

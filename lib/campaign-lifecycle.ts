@@ -2,6 +2,16 @@ import type { Campaign, CampaignStatus } from "@/lib/types";
 
 type CampaignGate = Pick<Campaign, "status" | "recruitEnd" | "recruitCount" | "appliedCount">;
 
+type CampaignSelectionGate = Pick<Campaign, "status" | "recruitEnd" | "selectionDate">;
+
+type CampaignSelectionPeriod = {
+  start: string;
+  end: string;
+  remainingDays: number | null;
+  overdueDays: number;
+  label: string;
+};
+
 type CampaignLifecycle = {
   label: string;
   description: string;
@@ -64,6 +74,41 @@ export function getCampaignDeadlineLabel(campaign: CampaignGate, today = getKore
   if (remainingDays < 0) return "마감됨";
   if (remainingDays === 0) return "오늘마감";
   return `D-${remainingDays}`;
+}
+
+export function addDaysToDate(value: string, days: number) {
+  if (!value) return "";
+  const base = new Date(`${value}T00:00:00+09:00`);
+  if (Number.isNaN(base.getTime())) return "";
+
+  return getKoreaTodayString(new Date(base.getTime() + days * 86_400_000));
+}
+
+// 선정 기간은 따로 저장하지 않는다. 모집이 끝난 다음 날부터 가게가 약속한 선정 발표일까지가 선정 기간이다.
+export function getCampaignSelectionPeriod(campaign: CampaignSelectionGate, today = getKoreaTodayString()): CampaignSelectionPeriod {
+  // 새 입력은 발표일이 필수지만 기존 데이터에는 빈 값이 있을 수 있다. 임의의 마감일로 지연 처리하지 않는다.
+  const end = campaign.selectionDate || "";
+  const nextDay = addDaysToDate(campaign.recruitEnd, 1);
+  const start = nextDay && end && nextDay <= end ? nextDay : end;
+  const remainingDays = end ? daysUntilDate(end, today) : null;
+  const overdueDays = remainingDays !== null && remainingDays < 0 ? -remainingDays : 0;
+
+  if (!end || remainingDays === null) {
+    return { start, end, remainingDays: null, overdueDays: 0, label: "발표일 미정" };
+  }
+
+  if (overdueDays > 0) {
+    return { start, end, remainingDays, overdueDays, label: `선정 지연 ${overdueDays}일` };
+  }
+
+  return { start, end, remainingDays, overdueDays, label: remainingDays === 0 ? "오늘 발표" : `D-${remainingDays}` };
+}
+
+// 발표일을 넘겼는데 아직 선정중이면 지원한 크리에이터가 약속받은 날짜를 지나서 기다리고 있다는 뜻이다.
+export function isCampaignSelectionOverdue(campaign: CampaignSelectionGate, today = getKoreaTodayString()) {
+  if (campaign.status !== "selecting") return false;
+
+  return getCampaignSelectionPeriod(campaign, today).overdueDays > 0;
 }
 
 export function getCampaignLifecycle(campaign: CampaignGate, today = getKoreaTodayString()): CampaignLifecycle {
