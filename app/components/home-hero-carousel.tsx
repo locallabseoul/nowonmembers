@@ -30,7 +30,7 @@ const slides: HeroSlide[] = [
   {
     type: "reels",
     label: "인스타 릴스",
-    image: "https://storage.googleapis.com/uxpilot-auth.appspot.com/gen_934235dfdb_692dd2153bbbb8b9.png",
+    image: "/images/nowon-local-market.webp",
     region: "노원구 일대",
     title: "노원 로컬마켓 현장 기록 캠페인",
     benefit: "행사 초대 + 활동비",
@@ -41,7 +41,7 @@ const slides: HeroSlide[] = [
   {
     type: "feed",
     label: "인스타 피드",
-    image: "https://storage.googleapis.com/uxpilot-auth.appspot.com/gen_352d5b3cff_f77aabc46a29ff61.png",
+    image: "/images/bookshop-instagram-feed.webp",
     region: "월계동",
     title: "동네책방의 하루를 기록해주세요",
     benefit: "도서 1권 + 음료 제공",

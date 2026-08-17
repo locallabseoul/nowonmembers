@@ -320,7 +320,7 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <div className="flex w-full max-w-md flex-1 justify-center lg:max-w-none lg:justify-end">
+            <div className="hidden w-full max-w-md flex-1 justify-center lg:flex lg:max-w-none lg:justify-end">
               <HomeHeroCarousel />
             </div>
           </div>
@@ -371,7 +371,7 @@ export default async function HomePage() {
             <ContentTypeCard
               title="인스타그램 피드"
               subtitle="사진 + 해시태그"
-              image="https://storage.googleapis.com/uxpilot-auth.appspot.com/gen_352d5b3cff_f77aabc46a29ff61.png"
+              image="/images/bookshop-instagram-feed.webp"
               icon={<Instagram />}
               description="감각적인 사진과 해시태그로 가게를 알립니다. 팔로워와의 높은 인게이지먼트가 특징입니다."
               tags={["비주얼", "해시태그"]}
