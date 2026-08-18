@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { confirmTossPayment } from "@/lib/toss-payments";
+import { assertPointPaymentAccess } from "@/lib/point-payment-access";
 
 export default async function PointPaymentSuccessPage({
   searchParams
@@ -9,7 +10,14 @@ export default async function PointPaymentSuccessPage({
   searchParams: Promise<{ paymentKey?: string; orderId?: string; amount?: string; campaign?: string }>;
 }) {
   const { paymentKey, orderId, amount, campaign } = await searchParams;
-  const { supabase } = await requireRole("business", "/business/points");
+  const { supabase, user } = await requireRole("business", "/business/points");
+
+  try {
+    assertPointPaymentAccess(user.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "카드 결제는 준비 중입니다.";
+    redirect(`/business/points?error=${encodeURIComponent(message)}`);
+  }
 
   if (!paymentKey || !orderId || !amount) {
     redirect(`/business/points?error=${encodeURIComponent("결제 승인 정보가 누락되었습니다.")}`);

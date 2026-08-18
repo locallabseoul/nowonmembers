@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { CreditCard, Loader2 } from "lucide-react";
-import { DEFAULT_POINT_CHARGE_POINTS, formatPoints, POINT_CHARGE_OPTIONS, POINT_TERMS_VERSION, POINTS_PAYMENT_OPEN } from "@/lib/points";
+import { DEFAULT_POINT_CHARGE_POINTS, formatPoints, POINT_CHARGE_OPTIONS, POINT_TERMS_VERSION } from "@/lib/points";
 import { track } from "@vercel/analytics";
 import { createPointChargeOrder, markPointChargeOrderFailed, type PointChargeOrder } from "./actions";
 
@@ -48,7 +48,7 @@ function loadTossScript() {
   return tossScriptPromise;
 }
 
-export function PointChargeButton({ campaignId }: { campaignId?: string }) {
+export function PointChargeButton({ campaignId, paymentEnabled }: { campaignId?: string; paymentEnabled: boolean }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [showPreparingNotice, setShowPreparingNotice] = useState(false);
@@ -58,16 +58,12 @@ export function PointChargeButton({ campaignId }: { campaignId?: string }) {
     ?? POINT_CHARGE_OPTIONS[1];
 
   function startPayment() {
-    if (!agreed) return;
-
-    // 토스 심사 승인 전까지는 결제창 대신 준비중 안내를 띄운다. 서버 액션도
-    // 같은 플래그로 막혀 있어 화면을 우회해도 주문은 생성되지 않는다.
-    if (!POINTS_PAYMENT_OPEN) {
-      // 결제를 열기 전의 실수요 지표. 결제 오픈 시점을 정할 때 쓴다.
+    if (!paymentEnabled) {
       track("charge_attempted_while_closed", { points: selectedPoints });
       setShowPreparingNotice(true);
       return;
     }
+    if (!agreed) return;
 
     setError("");
     startTransition(async () => {
@@ -179,7 +175,7 @@ export function PointChargeButton({ campaignId }: { campaignId?: string }) {
             type="checkbox"
             checked={agreed}
             onChange={(event) => setAgreed(event.target.checked)}
-            disabled={isPending}
+            disabled={isPending || !paymentEnabled}
             className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
           />
           <span className="text-xs font-bold leading-5 text-charcoal">
@@ -195,11 +191,13 @@ export function PointChargeButton({ campaignId }: { campaignId?: string }) {
       <button
         type="button"
         onClick={startPayment}
-        disabled={!agreed || isPending}
+        disabled={isPending || (paymentEnabled && !agreed)}
         className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 font-black text-white shadow-sm transition-colors hover:bg-primaryHover disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isPending ? <Loader2 size={18} className="animate-spin" /> : <CreditCard size={18} />}
-        {selectedOption.totalAmount.toLocaleString("ko-KR")}원 결제하고 충전
+        {paymentEnabled
+          ? `${selectedOption.totalAmount.toLocaleString("ko-KR")}원 결제하고 충전`
+          : "카드 결제 준비 중"}
       </button>
       {error ? <p className="mt-3 text-center text-sm font-bold text-red-600">{error}</p> : null}
 

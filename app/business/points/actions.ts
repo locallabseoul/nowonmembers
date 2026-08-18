@@ -7,8 +7,10 @@ import {
   getPointChargeOption,
   normalizePaymentFailureCode,
   paymentFailureMessage,
-  POINT_TERMS_VERSION, POINTS_PAYMENT_OPEN } from "@/lib/points";
+  POINT_TERMS_VERSION
+} from "@/lib/points";
 import { requireRole } from "@/lib/auth/guards";
+import { assertPointPaymentAccess } from "@/lib/point-payment-access";
 import { logEvent } from "@/lib/events";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { cancelTossPayment } from "@/lib/toss-payments";
@@ -26,10 +28,6 @@ export async function createPointChargeOrder(
   pointAmount: number,
   acceptedTermsVersion: string
 ): Promise<PointChargeOrder> {
-  if (!POINTS_PAYMENT_OPEN) {
-    throw new Error("카드 결제는 준비 중입니다. 포인트가 필요하시면 운영자에게 문의해주세요.");
-  }
-
   const chargeOption = getPointChargeOption(pointAmount);
   if (!chargeOption) throw new Error("충전 금액을 확인해주세요.");
   // 주문에 기록되는 동의 버전은 사용자가 실제로 확인한 버전이어야 한다.
@@ -37,7 +35,8 @@ export async function createPointChargeOrder(
     throw new Error("포인트 이용약관이 변경되었습니다. 새로고침 후 다시 확인해주세요.");
   }
 
-  const { supabase } = await requireRole("business", "/business/points");
+  const { supabase, user } = await requireRole("business", "/business/points");
+  assertPointPaymentAccess(user.id);
   const orderId = `points_${randomUUID().replaceAll("-", "")}`;
   const { data, error } = await supabase.rpc("create_point_payment_order", {
     target_order_id: orderId,
@@ -66,7 +65,8 @@ export async function createPointChargeOrder(
 }
 
 export async function markPointChargeOrderFailed(orderId: string, code: string, message: string) {
-  const { supabase } = await requireRole("business", "/business/points");
+  const { supabase, user } = await requireRole("business", "/business/points");
+  assertPointPaymentAccess(user.id);
   if (!orderId.startsWith("points_")) throw new Error("결제 주문번호를 확인해주세요.");
 
   const failureCode = normalizePaymentFailureCode(code);
@@ -83,12 +83,14 @@ export async function markPointChargeOrderFailed(orderId: string, code: string, 
 }
 
 export async function refundPointOrder(formData: FormData) {
-  if (!POINTS_PAYMENT_OPEN) {
-    redirect(`/business/points?error=${encodeURIComponent("결제·환불 기능은 준비 중입니다. 운영자에게 문의해주세요.")}`);
-  }
-
   const orderId = String(formData.get("order_id") ?? "");
-  const { supabase } = await requireRole("business", "/business/points");
+  const { supabase, user } = await requireRole("business", "/business/points");
+  try {
+    assertPointPaymentAccess(user.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "결제·환불 기능은 준비 중입니다.";
+    redirect(`/business/points?error=${encodeURIComponent(message)}`);
+  }
 
   const { data: order, error: orderError } = await supabase
     .from("point_payment_orders")

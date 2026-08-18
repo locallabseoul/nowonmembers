@@ -7,6 +7,7 @@ import { OperatorSidebar } from "@/app/business/components/operator-sidebar";
 import { PointChargeButton } from "./point-charge-button";
 import { RefundPointForm } from "./refund-point-form";
 import { FormBanner } from "@/app/components/form-field";
+import { canAccessPointPayments } from "@/lib/point-payment-access";
 
 function formatDate(value: string | null) {
   if (!value) return "없음";
@@ -32,7 +33,8 @@ export default async function BusinessPointsPage({
   searchParams: Promise<{ campaign?: string; required?: string; shortfall?: string; error?: string; refunded?: string; charged?: string }>;
 }) {
   const params = await searchParams;
-  await requireRole("business", "/business/points");
+  const { user } = await requireRole("business", "/business/points");
+  const paymentEnabled = canAccessPointPayments(user.id);
   const [{ business }, overview] = await Promise.all([
     getBusinessDashboard(),
     getBusinessPointOverview()
@@ -104,7 +106,7 @@ export default async function BusinessPointsPage({
                 <h2 className="text-xl font-black text-charcoal">충전 금액 선택</h2>
                 <p className="mt-2 text-sm leading-5 text-gray-500">필요한 모집 인원에 맞춰 결제할 금액을 선택해주세요.</p>
                 <div className="mt-5">
-                  <PointChargeButton campaignId={params.campaign} />
+                  <PointChargeButton campaignId={params.campaign} paymentEnabled={paymentEnabled} />
                 </div>
               </section>
             </aside>
@@ -130,9 +132,13 @@ export default async function BusinessPointsPage({
                       <td className="px-6 py-4">{order.totalAmount.toLocaleString("ko-KR")}원</td>
                       <td className="px-6 py-4">{orderStatusLabel(order.status)}</td>
                       <td className="px-6 py-4 text-right">
-                        {order.refundablePoints > 0 && order.paymentKey ? (
+                        {paymentEnabled && order.refundablePoints > 0 && order.paymentKey ? (
                           <RefundPointForm orderId={order.orderId} refundablePoints={order.refundablePoints} />
-                        ) : <span className="text-xs text-gray-400">환불 가능 잔액 없음</span>}
+                        ) : (
+                          <span className="text-xs text-gray-400">
+                            {!paymentEnabled ? "결제 심사 중" : "환불 가능 잔액 없음"}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}

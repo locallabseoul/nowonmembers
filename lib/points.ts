@@ -1,7 +1,3 @@
-// 토스페이먼츠 가맹 재심사에서 심사자가 카드 결제창까지 확인할 수 있도록
-// 화면과 서버 주문 생성을 함께 연다 (2026-08-18).
-export const POINTS_PAYMENT_OPEN = true;
-
 export const POINTS_PER_RECRUIT = 5_000;
 export const POINT_CHARGE_OPTIONS = [
   {
