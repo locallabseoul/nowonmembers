@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
+import { logEvent } from "@/lib/events";
 
 const CREATOR_IMAGE_BUCKET = "creator-images";
 const MAX_CREATOR_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -35,6 +36,7 @@ function getProfileRedirect(formData: FormData, error?: string) {
 }
 
 function redirectWithError(formData: FormData, message: string): never {
+  logEvent("creator_profile.save_failed", { error: message });
   redirect(getProfileRedirect(formData, message));
 }
 
@@ -368,6 +370,7 @@ export async function saveCreatorProfile(formData: FormData) {
     redirectWithError(formData, message);
   }
 
+  logEvent("creator_profile.saved", {});
   revalidatePath("/creator/profile");
   revalidatePath("/creator/dashboard");
   const next = getSafeNext(formData.get("next"));

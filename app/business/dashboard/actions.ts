@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/guards";
+import { logEvent } from "@/lib/events";
 
 const BUSINESS_IMAGE_BUCKET = "business-images";
 const MAX_BUSINESS_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -34,6 +35,10 @@ function getDashboardRedirect(formData: FormData, error?: string) {
 }
 
 function redirectWithError(formData: FormData, message: string): never {
+  logEvent("business_profile.save_failed", {
+    error: message,
+    mode: String(formData.get("profile_mode") ?? "") === "edit" ? "edit" : "create"
+  });
   redirect(getDashboardRedirect(formData, message));
 }
 
@@ -167,10 +172,8 @@ export async function saveBusinessProfile(formData: FormData) {
     redirectWithError(formData, "매장 연락처를 정확히 입력해주세요.");
   }
 
-  if (latitude === null || longitude === null) {
-    redirectWithError(formData, "주소 검색 결과에서 매장 위치를 선택해주세요.");
-  }
-
+  // 지오코딩이 못 찾는 주소(신축 건물, 상세 표기 차이 등)도 있어 좌표는 없어도 저장한다.
+  // 좌표가 없으면 캠페인 상세의 지도만 생략된다.
   const businessHoursSummary = requiredText(formData, "business_hours_summary", "영업시간");
   const businessHoursPreset = String(formData.get("business_hours_preset") ?? "").trim();
   const businessHoursNote = String(formData.get("business_hours_note") ?? "").trim();
@@ -284,6 +287,10 @@ export async function saveBusinessProfile(formData: FormData) {
 
   if (profileError) redirectWithError(formData, getProfileDuplicateMessage(profileError) ?? profileError.message);
 
+  logEvent("business_profile.saved", {
+    mode: existingBusiness ? "update" : "create",
+    hasCoordinates: latitude !== null && longitude !== null
+  });
   revalidatePath("/business/dashboard");
   const next = getSafeNext(formData.get("next"));
   redirect(next || "/business/dashboard");
@@ -297,7 +304,10 @@ export async function approveRecommendedApplication(formData: FormData) {
     target_application_id: applicationId
   });
 
-  if (error) redirect(`/business/dashboard?error=${encodeURIComponent(error.message)}`);
+  if (error) {
+    logEvent("application.approve_failed", { error: error.message, applicationId });
+    redirect(`/business/dashboard?error=${encodeURIComponent(error.message)}`);
+  }
   revalidatePath("/business/dashboard");
   revalidatePath("/admin");
   revalidatePath("/creator/dashboard");
@@ -315,6 +325,7 @@ export async function submitDraftCampaignForReview(formData: FormData) {
   });
 
   if (error) {
+    logEvent("campaign.submit_failed", { error: error.message, campaignId });
     redirect(`/business/dashboard?campaign=${campaignId}&error=${encodeURIComponent(error.message)}`);
   }
 
@@ -344,6 +355,7 @@ export async function withdrawCampaignFromReview(formData: FormData) {
   });
 
   if (error) {
+    logEvent("campaign.withdraw_failed", { error: error.message, campaignId });
     redirect(`/business/dashboard?campaign=${campaignId}&error=${encodeURIComponent(error.message)}`);
   }
 
@@ -359,7 +371,10 @@ export async function finalizeCampaignSelection(formData: FormData) {
     target_campaign_id: campaignId
   });
 
-  if (error) redirect(`/business/dashboard?campaign=${campaignId}&error=${encodeURIComponent(error.message)}`);
+  if (error) {
+    logEvent("campaign.finalize_failed", { error: error.message, campaignId });
+    redirect(`/business/dashboard?campaign=${campaignId}&error=${encodeURIComponent(error.message)}`);
+  }
   revalidatePath("/business/dashboard");
   revalidatePath("/admin");
   revalidatePath("/creator/dashboard");
@@ -386,6 +401,7 @@ export async function deleteCampaign(formData: FormData) {
   });
 
   if (error) {
+    logEvent("campaign.delete_failed", { error: error.message, campaignId });
     redirect(`/business/dashboard?error=${encodeURIComponent(error.message)}`);
   }
 
@@ -413,7 +429,10 @@ export async function cancelCampaignBeforePublish(formData: FormData) {
     target_idempotency_key: `campaign_cancel:${campaignId}`
   });
 
-  if (error) redirect(`/business/dashboard?campaign=${campaignId}&error=${encodeURIComponent(error.message)}`);
+  if (error) {
+    logEvent("campaign.cancel_failed", { error: error.message, campaignId });
+    redirect(`/business/dashboard?campaign=${campaignId}&error=${encodeURIComponent(error.message)}`);
+  }
   revalidatePath("/business/dashboard");
   revalidatePath("/admin");
   redirect(`/business/dashboard?message=${encodeURIComponent("캠페인을 취소하고 예약 포인트를 반환했습니다.")}`);

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/guards";
+import { logEvent } from "@/lib/events";
 import { TERMS_VERSION } from "@/lib/legal";
 
 export async function claimCoupon(formData: FormData) {
@@ -18,7 +19,11 @@ export async function claimCoupon(formData: FormData) {
     if (acceptanceError) redirect(`/coupons/${couponId}?error=${encodeURIComponent("이용약관 동의를 저장하지 못했습니다.")}`);
   }
   const { error } = await supabase.rpc("claim_coupon", { target_coupon_id: couponId });
-  if (error) redirect(`/coupons/${couponId}?error=${encodeURIComponent(error.message)}`);
+  if (error) {
+    logEvent("coupon.claim_failed", { error: error.message, couponId });
+    redirect(`/coupons/${couponId}?error=${encodeURIComponent(error.message)}`);
+  }
+  logEvent("coupon.claimed", { couponId });
   revalidatePath("/coupons");
   revalidatePath(`/coupons/${couponId}`);
   redirect("/my/coupons?message=" + encodeURIComponent("쿠폰을 받았습니다. 매장에서 직원이 사용 코드를 입력해드립니다."));

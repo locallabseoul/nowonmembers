@@ -4,11 +4,13 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
+import { logEvent } from "@/lib/events";
 
 const bucket = "coupon-images";
 const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function fail(path: string, message: string): never {
+  logEvent("coupon.action_failed", { error: message, path });
   redirect(`${path}${path.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
 }
 
@@ -65,7 +67,10 @@ export async function saveCoupon(_previous: CouponFormState, formData: FormData)
   const returnPath = couponId ? `/business/coupons/${couponId}/edit` : "/business/coupons/new";
   const { supabase, user } = await requireRole("business", returnPath);
   const submitted = echoValues(formData);
-  const reject = (message: string): CouponFormState => ({ error: message, values: submitted });
+  const reject = (message: string): CouponFormState => {
+    logEvent("coupon.save_failed", { error: message, couponId });
+    return { error: message, values: submitted };
+  };
 
   let values: ReturnType<typeof parseCoupon>;
   let redemptionCode: string | null;

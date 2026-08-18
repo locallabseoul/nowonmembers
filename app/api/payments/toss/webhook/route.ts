@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logEvent } from "@/lib/events";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getTossPaymentByOrderId } from "@/lib/toss-payments";
 
@@ -52,10 +53,12 @@ export async function POST(request: Request) {
     });
 
     if (error) throw new Error(error.message);
+    logEvent("point.charged", { orderId });
     return NextResponse.json({ received: true, reconciled: true });
   } catch (error) {
     // 토스가 재시도하도록 5xx를 주되, 내부 오류 내용은 응답에 싣지 않는다.
     console.error("Toss webhook reconciliation failed", { orderId, error });
+    logEvent("point.charge_reconcile_failed", { orderId, error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ received: false }, { status: 500 });
   }
 }

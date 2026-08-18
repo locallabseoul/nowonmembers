@@ -44,7 +44,8 @@ export const campaignMissionOptions = [
   "공식 인스타그램 계정 태그"
 ];
 
-export const campaignImageAccept = "image/jpeg,image/png,image/webp";
+// HEIC은 선택만 허용하고 업로드 전에 클라이언트에서 JPEG로 변환한다(lib/heic.ts).
+export const campaignImageAccept = "image/jpeg,image/png,image/webp,image/heic,image/heif";
 export const maxCampaignImageBytes = 10 * 1024 * 1024;
 export const maxReferenceImageCount = 6;
 

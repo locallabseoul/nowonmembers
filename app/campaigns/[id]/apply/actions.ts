@@ -4,6 +4,7 @@ import { campaignContentTypeLabel } from "@/lib/campaign-options";
 import { track } from "@vercel/analytics/server";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
+import { logEvent } from "@/lib/events";
 import { fieldError, keepValues, type FormState } from "@/lib/form-errors";
 import { getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import type { Campaign } from "@/lib/types";
@@ -130,6 +131,7 @@ export async function applyCampaign(_prevState: FormState, formData: FormData): 
     // unique (campaign_id, creator_id) 때문에 취소한 캠페인에는 다시 지원할 수 없다.
     // 취소된 행이면 되살린다.
     if (error.code !== "23505") {
+      logEvent("campaign.apply_failed", { error: error.message, campaignId });
       return { formError: "신청을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.", values: kept };
     }
 
@@ -141,11 +143,13 @@ export async function applyCampaign(_prevState: FormState, formData: FormData): 
     });
 
     if (restoreError) {
+      logEvent("campaign.apply_failed", { error: restoreError.message, campaignId });
       return { formError: restoreError.message, values: kept };
     }
   }
 
   await track("campaign_applied").catch(() => {});
+  logEvent("campaign.applied", { campaignId });
 
   redirect("/creator/dashboard");
 }

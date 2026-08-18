@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
 import { getKoreaTodayString } from "@/lib/campaign-lifecycle";
+import { logEvent } from "@/lib/events";
 
 const CAMPAIGN_IMAGE_BUCKET = "campaign-images";
 const MAX_CAMPAIGN_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -51,6 +52,7 @@ function toCoordinate(value: FormDataEntryValue | null) {
 }
 
 function redirectWithError(message: string): never {
+  logEvent("campaign.create_failed", { error: message });
   redirect(`/business/campaigns/new?error=${encodeURIComponent(message)}`);
 }
 
@@ -136,10 +138,8 @@ export async function createCampaign(formData: FormData) {
     redirectWithError("캠페인 내용과 포인트 이용 정책을 확인하고 동의해주세요.");
   }
 
-  if (latitude === null || longitude === null) {
-    redirectWithError("주소 검색 결과에서 캠페인 위치를 선택해주세요.");
-  }
-
+  // 지오코딩이 못 찾는 주소도 있어 좌표는 없어도 저장한다. 좌표가 없으면 캠페인
+  // 상세의 지도만 생략된다.
   if (!coverImage) {
     redirectWithError("대표 이미지를 등록해주세요.");
   }
@@ -234,6 +234,7 @@ export async function createCampaign(formData: FormData) {
   });
 
   if (submissionError) {
+    logEvent("campaign.submit_failed", { error: submissionError.message, campaignId: createdCampaign.id });
     redirect(`/business/dashboard?campaign=${createdCampaign.id}&error=${encodeURIComponent(submissionError.message)}`);
   }
 
@@ -248,6 +249,7 @@ export async function createCampaign(formData: FormData) {
   }
 
   await track("campaign_submitted", { recruitCount }).catch(() => {});
+  logEvent("campaign.created", { campaignId: createdCampaign.id, recruitCount });
 
   redirect("/business/dashboard");
 }

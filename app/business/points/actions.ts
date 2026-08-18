@@ -9,6 +9,7 @@ import {
   paymentFailureMessage,
   POINT_TERMS_VERSION, POINTS_PAYMENT_OPEN } from "@/lib/points";
 import { requireRole } from "@/lib/auth/guards";
+import { logEvent } from "@/lib/events";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { cancelTossPayment } from "@/lib/toss-payments";
 
@@ -44,10 +45,14 @@ export async function createPointChargeOrder(
     target_point_amount: chargeOption.paidPoints
   });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    logEvent("point.charge_order_failed", { error: error.message, points: chargeOption.paidPoints });
+    throw new Error(error.message);
+  }
   const order = Array.isArray(data) ? data[0] : data;
   const clientKey = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY;
   if (!order || !clientKey) throw new Error("결제 설정을 확인해주세요.");
+  logEvent("point.charge_order_created", { orderId, points: chargeOption.paidPoints });
 
   return {
     orderId: order.order_id,
@@ -73,6 +78,7 @@ export async function markPointChargeOrderFailed(orderId: string, code: string, 
   });
 
   if (error) throw new Error(error.message);
+  logEvent("point.charge_failed", { orderId, code: failureCode });
   revalidatePath("/business/points");
 }
 
@@ -128,9 +134,11 @@ export async function refundPointOrder(formData: FormData) {
       target_refund_id: refundId,
       target_failure_message: message
     });
+    logEvent("point.refund_failed", { error: message, orderId });
     redirect(`/business/points?error=${encodeURIComponent(message)}`);
   }
 
+  logEvent("point.refunded", { orderId });
   revalidatePath("/business/points");
   revalidatePath("/business/dashboard");
   redirect("/business/points?refunded=1");

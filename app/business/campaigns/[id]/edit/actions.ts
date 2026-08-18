@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/guards";
 import { getKoreaTodayString } from "@/lib/campaign-lifecycle";
+import { logEvent } from "@/lib/events";
 import { collectFieldErrors, fieldError, hasErrors, keepValues, type FormState } from "@/lib/form-errors";
 
 const CAMPAIGN_IMAGE_BUCKET = "campaign-images";
@@ -144,11 +145,8 @@ export async function updateCampaign(_prevState: FormState, formData: FormData):
 
   const invalid = collectFieldErrors({
     title: title ? null : "캠페인 제목을 입력해주세요.",
-    region: !region
-      ? "캠페인 주소를 입력해주세요."
-      : latitude === null || longitude === null
-        ? "주소 검색 결과에서 캠페인 위치를 선택해주세요."
-        : null,
+    // 지오코딩이 못 찾는 주소도 있어 좌표는 없어도 저장한다.
+    region: region ? null : "캠페인 주소를 입력해주세요.",
     description: description ? null : "캠페인 상세 설명을 입력해주세요.",
     benefit_value: benefitValue ? null : "제공 내역을 입력해주세요.",
     recruit_end: !recruitEnd
@@ -251,6 +249,7 @@ export async function updateCampaign(_prevState: FormState, formData: FormData):
 
   if (updateError) {
     if (uploadedPaths.length) await supabase.storage.from(CAMPAIGN_IMAGE_BUCKET).remove(uploadedPaths);
+    logEvent("campaign.update_failed", { error: updateError.message, campaignId });
     return { formError: "캠페인을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.", values: kept };
   }
 
@@ -260,7 +259,10 @@ export async function updateCampaign(_prevState: FormState, formData: FormData):
       target_idempotency_key: `campaign_reserve:${campaignId}`
     });
 
-    if (error) return { formError: error.message, values: kept };
+    if (error) {
+      logEvent("campaign.submit_failed", { error: error.message, campaignId });
+      return { formError: error.message, values: kept };
+    }
 
     const result = Array.isArray(data) ? data[0] : data;
     if (!result?.submitted) {

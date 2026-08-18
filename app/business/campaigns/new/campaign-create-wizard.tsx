@@ -29,6 +29,13 @@ import {
   maxCampaignImageBytes,
   maxReferenceImageCount
 } from "@/lib/campaign-options";
+import {
+  HEIC_CONVERSION_FAILED_MESSAGE,
+  convertHeicToJpeg,
+  isHeicFile,
+  replaceHeicSelection,
+  uploadableImageTypes
+} from "@/lib/heic";
 
 type CampaignCreateWizardProps = {
   action: (formData: FormData) => void | Promise<void>;
@@ -324,7 +331,7 @@ export function CampaignCreateWizard({
 
         const addresses = result.addresses ?? [];
         setAddressResults(addresses);
-        setAddressSearchMessage(addresses.length ? "후보 주소를 선택해주세요." : "검색 결과가 없습니다. 도로명 주소는 건물번호까지 입력해주세요.");
+        setAddressSearchMessage(addresses.length ? "후보 주소를 선택해주세요." : "검색 결과가 없어요. 지금 입력한 주소 그대로 저장할 수 있어요.");
       } catch (addressError) {
         if (controller.signal.aborted) return;
         setAddressSearchMessage(addressError instanceof Error ? addressError.message : "주소 검색 중 오류가 발생했습니다.");
@@ -413,10 +420,6 @@ export function CampaignCreateWizard({
       }
     }
 
-    if (stepIndex === 0 && !selectedCoordinates) {
-      errors.region = "주소 검색 결과에서 캠페인 위치를 선택해주세요.";
-    }
-
     if (stepIndex === 2 && keywordTagsRef.current.length === 0 && !normalizeKeywordTag(getKeywordInputValue())) {
       errors.keywords = keywordRequiredMessage;
     }
@@ -500,7 +503,7 @@ export function CampaignCreateWizard({
   }
 
   function getImageValidationMessage(file: File) {
-    if (!file.type.startsWith("image/") || !campaignImageAccept.split(",").includes(file.type)) {
+    if (!uploadableImageTypes.includes(file.type)) {
       return "이미지는 JPG, PNG, WEBP 형식만 등록할 수 있습니다.";
     }
 
@@ -536,17 +539,24 @@ export function CampaignCreateWizard({
     referenceImagesInputRef.current.files = dataTransfer.files;
   }
 
-  function handleCoverImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
-    if (!file) {
+  async function handleCoverImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const selectedFile = input.files?.[0];
+    if (!selectedFile) {
       if (coverImagePreview) revokeImagePreview(coverImagePreview);
       setCoverImagePreview(null);
       return;
     }
 
+    const { file, error: conversionError } = await replaceHeicSelection(input, selectedFile);
+    if (!file) {
+      setFieldErrors((current) => ({ ...current, cover_image: conversionError }));
+      return;
+    }
+
     const imageError = getImageValidationMessage(file);
     if (imageError) {
-      event.currentTarget.value = "";
+      input.value = "";
       setFieldErrors((current) => ({ ...current, cover_image: imageError }));
       return;
     }
@@ -557,9 +567,25 @@ export function CampaignCreateWizard({
     setFieldErrors((current) => ({ ...current, cover_image: "" }));
   }
 
-  function handleReferenceImagesChange(event: ChangeEvent<HTMLInputElement>) {
-    const selectedFiles = Array.from(event.currentTarget.files ?? []);
+  async function handleReferenceImagesChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    let selectedFiles = Array.from(input.files ?? []);
     if (!selectedFiles.length) return;
+
+    // 참고 사진은 input.files를 미리보기 목록에서 다시 만들기 때문에(syncReferenceImageInput)
+    // 여기서는 파일만 JPEG로 바꾸면 된다.
+    if (selectedFiles.some(isHeicFile)) {
+      try {
+        selectedFiles = await Promise.all(
+          selectedFiles.map((file) => (isHeicFile(file) ? convertHeicToJpeg(file) : Promise.resolve(file)))
+        );
+      } catch {
+        input.value = "";
+        syncReferenceImageInput(referenceImagePreviews);
+        setFieldErrors((current) => ({ ...current, reference_images: HEIC_CONVERSION_FAILED_MESSAGE }));
+        return;
+      }
+    }
 
     const validFiles: File[] = [];
     const invalidFile = selectedFiles.find((file) => {
@@ -574,7 +600,7 @@ export function CampaignCreateWizard({
     });
 
     if (invalidFile || !validFiles.length) {
-      event.currentTarget.value = "";
+      input.value = "";
       syncReferenceImageInput(referenceImagePreviews);
       return;
     }

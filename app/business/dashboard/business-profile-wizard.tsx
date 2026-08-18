@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { FieldError, FieldLabel, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
 import { sendEmailVerification, sendPhoneVerification, verifyPhoneOtp } from "@/app/profile-verification-actions";
+import { replaceHeicSelection, uploadableImageTypes } from "@/lib/heic";
 import type { BusinessDashboardData } from "@/lib/supabase/queries";
 
 type InitialBusinessProfile = NonNullable<BusinessDashboardData["business"]>;
@@ -142,7 +143,8 @@ function parseTimeRange(summary: string) {
   return { open: pad(matched[1]), close: pad(matched[2]) };
 }
 
-const businessImageAccept = "image/jpeg,image/png,image/webp";
+// 아이폰 기본 카메라 포맷(HEIC)은 선택은 받되 업로드 전에 JPEG로 변환한다.
+const businessImageAccept = "image/jpeg,image/png,image/webp,image/heic,image/heif";
 const maxBusinessImageBytes = 10 * 1024 * 1024;
 
 function getDefaultBusinessHours(initial?: InitialBusinessProfile) {
@@ -227,7 +229,7 @@ function isValidUrl(value: string) {
 }
 
 function getImageValidationMessage(file: File) {
-  if (!file.type.startsWith("image/") || !businessImageAccept.split(",").includes(file.type)) {
+  if (!uploadableImageTypes.includes(file.type)) {
     return "대표 이미지는 JPG, PNG, WEBP 형식만 업로드할 수 있습니다.";
   }
 
@@ -377,11 +379,8 @@ function BusinessProfileCreateWizard({
       short_intro: draft.short_intro.trim() ? "" : "한 줄 소개를 입력해주세요."
     };
     const stepOne: Record<string, string> = {
-      address: !draft.address.trim()
-        ? "주소를 입력해주세요."
-        : !draft.latitude.trim() || !draft.longitude.trim()
-          ? "주소 검색 결과에서 매장 위치를 선택해주세요."
-          : "",
+      // 검색 결과가 안 나오는 주소도 있어 좌표 없이 입력한 주소만으로 저장을 허용한다.
+      address: draft.address.trim() ? "" : "주소를 입력해주세요.",
       contact: draft.contact.replace(/\D/g, "").length >= 8 ? "" : "매장 연락처를 정확히 입력해주세요.",
       manager_name: draft.manager_name.trim() ? "" : "담당자명을 입력해주세요.",
       manager_phone: draft.manager_phone.replace(/\D/g, "").length >= 10 ? "" : "담당자 전화번호를 정확히 입력해주세요.",
@@ -405,9 +404,16 @@ function BusinessProfileCreateWizard({
   }
 
 
-  function handleCoverImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  async function handleCoverImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.target;
+    const selectedFile = input.files?.[0];
+    if (!selectedFile) return;
+
+    const { file, error: conversionError } = await replaceHeicSelection(input, selectedFile);
+    if (!file) {
+      setFieldErrors((current) => ({ ...current, cover_image: conversionError }));
+      return;
+    }
 
     const imageError = getImageValidationMessage(file);
     if (imageError) {
@@ -900,9 +906,16 @@ function BusinessProfileEditForm({
     }));
   }
 
-  function handleCoverImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  async function handleCoverImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.target;
+    const selectedFile = input.files?.[0];
+    if (!selectedFile) return;
+
+    const { file, error: conversionError } = await replaceHeicSelection(input, selectedFile);
+    if (!file) {
+      setFieldErrors((current) => ({ ...current, cover_image: conversionError }));
+      return;
+    }
 
     const imageError = getImageValidationMessage(file);
     if (imageError) {
@@ -962,11 +975,7 @@ function BusinessProfileEditForm({
       category: draft.category.trim() ? "" : "업종을 선택해주세요.",
       district: draft.district.trim() ? "" : "소재지를 선택해주세요.",
       short_intro: draft.short_intro.trim() ? "" : "한 줄 소개를 입력해주세요.",
-      address: !draft.address.trim()
-        ? "주소를 입력해주세요."
-        : !draft.latitude.trim() || !draft.longitude.trim()
-          ? "주소 검색 결과에서 매장 위치를 선택해주세요."
-          : "",
+      address: draft.address.trim() ? "" : "주소를 입력해주세요.",
       contact: draft.contact.replace(/\D/g, "").length >= 8 ? "" : "매장 연락처를 정확히 입력해주세요.",
       manager_name: draft.manager_name.trim() ? "" : "담당자명을 입력해주세요.",
       manager_phone: draft.manager_phone.replace(/\D/g, "").length >= 10 ? "" : "담당자 전화번호를 정확히 입력해주세요.",
@@ -1561,7 +1570,7 @@ function BusinessAddressField({
 
         const addresses = result.addresses ?? [];
         setResults(addresses);
-        setMessage(addresses.length ? "후보 주소를 선택해주세요." : "검색 결과가 없습니다. 도로명 주소는 건물번호까지 입력해주세요.");
+        setMessage(addresses.length ? "후보 주소를 선택해주세요." : "검색 결과가 없어요. 지금 입력한 주소 그대로 저장할 수 있어요.");
       } catch (addressError) {
         if (controller.signal.aborted) return;
         setMessage(addressError instanceof Error ? addressError.message : "주소 검색 중 오류가 발생했습니다.");
@@ -1657,7 +1666,7 @@ function BusinessAddressField({
         />
       </div>
       <p className={`mt-2 text-xs ${isErrorMessage ? "font-bold text-primary" : "text-slate-500"}`}>
-        {message || (hasCoordinates ? "저장된 좌표를 사용합니다. 주소를 바꾸면 후보 주소를 다시 선택해주세요." : "후보 주소를 선택하면 지도 표시용 좌표가 함께 저장됩니다.")}
+        {message || (hasCoordinates ? "저장된 좌표를 사용합니다. 주소를 바꾸면 후보 주소를 다시 선택해주세요." : "후보 주소를 선택하면 지도에 위치가 표시돼요. 검색 결과가 없으면 입력한 주소 그대로 저장됩니다.")}
       </p>
     </div>
   );

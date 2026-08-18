@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin as requireAdminSession } from "@/lib/auth/guards";
 import { getKoreaTodayString } from "@/lib/campaign-lifecycle";
+import { logEvent } from "@/lib/events";
 import { buildSmsText } from "@/lib/messages";
 import { PUBLIC_SITE_URL } from "@/lib/site";
 import { isSmsConfigured, sendSms } from "@/lib/sms";
@@ -88,7 +89,11 @@ export async function approveCampaign(formData: FormData) {
     .update({ status: "recruiting", recruit_start: campaign.recruit_start ?? today })
     .eq("id", id);
 
-  if (error) redirect(backTo(formData, "/admin/campaigns", { error: error.message }));
+  if (error) {
+    logEvent("admin.campaign_approve_failed", { error: error.message, campaignId: id });
+    redirect(backTo(formData, "/admin/campaigns", { error: error.message }));
+  }
+  logEvent("admin.campaign_approved", { campaignId: id });
   revalidatePath("/admin", "layout");
   revalidatePath("/campaigns");
   revalidatePath(`/campaigns/${id}`);
@@ -104,7 +109,11 @@ export async function rejectCampaign(formData: FormData) {
     target_idempotency_key: `admin_reject:${id}`
   });
 
-  if (error) redirect(backTo(formData, "/admin/campaigns", { error: error.message }));
+  if (error) {
+    logEvent("admin.campaign_reject_failed", { error: error.message, campaignId: id });
+    redirect(backTo(formData, "/admin/campaigns", { error: error.message }));
+  }
+  logEvent("admin.campaign_rejected", { campaignId: id, reason });
   revalidatePath("/admin", "layout");
   revalidatePath("/business/dashboard");
   redirect(backTo(formData, "/admin/campaigns", { message: "캠페인을 반려하고 예약 포인트를 반환했습니다." }));
@@ -127,7 +136,11 @@ export async function adjustBusinessPoints(formData: FormData) {
     target_idempotency_key: `admin_adjust:${randomUUID()}`
   });
 
-  if (error) redirect(backTo(formData, "/admin/campaigns", { error: error.message }));
+  if (error) {
+    logEvent("admin.points_adjust_failed", { error: error.message, businessId, points });
+    redirect(backTo(formData, "/admin/campaigns", { error: error.message }));
+  }
+  logEvent("admin.points_adjusted", { businessId, points, reason });
   revalidatePath("/admin", "layout");
   revalidatePath("/business/dashboard");
   revalidatePath("/business/points");
@@ -142,6 +155,7 @@ export async function requestCampaignRevision(formData: FormData) {
     admin_memo: String(formData.get("admin_memo") ?? "운영자 수정 요청")
   }).eq("id", id);
   if (error) redirect(backTo(formData, "/admin/campaigns", { error: error.message }));
+  logEvent("admin.campaign_revision_requested", { campaignId: id });
   revalidatePath("/admin", "layout");
 }
 
@@ -346,6 +360,7 @@ export async function approveSubmission(formData: FormData) {
 
   if (error) redirect(backTo(formData, "/admin/submissions", { error: error.message }));
 
+  logEvent("admin.submission_approved", { submissionId });
   await supabase.from("collaborations").update({ status: "completed" }).eq("id", submission.collaboration_id);
   const collaboration = asRelation(submission.collaborations);
   if (collaboration?.campaign_id) {
@@ -380,6 +395,7 @@ export async function requestSubmissionRevision(formData: FormData) {
     .eq("id", submissionId);
 
   if (error) redirect(backTo(formData, "/admin/submissions", { error: error.message }));
+  logEvent("admin.submission_revision_requested", { submissionId });
   await supabase.from("collaborations").update({ status: "revision_requested" }).eq("id", submission.collaboration_id);
   const collaboration = asRelation(submission.collaborations);
   if (collaboration?.campaign_id) {
@@ -457,7 +473,11 @@ export async function releaseCampaignReservation(formData: FormData) {
     target_reason: reason || "관리자 예약 해제"
   });
 
-  if (error) redirect(backTo(formData, "/admin/points", { error: error.message }));
+  if (error) {
+    logEvent("admin.reservation_release_failed", { error: error.message, campaignId });
+    redirect(backTo(formData, "/admin/points", { error: error.message }));
+  }
+  logEvent("admin.reservation_released", { campaignId, releasedPoints: Number(releasedPoints ?? 0), reason });
   revalidatePath("/admin", "layout");
   revalidatePath("/business/points");
   revalidatePath("/business/dashboard");
@@ -543,7 +563,11 @@ export async function sendAdminMessage(formData: FormData) {
   }
 
   revalidatePath("/admin", "layout");
-  if (sendError) redirect(backTo(formData, "/admin/messages", { error: sendError }));
+  if (sendError) {
+    logEvent("admin.message_send_failed", { error: sendError, kind, receiverCount: numbers.length });
+    redirect(backTo(formData, "/admin/messages", { error: sendError }));
+  }
+  logEvent("admin.message_sent", { kind, receiverCount: numbers.length });
   redirect(backTo(formData, "/admin/messages", { messageSent: String(numbers.length) }));
 }
 
@@ -671,7 +695,11 @@ export async function setMemberRole(formData: FormData) {
     new_role: role
   });
 
-  if (error) redirect(backTo(formData, "/admin/members", { error: error.message }));
+  if (error) {
+    logEvent("admin.member_role_change_failed", { error: error.message, targetUserId: userId, role });
+    redirect(backTo(formData, "/admin/members", { error: error.message }));
+  }
+  logEvent("admin.member_role_changed", { targetUserId: userId, role });
   revalidatePath("/admin", "layout");
   redirect(backTo(formData, "/admin/members", {
     message: role === "business"
@@ -692,7 +720,11 @@ export async function setMemberAdmin(formData: FormData) {
     make_admin: makeAdmin
   });
 
-  if (error) redirect(backTo(formData, "/admin/members", { error: error.message }));
+  if (error) {
+    logEvent("admin.member_admin_change_failed", { error: error.message, targetUserId: userId, makeAdmin });
+    redirect(backTo(formData, "/admin/members", { error: error.message }));
+  }
+  logEvent("admin.member_admin_changed", { targetUserId: userId, makeAdmin });
   revalidatePath("/admin", "layout");
   redirect(backTo(formData, "/admin/members", { message: makeAdmin ? "관리자 권한을 부여했습니다." : "관리자 권한을 해제했습니다." }));
 }
@@ -707,7 +739,11 @@ export async function setMemberStatus(formData: FormData) {
     new_status: status
   });
 
-  if (error) redirect(backTo(formData, "/admin/members", { error: error.message }));
+  if (error) {
+    logEvent("admin.member_status_change_failed", { error: error.message, targetUserId: userId, status });
+    redirect(backTo(formData, "/admin/members", { error: error.message }));
+  }
+  logEvent("admin.member_status_changed", { targetUserId: userId, status });
   revalidatePath("/admin", "layout");
   redirect(backTo(formData, "/admin/members", { message: status === "suspended" ? "계정을 정지했습니다." : "계정 정지를 해제했습니다." }));
 }
@@ -722,7 +758,11 @@ export async function setMemberVerification(formData: FormData) {
     new_status: verification
   });
 
-  if (error) redirect(backTo(formData, "/admin/members", { error: error.message }));
+  if (error) {
+    logEvent("admin.member_verification_change_failed", { error: error.message, targetUserId: userId, verification });
+    redirect(backTo(formData, "/admin/members", { error: error.message }));
+  }
+  logEvent("admin.member_verification_changed", { targetUserId: userId, verification });
   revalidatePath("/admin", "layout");
   redirect(backTo(formData, "/admin/members", { message: verification === "verified" ? "인증을 승인했습니다." : verification === "rejected" ? "인증을 반려했습니다." : "인증 상태를 변경했습니다." }));
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
-import { FieldLabel, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
+import { useActionState, useState, type ChangeEvent } from "react";
+import { FieldError, FieldLabel, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
+import { replaceHeicSelection } from "@/lib/heic";
 import type { CouponFormState } from "./actions";
 import type { Coupon } from "@/lib/coupons";
 
@@ -11,6 +12,17 @@ export function CouponForm({ action, coupon, error }: { action: SaveAction; coup
   const [state, submit] = useActionState(action, error ? { error, values: {} } : null);
   // 저장에 실패하면 돌려받은 제출값을 우선 사용해 입력 내용을 그대로 남긴다.
   const kept = (name: string, fallback = "") => state?.values?.[name] || fallback;
+  // 아이폰 사진(HEIC)은 제출 전에 JPEG로 바꾼다.
+  const [heicError, setHeicError] = useState("");
+
+  async function handleCoverImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const { error: conversionError } = await replaceHeicSelection(input, file);
+    setHeicError(conversionError);
+  }
 
   return (
     <form action={submit} className="space-y-7">
@@ -33,8 +45,9 @@ export function CouponForm({ action, coupon, error }: { action: SaveAction; coup
         <FormField name="total_quantity" label="총 발행 수량" type="number" min={coupon?.claimedQuantity ?? 1} max={100000} required defaultValue={kept("total_quantity", String(coupon?.totalQuantity ?? 100))} suffix="장" />
         <label>
           <FieldLabel>대표 이미지</FieldLabel>
-          <input name="cover_image" type="file" accept="image/jpeg,image/png,image/webp" className={fieldControlClassName(undefined, "file:mr-4 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-xs file:font-black file:text-primary")} />
-          <p className="mt-2 text-xs text-gray-400">JPG, PNG, WEBP · 최대 10MB · 미등록 시 가게 대표 이미지 사용</p>
+          <input name="cover_image" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={handleCoverImageChange} className={fieldControlClassName(undefined, "file:mr-4 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-xs file:font-black file:text-primary")} />
+          <p className="mt-2 text-xs text-gray-400">JPG, PNG, WEBP · 최대 10MB · 미등록 시 가게 대표 이미지 사용 · 아이폰 사진(HEIC)은 자동 변환</p>
+          <FieldError>{heicError}</FieldError>
         </label>
         <div className="sm:col-span-2">
           <label>

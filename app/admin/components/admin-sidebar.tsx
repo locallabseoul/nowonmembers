@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BellRing, ClipboardCheck, CreditCard, FileCheck, LayoutDashboard, Megaphone, Send, ShieldCheck, Ticket, Users } from "lucide-react";
+import { BellRing, ClipboardCheck, CreditCard, FileCheck, LayoutDashboard, Megaphone, ScrollText, Send, ShieldCheck, Ticket, Users } from "lucide-react";
 
 // operator-sidebar와 같은 모양새. 다만 관리자 페이지는 레이아웃이 사이드바를 한 번만
 // 렌더링하므로, 페이지마다 active를 넘기는 대신 경로로 판단한다.
@@ -15,7 +15,8 @@ const menuItems = [
   { href: "/admin/points", label: "포인트·정산", icon: CreditCard, exact: false },
   { href: "/admin/notices", label: "공지 관리", icon: Megaphone, exact: false },
   { href: "/admin/messages", label: "문자 발송", icon: Send, exact: false },
-  { href: "/admin/notifications", label: "자동 알림", icon: BellRing, exact: false }
+  { href: "/admin/notifications", label: "자동 알림", icon: BellRing, exact: false },
+  { href: "/admin/events", label: "이벤트 로그", icon: ScrollText, exact: false }
 ];
 
 function navClassName(isActive: boolean) {

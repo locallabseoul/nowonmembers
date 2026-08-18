@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState, type ChangeEvent } from "react";
 import { CircleAlert, Lock } from "lucide-react";
 import { emptyFormState } from "@/lib/form-errors";
 import { FieldError, FieldLabel, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
@@ -12,6 +12,7 @@ import {
   campaignImageAccept,
   campaignMissionOptions
 } from "@/lib/campaign-options";
+import { HEIC_CONVERSION_FAILED_MESSAGE, convertHeicToJpeg, isHeicFile, replaceHeicSelection } from "@/lib/heic";
 import { formatPoints } from "@/lib/points";
 import { updateCampaign } from "./actions";
 
@@ -48,6 +49,38 @@ export function CampaignEditForm({ campaign }: { campaign: CampaignEditValues })
   const fieldErrors = state.fieldErrors ?? {};
   const values = state.values ?? {};
   const isRevision = campaign.status === "revision_requested";
+  // 아이폰 사진(HEIC)은 제출 전에 JPEG로 바꾼다. 변환 실패 안내는 서버 검증 오류와
+  // 별도로 관리해야 다음 제출 결과에 묻히지 않는다.
+  const [heicErrors, setHeicErrors] = useState<{ cover?: string; reference?: string }>({});
+
+  async function handleCoverImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const { error } = await replaceHeicSelection(input, file);
+    setHeicErrors((current) => ({ ...current, cover: error }));
+  }
+
+  async function handleReferenceImagesChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const files = Array.from(input.files ?? []);
+    if (!files.some(isHeicFile)) {
+      setHeicErrors((current) => ({ ...current, reference: "" }));
+      return;
+    }
+
+    try {
+      const converted = await Promise.all(files.map((file) => (isHeicFile(file) ? convertHeicToJpeg(file) : Promise.resolve(file))));
+      const transfer = new DataTransfer();
+      converted.forEach((file) => transfer.items.add(file));
+      input.files = transfer.files;
+      setHeicErrors((current) => ({ ...current, reference: "" }));
+    } catch {
+      input.value = "";
+      setHeicErrors((current) => ({ ...current, reference: HEIC_CONVERSION_FAILED_MESSAGE }));
+    }
+  }
 
   return (
     <form action={formAction} className="space-y-6">
@@ -246,10 +279,11 @@ export function CampaignEditForm({ campaign }: { campaign: CampaignEditValues })
             name="cover_image"
             type="file"
             accept={campaignImageAccept}
+            onChange={handleCoverImageChange}
             className="block w-full text-sm text-slate-500 file:mr-4 file:rounded-lg file:border-0 file:bg-primary/10 file:px-4 file:py-2 file:font-bold file:text-primary"
           />
           <p className="mt-2 text-xs text-slate-500">새로 선택하지 않으면 기존 이미지가 유지됩니다.</p>
-          <FieldError>{fieldErrors.cover_image}</FieldError>
+          <FieldError>{heicErrors.cover || fieldErrors.cover_image}</FieldError>
         </div>
 
         <div>
@@ -259,10 +293,11 @@ export function CampaignEditForm({ campaign }: { campaign: CampaignEditValues })
             type="file"
             multiple
             accept={campaignImageAccept}
+            onChange={handleReferenceImagesChange}
             className="block w-full text-sm text-slate-500 file:mr-4 file:rounded-lg file:border-0 file:bg-primary/10 file:px-4 file:py-2 file:font-bold file:text-primary"
           />
           <p className="mt-2 text-xs text-slate-500">새로 선택하면 기존 참고 사진을 전부 대체합니다.</p>
-          <FieldError>{fieldErrors.reference_images}</FieldError>
+          <FieldError>{heicErrors.reference || fieldErrors.reference_images}</FieldError>
         </div>
 
         <label className="flex cursor-pointer items-center gap-2.5 text-sm font-bold text-charcoal">
