@@ -1,7 +1,6 @@
-// 토스페이먼츠 가맹 심사가 아직 승인되지 않아 실결제를 열 수 없다 (2026-08-05).
-// 승인이 나면 true로 바꾸고 배포한다. 화면의 준비중 안내와 서버의 주문 생성
-// 차단이 모두 이 값을 본다.
-export const POINTS_PAYMENT_OPEN = false;
+// 토스페이먼츠 가맹 재심사에서 심사자가 카드 결제창까지 확인할 수 있도록
+// 화면과 서버 주문 생성을 함께 연다 (2026-08-18).
+export const POINTS_PAYMENT_OPEN = true;
 
 export const POINTS_PER_RECRUIT = 5_000;
 export const POINT_CHARGE_OPTIONS = [
