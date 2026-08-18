@@ -1,6 +1,6 @@
 begin;
 
-select plan(15);
+select plan(18);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -38,6 +38,39 @@ insert into auth.users (
     '{"role":"creator","nickname":"주민테스트관리자"}',
     now(), now()
   );
+
+insert into auth.users (
+  id, instance_id, aud, role, phone, encrypted_password, phone_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+) values (
+  'c0000000-0000-4000-8000-000000000005',
+  '00000000-0000-0000-0000-000000000000',
+  'authenticated', 'authenticated', '+821000000005', '', null,
+  '{"provider":"phone","providers":["phone"]}',
+  '{"role":"resident","nickname":"인증대기주민","name":"대기주민","phone":"01000000005","age_14_plus_confirmed":"true","terms_version":"2026-08-18-v2","privacy_version":"2026-08-18-v2"}',
+  now(), now()
+);
+
+select is(
+  (select count(*)::integer from public.profiles where id = 'c0000000-0000-4000-8000-000000000005'),
+  0,
+  'unconfirmed phone signup defers profile creation'
+);
+
+update auth.users
+set phone_confirmed_at = now(), updated_at = now()
+where id = 'c0000000-0000-4000-8000-000000000005';
+
+select is(
+  (select nickname from public.profiles where id = 'c0000000-0000-4000-8000-000000000005'),
+  '인증대기주민',
+  'phone confirmation creates the resident profile with its nickname'
+);
+select is(
+  (select count(*)::integer from public.legal_acceptances where user_id = 'c0000000-0000-4000-8000-000000000005'),
+  2,
+  'phone confirmation records signup legal acceptances'
+);
 
 update public.profiles
 set marketing_opt_in = true, marketing_opt_in_at = now()

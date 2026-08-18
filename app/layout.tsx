@@ -54,8 +54,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
 async function Header() {
   const { user, profile } = await getCurrentSessionProfile();
   const preview = await getReadOnlyPreview();
-  const displayName = preview?.nickname || profile?.nickname || user?.email?.split("@")[0] || user?.phone || "내 계정";
-  const role = preview?.role ?? profile?.role;
+  const authNickname = typeof user?.user_metadata?.nickname === "string" ? user.user_metadata.nickname.trim() : "";
+  const authRole = typeof user?.user_metadata?.role === "string" && ["business", "creator", "resident"].includes(user.user_metadata.role)
+    ? user.user_metadata.role
+    : undefined;
+  const displayName = preview?.nickname || profile?.nickname || authNickname || user?.email?.split("@")[0] || user?.phone || "내 계정";
+  const role = preview?.role ?? profile?.role ?? authRole;
   const isLoggedIn = Boolean(user);
   const accountPath = getAccountPath(role);
   const profileEditPath = getProfileEditPath(role);
@@ -106,6 +110,7 @@ async function Header() {
 function getProfileEditPath(role?: string | null) {
   if (role === "business") return "/business/dashboard?profile=edit";
   if (role === "creator") return "/creator/profile";
+  if (role === "resident") return "/account/profile";
   return null;
 }
 

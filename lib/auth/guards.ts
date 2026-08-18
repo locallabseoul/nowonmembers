@@ -1,19 +1,81 @@
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import type { UserRole } from "@/lib/types";
+import { normalizeKoreanAuthPhone } from "@/lib/auth/phone";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getReadOnlyPreview } from "@/lib/auth/read-only-preview";
 
 export function getAccountPath(role?: UserRole | string | null) {
   if (role === "business") return "/business/dashboard";
   if (role === "creator") return "/creator/dashboard";
-  if (role === "resident") return "/my/coupons";
+  if (role === "resident") return "/my";
   return "/";
 }
 
 function withError(path: string, message: string) {
   const separator = path.includes("?") ? "&" : "?";
   return `${path}${separator}error=${encodeURIComponent(message)}`;
+}
+
+function metadataText(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+async function repairMissingSignupProfile(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  user: { id: string; email?: string | null; phone?: string | null; user_metadata?: Record<string, unknown> }
+) {
+  const metadata = user.user_metadata ?? {};
+  const rawRole = metadataText(metadata, "role");
+  if (rawRole !== "resident" && rawRole !== "creator" && rawRole !== "business") return null;
+
+  const marketingOptIn = metadataText(metadata, "marketing_opt_in") === "true";
+  const age14Plus = metadataText(metadata, "age_14_plus_confirmed") === "true";
+  const phone = metadataText(metadata, "phone") || normalizeKoreanAuthPhone(user.phone);
+  const { data: repairedProfile, error } = await supabase
+    .from("profiles")
+    .insert({
+      id: user.id,
+      email: metadataText(metadata, "email") || user.email || null,
+      role: rawRole,
+      nickname: metadataText(metadata, "nickname") || null,
+      name: metadataText(metadata, "name") || null,
+      phone: phone || null,
+      business_registration_number: metadataText(metadata, "business_registration_number") || null,
+      referral_code: metadataText(metadata, "referral_code") || null,
+      verification_status: rawRole === "resident" ? "verified" : "pending",
+      status: "active",
+      is_admin: false,
+      marketing_opt_in: marketingOptIn,
+      marketing_opt_in_at: marketingOptIn ? new Date().toISOString() : null,
+      age_14_plus_confirmed_at: age14Plus ? new Date().toISOString() : null
+    })
+    .select("id,email,role,nickname,verification_status,status,is_admin")
+    .single();
+
+  if (error) return null;
+
+  const termsVersion = metadataText(metadata, "terms_version");
+  const privacyVersion = metadataText(metadata, "privacy_version");
+  await Promise.all([
+    termsVersion
+      ? supabase.rpc("accept_legal_document", {
+          target_document_type: "terms",
+          target_version: termsVersion,
+          acceptance_source: "signup"
+        })
+      : Promise.resolve(),
+    privacyVersion
+      ? supabase.rpc("accept_legal_document", {
+          target_document_type: "privacy",
+          target_version: privacyVersion,
+          acceptance_source: "signup"
+        })
+      : Promise.resolve()
+  ]);
+
+  return repairedProfile;
 }
 
 export const getCurrentSessionProfile = cache(async function getCurrentSessionProfile() {
@@ -32,11 +94,13 @@ export const getCurrentSessionProfile = cache(async function getCurrentSessionPr
     return { supabase, user: null, profile: null };
   }
 
-  const { data: profile } = await supabase
+  const { data: existingProfile } = await supabase
     .from("profiles")
     .select("id,email,role,nickname,verification_status,status,is_admin")
     .eq("id", user.id)
     .maybeSingle();
+
+  const profile = existingProfile ?? await repairMissingSignupProfile(supabase, user);
 
   return { supabase, user, profile };
 });

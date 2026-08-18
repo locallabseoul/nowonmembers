@@ -4,15 +4,17 @@ import { redirect } from "next/navigation";
 import { getAccountPath } from "@/lib/auth/guards";
 import { track } from "@vercel/analytics/server";
 import { normalizePhoneNumber, toKoreanE164Phone } from "@/lib/auth/phone";
+import { isTestPhoneBypassAllowed } from "@/lib/auth/test-phone-bypass";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal";
 import { collectFieldErrors, fieldError, hasErrors, keepValues, type FormState } from "@/lib/form-errors";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type SignupRole = "business" | "creator" | "resident";
 
 function profilePathForRole(role: SignupRole) {
   if (role === "business") return "/business/dashboard";
-  if (role === "resident") return "/my/coupons";
+  if (role === "resident") return "/my";
   return "/creator/profile";
 }
 
@@ -248,24 +250,70 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
 
   if (hasErrors(unavailable)) return { ...unavailable, values: kept };
 
+  const signupMetadata = {
+    role,
+    nickname,
+    name,
+    email,
+    phone,
+    business_registration_number: businessRegistrationNumber,
+    referral_code: referralCode,
+    marketing_opt_in: marketingOptIn ? "true" : "false",
+    age_14_plus_confirmed: age14Plus ? "true" : "false",
+    terms_version: TERMS_VERSION,
+    privacy_version: PRIVACY_VERSION
+  };
+
+  if (isTestPhoneBypassAllowed(phone)) {
+    let adminSupabase: ReturnType<typeof createSupabaseAdminClient>;
+
+    try {
+      adminSupabase = createSupabaseAdminClient();
+    } catch {
+      return {
+        formError: "테스트 가입 설정을 확인해주세요. 서버 전용 Supabase 키가 필요합니다.",
+        values: kept
+      };
+    }
+
+    const { error: createError } = await adminSupabase.auth.admin.createUser({
+      phone: authPhone,
+      password,
+      phone_confirm: true,
+      user_metadata: signupMetadata
+    });
+
+    if (createError) {
+      const duplicateMessage = getDuplicateSignupMessage(createError);
+      const field = duplicateMessage ? getDuplicateSignupField(duplicateMessage, nicknameField) : null;
+
+      return field
+        ? { ...fieldError(field, duplicateMessage as string), values: kept }
+        : { formError: duplicateMessage ?? "테스트 회원가입을 처리하지 못했습니다.", values: kept };
+    }
+
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      phone: authPhone,
+      password
+    });
+
+    if (signInError || !signInData.user) {
+      return {
+        formError: "테스트 계정은 생성되었지만 로그인하지 못했습니다. 같은 번호와 비밀번호로 로그인해주세요.",
+        values: kept
+      };
+    }
+
+    await track("signup_completed", { role, testPhoneBypass: true }).catch(() => {});
+    redirect(profilePathForRole(role));
+  }
+
   const { data, error } = await supabase.auth.signUp({
     phone: authPhone,
     password,
     options: {
       channel: "sms",
-      data: {
-        role,
-        nickname,
-        name,
-        email,
-        phone,
-        business_registration_number: businessRegistrationNumber,
-        referral_code: referralCode,
-        marketing_opt_in: marketingOptIn ? "true" : "false",
-        age_14_plus_confirmed: age14Plus ? "true" : "false",
-        terms_version: TERMS_VERSION,
-        privacy_version: PRIVACY_VERSION
-      }
+      data: signupMetadata
     }
   });
 
