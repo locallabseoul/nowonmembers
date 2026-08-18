@@ -7,6 +7,7 @@ import { Badge } from "@/app/components/ui";
 import { getKoreaTodayString } from "@/lib/campaign-lifecycle";
 import { getCouponBenefitLabel, getMyCouponClaims, type CouponClaim } from "@/lib/coupons";
 import { requireUser } from "@/lib/auth/guards";
+import { getReadOnlyPreview } from "@/lib/auth/read-only-preview";
 import { cancelCouponClaim, redeemMyCouponClaim } from "./actions";
 
 function claimViewStatus(claim: CouponClaim) {
@@ -24,8 +25,12 @@ const statusInfo = {
 };
 
 export default async function MyCouponsPage({ searchParams }: { searchParams: Promise<{ error?: string; message?: string; claim?: string }> }) {
-  const [{ error, message, claim: errorClaim }, { user }] = await Promise.all([searchParams, requireUser("/my/coupons")]);
-  const claims = await getMyCouponClaims(user.id);
+  const [{ error, message, claim: errorClaim }, { user }, preview] = await Promise.all([
+    searchParams,
+    requireUser("/my/coupons"),
+    getReadOnlyPreview()
+  ]);
+  const claims = await getMyCouponClaims(preview?.targetId ?? user.id);
 
   return (
     <main className="bg-[#F8F9FA] px-4 py-12 sm:px-6 lg:px-8">
@@ -46,8 +51,8 @@ export default async function MyCouponsPage({ searchParams }: { searchParams: Pr
               const viewStatus = claimViewStatus(claim);
               const info = statusInfo[viewStatus];
               const StatusIcon = info.icon;
-              const canCancel = claim.status === "issued";
-              const canEnterCode = viewStatus === "available" && getKoreaTodayString() >= claim.coupon.startDate && claim.coupon.redemptionCodeConfigured;
+              const canCancel = !preview && claim.status === "issued";
+              const canEnterCode = !preview && viewStatus === "available" && getKoreaTodayString() >= claim.coupon.startDate && claim.coupon.redemptionCodeConfigured;
               const locked = Boolean(claim.redemptionLockedUntil && new Date(claim.redemptionLockedUntil).getTime() > Date.now());
               return (
                 <article key={claim.id} className="overflow-hidden rounded-[20px] border border-slate-100 bg-white shadow-sm">

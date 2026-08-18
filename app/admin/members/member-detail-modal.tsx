@@ -77,7 +77,9 @@ export function MemberDetailModal({ member, closeHref }: { member: AdminMemberDe
                 {member.nickname || member.business?.businessName || "(이름 없음)"}
               </h2>
               <span className="mt-1 flex flex-wrap gap-1">
-                <Badge tone={member.role === "business" ? "blue" : "green"}>{member.role === "business" ? "가게" : "크리에이터"}</Badge>
+                <Badge tone={member.role === "business" ? "blue" : member.role === "resident" ? "gray" : "green"}>
+                  {member.role === "business" ? "가게" : member.role === "resident" ? "주민" : "크리에이터"}
+                </Badge>
                 {member.isAdmin ? <Badge tone="amber">관리자</Badge> : null}
                 {member.status === "suspended" ? <Badge tone="red">정지됨</Badge> : null}
               </span>

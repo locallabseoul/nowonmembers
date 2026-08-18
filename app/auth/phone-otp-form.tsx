@@ -13,7 +13,7 @@ export function PhoneOtpForm({
   source = "",
   submitLabel
 }: {
-  role: "creator" | "business";
+  role: "creator" | "business" | "resident";
   phone: string;
   type?: "sms" | "phone_change";
   next?: string;

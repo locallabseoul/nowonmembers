@@ -10,8 +10,10 @@ function getSafeNext(next?: string) {
   return next;
 }
 
-function normalizeRole(value?: string): "creator" | "business" {
-  return value === "business" ? "business" : "creator";
+function normalizeRole(value?: string): "creator" | "business" | "resident" {
+  if (value === "business") return "business";
+  if (value === "resident") return "resident";
+  return "creator";
 }
 
 export default async function VerifyPhonePage({

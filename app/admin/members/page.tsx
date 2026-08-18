@@ -11,6 +11,7 @@ const roleTabs = [
   ["", "전체"],
   ["business", "가게"],
   ["creator", "크리에이터"],
+  ["resident", "주민"],
   ["admin", "관리자"]
 ] as const;
 
@@ -24,11 +25,13 @@ const verificationTabs = [
 function roleLabel(role: string) {
   if (role === "business") return "가게";
   if (role === "creator") return "크리에이터";
+  if (role === "resident") return "주민";
   return role;
 }
 
-function roleTone(role: string): "blue" | "green" {
+function roleTone(role: string): "blue" | "green" | "gray" {
   if (role === "business") return "blue";
+  if (role === "resident") return "gray";
   return "green";
 }
 
@@ -202,7 +205,7 @@ export default async function AdminMembersPage({ searchParams }: { searchParams:
                       {member.status === "suspended" ? <Badge tone="red">정지됨</Badge> : null}
                     </p>
                     <p className="mt-0.5 text-xs text-gray-400">{member.email || "이메일 없음"}{member.businessName && member.nickname !== member.businessName ? ` · ${member.businessName}` : ""}</p>
-                    {member.hasRoleProfile ? null : (
+                    {member.role === "resident" || member.hasRoleProfile ? null : (
                       <p className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-amber-600">
                         <AlertTriangle size={12} />
                         {member.role === "business" ? "가게 프로필 미작성" : "크리에이터 프로필 미작성"}

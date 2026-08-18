@@ -8,7 +8,7 @@ export type ReadOnlyPreview = {
   adminId: string;
   targetId: string;
   nickname: string;
-  role: "business" | "creator";
+  role: "business" | "creator" | "resident";
 };
 
 export const getReadOnlyPreview = cache(async (): Promise<ReadOnlyPreview | null> => {
@@ -25,12 +25,12 @@ export const getReadOnlyPreview = cache(async (): Promise<ReadOnlyPreview | null
   ]);
 
   if (!admin?.is_admin || admin.status !== "active") return null;
-  if (!target || target.status !== "active" || (target.role !== "business" && target.role !== "creator")) return null;
+  if (!target || target.status !== "active" || !["business", "creator", "resident"].includes(target.role)) return null;
 
   return {
     adminId: admin.id,
     targetId: target.id,
     nickname: target.nickname || "이름 없는 회원",
-    role: target.role
+    role: target.role as ReadOnlyPreview["role"]
   };
 });

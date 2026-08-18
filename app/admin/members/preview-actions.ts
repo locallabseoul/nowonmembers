@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { requireAdmin } from "@/lib/auth/guards";
+import { getAccountPath, requireAdmin } from "@/lib/auth/guards";
 import { READ_ONLY_PREVIEW_COOKIE } from "@/lib/auth/read-only-preview";
 
 export async function startReadOnlyPreview(formData: FormData) {
@@ -14,7 +14,7 @@ export async function startReadOnlyPreview(formData: FormData) {
     .eq("id", targetId)
     .maybeSingle();
 
-  if (!target || target.id === user.id || target.status !== "active" || (target.role !== "business" && target.role !== "creator")) {
+  if (!target || target.id === user.id || target.status !== "active" || !["business", "creator", "resident"].includes(target.role)) {
     redirect("/admin/members?error=" + encodeURIComponent("미리보기할 수 없는 회원입니다."));
   }
 
@@ -25,7 +25,7 @@ export async function startReadOnlyPreview(formData: FormData) {
     path: "/",
     maxAge: 60 * 30
   });
-  redirect(target.role === "business" ? "/business/dashboard" : "/creator/dashboard");
+  redirect(getAccountPath(target.role));
 }
 
 export async function stopReadOnlyPreview() {

@@ -4,11 +4,16 @@ import { redirect } from "next/navigation";
 import { getAccountPath } from "@/lib/auth/guards";
 import { track } from "@vercel/analytics/server";
 import { normalizePhoneNumber, toKoreanE164Phone } from "@/lib/auth/phone";
+import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal";
 import { collectFieldErrors, fieldError, hasErrors, keepValues, type FormState } from "@/lib/form-errors";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-function profilePathForRole(role: "business" | "creator") {
-  return role === "business" ? "/business/dashboard" : "/creator/profile";
+type SignupRole = "business" | "creator" | "resident";
+
+function profilePathForRole(role: SignupRole) {
+  if (role === "business") return "/business/dashboard";
+  if (role === "resident") return "/my/coupons";
+  return "/creator/profile";
 }
 
 function getSafeNext(next: string | null) {
@@ -19,7 +24,7 @@ function getSafeNext(next: string | null) {
   return next;
 }
 
-function getSignupPhoneVerifyRedirect(role: "business" | "creator", phone: string, message: string) {
+function getSignupPhoneVerifyRedirect(role: SignupRole, phone: string, message: string) {
   const params = new URLSearchParams({
     role,
     verify: "phone",
@@ -86,8 +91,9 @@ function getUserMetadataString(metadata: Record<string, unknown> | undefined, ke
   return typeof value === "string" ? value.trim() : "";
 }
 
-function getSignupRole(metadata: Record<string, unknown> | undefined, fallback: "business" | "creator") {
-  return getUserMetadataString(metadata, "role") === "business" ? "business" : fallback;
+function getSignupRole(metadata: Record<string, unknown> | undefined, fallback: SignupRole): SignupRole {
+  const role = getUserMetadataString(metadata, "role");
+  return role === "business" || role === "creator" || role === "resident" ? role : fallback;
 }
 
 function getAuthOtpErrorMessage(error: { message?: string; status?: number } | null | undefined) {
@@ -156,11 +162,11 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
   const rawRole = String(formData.get("role") ?? "");
   // 고르지 않은 채로 넘어오면 크리에이터로 채우지 않는다. 사장님이 회원 유형을
   // 지나쳐 크리에이터로 가입되는 일이 반복됐다.
-  if (rawRole !== "business" && rawRole !== "creator") {
+  if (rawRole !== "business" && rawRole !== "creator" && rawRole !== "resident") {
     return { formError: "회원 유형을 선택해주세요." };
   }
 
-  const role: "business" | "creator" = rawRole;
+  const role: SignupRole = rawRole;
   const isBusiness = role === "business";
   const nicknameField = isBusiness ? "business_name" : "nickname";
   const nameField = isBusiness ? "manager_name" : "name";
@@ -176,6 +182,7 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
     : null;
   const agreedTerms = formData.get("agreement_terms") === "on";
   const agreedPrivacy = formData.get("agreement_privacy") === "on";
+  const age14Plus = formData.get("age_14_plus") === "on";
   const marketingOptIn = formData.get("agreement_marketing") === "on";
   // 비밀번호는 돌려주지 않는다. 다시 입력받는다.
   const kept = keepValues(formData, ["email", "phone", nicknameField, nameField, "business_registration_number", "referral_code"]);
@@ -201,7 +208,11 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
           ? "사업자등록번호를 정확히 입력해주세요."
           : null
       : null,
-    agreement: !agreedTerms || !agreedPrivacy ? "필수 약관에 동의해주세요." : null
+    agreement: !age14Plus
+      ? "만 14세 이상 확인이 필요합니다."
+      : !agreedTerms || !agreedPrivacy
+        ? "필수 약관에 동의해주세요."
+        : null
   });
 
   if (hasErrors(invalid) || !authPhone) return { ...invalid, values: kept };
@@ -250,7 +261,10 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
         phone,
         business_registration_number: businessRegistrationNumber,
         referral_code: referralCode,
-        marketing_opt_in: marketingOptIn ? "true" : "false"
+        marketing_opt_in: marketingOptIn ? "true" : "false",
+        age_14_plus_confirmed: age14Plus ? "true" : "false",
+        terms_version: TERMS_VERSION,
+        privacy_version: PRIVACY_VERSION
       }
     }
   });
@@ -274,10 +288,11 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
           phone,
           business_registration_number: businessRegistrationNumber,
           referral_code: referralCode,
-          verification_status: "pending",
+          verification_status: role === "resident" ? "verified" : "pending",
           status: "active",
           marketing_opt_in: marketingOptIn,
-          marketing_opt_in_at: marketingOptIn ? new Date().toISOString() : null
+          marketing_opt_in_at: marketingOptIn ? new Date().toISOString() : null,
+          age_14_plus_confirmed_at: new Date().toISOString()
         }, { onConflict: "id" });
 
         if (profileError) {
@@ -287,6 +302,23 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
           return field
             ? { ...fieldError(field, message as string), values: kept }
             : { formError: message ?? "가입 정보를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.", values: kept };
+        }
+
+        const [termsAcceptance, privacyAcceptance] = await Promise.all([
+          supabase.rpc("accept_legal_document", {
+            target_document_type: "terms",
+            target_version: TERMS_VERSION,
+            acceptance_source: "signup"
+          }),
+          supabase.rpc("accept_legal_document", {
+            target_document_type: "privacy",
+            target_version: PRIVACY_VERSION,
+            acceptance_source: "signup"
+          })
+        ]);
+
+        if (termsAcceptance.error || privacyAcceptance.error) {
+          return { formError: "약관 동의 이력을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.", values: kept };
         }
 
         redirect(profilePathForRole(role));
@@ -339,8 +371,12 @@ function getOtpVerifyErrorMessage(error: { message?: string; status?: number } |
 export async function verifyAuthPhoneOtp(_prevState: FormState, formData: FormData): Promise<FormState> {
   const phone = normalizePhone(String(formData.get("phone") ?? ""));
   const token = String(formData.get("token") ?? "").trim();
-  const rawRole = String(formData.get("role") ?? "creator");
-  const role: "business" | "creator" = rawRole === "business" ? "business" : "creator";
+  const rawRole = String(formData.get("role") ?? "resident");
+  if (rawRole !== "business" && rawRole !== "creator" && rawRole !== "resident") {
+    return { formError: "회원 유형을 확인할 수 없습니다. 회원가입을 처음부터 다시 진행해주세요." };
+  }
+  const role: SignupRole = rawRole;
+  const source = String(formData.get("source") ?? "");
   const rawType = String(formData.get("type") ?? "sms");
   const type: "sms" | "phone_change" = rawType === "phone_change" ? "phone_change" : "sms";
   const next = getSafeNext(String(formData.get("next") ?? "")) ?? profilePathForRole(role);
@@ -375,6 +411,10 @@ export async function verifyAuthPhoneOtp(_prevState: FormState, formData: FormDa
     const businessRegistrationNumber = getUserMetadataString(metadata, "business_registration_number") || null;
     const referralCode = getUserMetadataString(metadata, "referral_code") || null;
     const marketingOptIn = getUserMetadataString(metadata, "marketing_opt_in") === "true";
+    const age14PlusConfirmed = getUserMetadataString(metadata, "age_14_plus_confirmed") === "true";
+    if (source === "signup" && !age14PlusConfirmed) {
+      return { formError: "만 14세 이상 확인 기록이 없습니다. 회원가입을 처음부터 다시 진행해주세요." };
+    }
     const { error: profileError } = await supabase.from("profiles").upsert({
       id: data.user.id,
       email: verifiedEmail,
@@ -384,15 +424,35 @@ export async function verifyAuthPhoneOtp(_prevState: FormState, formData: FormDa
       phone: verifiedPhone,
       business_registration_number: businessRegistrationNumber,
       referral_code: referralCode,
-      verification_status: "pending",
+      verification_status: verifiedRole === "resident" ? "verified" : "pending",
       status: "active",
       marketing_opt_in: marketingOptIn,
-      marketing_opt_in_at: marketingOptIn ? new Date().toISOString() : null
+      marketing_opt_in_at: marketingOptIn ? new Date().toISOString() : null,
+      age_14_plus_confirmed_at: age14PlusConfirmed ? new Date().toISOString() : null
     }, { onConflict: "id" });
 
     if (profileError) {
       const message = getDuplicateSignupMessage(profileError);
       return { formError: message ?? "가입 정보를 저장하지 못했습니다. 잠시 후 다시 시도해주세요." };
+    }
+
+    const termsVersion = getUserMetadataString(metadata, "terms_version") || TERMS_VERSION;
+    const privacyVersion = getUserMetadataString(metadata, "privacy_version") || PRIVACY_VERSION;
+    const [termsAcceptance, privacyAcceptance] = await Promise.all([
+      supabase.rpc("accept_legal_document", {
+        target_document_type: "terms",
+        target_version: termsVersion,
+        acceptance_source: "signup"
+      }),
+      supabase.rpc("accept_legal_document", {
+        target_document_type: "privacy",
+        target_version: privacyVersion,
+        acceptance_source: "signup"
+      })
+    ]);
+
+    if (termsAcceptance.error || privacyAcceptance.error) {
+      return { formError: "약관 동의 이력을 저장하지 못했습니다. 잠시 후 다시 시도해주세요." };
     }
   }
 

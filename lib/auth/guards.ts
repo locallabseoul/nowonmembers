@@ -7,6 +7,7 @@ import { getReadOnlyPreview } from "@/lib/auth/read-only-preview";
 export function getAccountPath(role?: UserRole | string | null) {
   if (role === "business") return "/business/dashboard";
   if (role === "creator") return "/creator/dashboard";
+  if (role === "resident") return "/my/coupons";
   return "/";
 }
 
@@ -66,7 +67,7 @@ export async function requireRole(roles: UserRole | UserRole[], next = "/", allo
   const preview = await getReadOnlyPreview();
 
   if (preview && !allowReadOnlyPreview) {
-    redirect(withError(preview.role === "business" ? "/business/dashboard" : "/creator/dashboard", "읽기 전용 미리보기에서는 변경할 수 없습니다"));
+    redirect(withError(getAccountPath(preview.role), "읽기 전용 미리보기에서는 변경할 수 없습니다"));
   }
 
   const role = (preview?.role ?? session.profile?.role) as UserRole | undefined;

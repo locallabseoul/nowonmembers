@@ -25,13 +25,13 @@ export const metadata: Metadata = {
     default: "노원멤버스",
     template: "%s | 노원멤버스"
   },
-  description: "노원의 가게와 지역 크리에이터를 연결하는 로컬 콘텐츠 협업 플랫폼",
+  description: "노원의 가게·크리에이터·주민을 연결하고 동네 쿠폰 혜택을 제공하는 지역 플랫폼",
   openGraph: {
     type: "website",
     locale: "ko_KR",
     siteName: "노원멤버스",
     title: "노원멤버스",
-    description: "노원의 가게와 지역 크리에이터를 연결하는 로컬 콘텐츠 협업 플랫폼"
+    description: "노원의 가게·크리에이터·주민을 연결하고 동네 쿠폰 혜택을 제공하는 지역 플랫폼"
   }
 };
 
@@ -89,7 +89,7 @@ async function Header() {
                 </Link>
               ) : null}
               <NoticeMenu items={feedData.items} unreadCount={feedData.unreadCount} onOpen={preview ? undefined : markNotificationsRead} />
-              <AccountMenu displayName={displayName} role={role} isAdmin={!preview && Boolean(profile?.is_admin)} accountPath={accountPath} profileEditPath={preview ? null : profileEditPath} avatarUrl={avatarUrl} signOutAction={signOut} />
+              <AccountMenu displayName={displayName} role={role} isAdmin={!preview && Boolean(profile?.is_admin)} isReadOnly={Boolean(preview)} accountPath={accountPath} profileEditPath={preview ? null : profileEditPath} avatarUrl={avatarUrl} signOutAction={signOut} />
             </>
           ) : (
             <Link href="/auth" className="flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-primary hover:text-primary">
@@ -144,7 +144,7 @@ function Footer() {
         <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <span className="inline-block text-white"><Logo /></span>
-            <p className="mt-3 max-w-lg text-sm leading-6 text-slate-400">노원 지역 소상공인과 크리에이터를 연결하는 로컬 콘텐츠 캠페인 플랫폼입니다.</p>
+            <p className="mt-3 max-w-lg text-sm leading-6 text-slate-400">노원 지역의 가게·크리에이터·주민을 연결하고 캠페인과 동네 쿠폰 혜택을 제공하는 지역 플랫폼입니다.</p>
             <div className="mt-3 flex max-w-2xl flex-wrap gap-x-3 gap-y-1 text-xs leading-5 text-gray-500">
               <span>상호: {COMPANY_INFO.name}</span>
               <span>대표: {COMPANY_INFO.representative}</span>

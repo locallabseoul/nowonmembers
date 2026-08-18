@@ -14,6 +14,14 @@ values
   ('a0000000-0000-4000-8000-000000000010', 'a0000000-0000-4000-8000-000000000001', '쿠폰 테스트 가게', '테스트', 'verified', true),
   ('a0000000-0000-4000-8000-000000000011', 'a0000000-0000-4000-8000-000000000004', '다른 테스트 가게', '테스트', 'verified', true);
 
+insert into public.legal_acceptances (user_id, document_type, document_version, source)
+values (
+  'a0000000-0000-4000-8000-000000000003',
+  'terms',
+  '2026-08-18-v2',
+  'signup'
+);
+
 -- 배포 전에 승인·발급됐던 쿠폰을 재현한다. 승인 상태와 발급 건은 그대로 보존된다.
 insert into public.coupons (
   id, business_id, title, description, benefit_type, benefit_value, terms, total_quantity,

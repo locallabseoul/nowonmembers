@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { PhoneOtpForm } from "../phone-otp-form";
 
-type SignupRole = "creator" | "business";
+type SignupRole = "creator" | "business" | "resident";
 
 export function SignupPhoneVerification({ role, phone }: { role: SignupRole; phone: string }) {
   return (

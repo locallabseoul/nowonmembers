@@ -674,7 +674,11 @@ export async function setMemberRole(formData: FormData) {
   if (error) redirect(backTo(formData, "/admin/members", { error: error.message }));
   revalidatePath("/admin", "layout");
   redirect(backTo(formData, "/admin/members", {
-    message: role === "business" ? "가게 회원으로 변경했습니다. 본인이 로그인하면 가게 프로필을 등록하게 됩니다." : "크리에이터 회원으로 변경했습니다."
+    message: role === "business"
+      ? "가게 회원으로 변경했습니다. 본인이 로그인하면 가게 프로필을 등록하게 됩니다."
+      : role === "resident"
+        ? "주민 회원으로 변경했습니다."
+        : "크리에이터 회원으로 변경했습니다."
   }));
 }
 

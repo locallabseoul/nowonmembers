@@ -28,10 +28,10 @@ export function RoleAwareActionLink({
   unauthenticatedHref,
   roleMismatchMessage
 }: RoleAwareActionLinkProps) {
-  const targetHref = currentRole ? href : unauthenticatedHref ?? href;
+  const targetHref = currentRole === "resident" ? "/account/upgrade" : currentRole ? href : unauthenticatedHref ?? href;
 
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
-    if (!currentRole || currentRole === requiredRole) return;
+    if (!currentRole || currentRole === requiredRole || currentRole === "resident") return;
 
     event.preventDefault();
     window.alert(roleMismatchMessage ?? warningMessages[requiredRole]);

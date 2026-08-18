@@ -398,7 +398,16 @@ export default async function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-14 text-center">
             <h2 className="mb-3 text-3xl font-black text-charcoal">누구를 위한 서비스인가요?</h2>
-            <p className="text-slate-500">크리에이터와 가게·브랜드 모두를 위한 플랫폼입니다.</p>
+            <p className="text-slate-500">주민, 크리에이터와 가게·브랜드 모두를 위한 플랫폼입니다.</p>
+          </div>
+
+          <div className="mb-8 flex flex-col items-center justify-between gap-5 rounded-3xl bg-primary/10 p-7 text-center sm:flex-row sm:text-left">
+            <div>
+              <p className="flex items-center justify-center gap-2 text-sm font-black text-primary sm:justify-start"><Gift size={18} /> 주민 회원</p>
+              <h3 className="mt-2 text-2xl font-black text-charcoal">우리 동네 쿠폰과 새로운 혜택을 만나보세요</h3>
+              <p className="mt-2 text-sm text-slate-500">전화번호 인증만으로 가입하고 노원 가게의 쿠폰을 받아 사용할 수 있습니다.</p>
+            </div>
+            <Link href="/coupons" className="shrink-0 rounded-full bg-primary px-7 py-3.5 text-sm font-black text-white">쿠폰북 둘러보기</Link>
           </div>
 
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">

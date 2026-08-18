@@ -7,7 +7,7 @@ import { emptyFormState } from "@/lib/form-errors";
 import { MARKETING_CONSENT_COPY } from "@/lib/messages";
 import { setMarketingOptIn } from "../actions";
 
-export function MarketingForm({ optIn, role }: { optIn: boolean; role: "creator" | "business" }) {
+export function MarketingForm({ optIn, role }: { optIn: boolean; role: "creator" | "business" | "resident" }) {
   const [state, formAction, isPending] = useActionState(setMarketingOptIn, emptyFormState);
   const [checked, setChecked] = useState(optIn);
 

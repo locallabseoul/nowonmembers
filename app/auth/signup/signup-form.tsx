@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
-import { BriefcaseBusiness, Camera, CheckCircle2, UserPlus, X } from "lucide-react";
+import { BriefcaseBusiness, Camera, CheckCircle2, House, UserPlus, X } from "lucide-react";
 import { LEGAL_EFFECTIVE_DATE, marketingSections, privacySections, termsSections, type LegalSection } from "@/lib/legal";
 import { MARKETING_CONSENT_COPY, MARKETING_CONSENT_FOOTNOTE } from "@/lib/messages";
 import { emptyFormState, type FormState } from "@/lib/form-errors";
 import { FieldError, FieldLabel, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
 
-type SignupRole = "creator" | "business";
+type SignupRole = "creator" | "business" | "resident";
 type SignupAction = (state: FormState, formData: FormData) => Promise<FormState>;
 type NicknameCheckStatus = "idle" | "checking" | "available" | "unavailable" | "error";
 type LegalModalType = "terms" | "privacy" | "marketing";
@@ -376,7 +376,7 @@ export function SignupForm({
           <UserPlus size={22} />
         </div>
         <h1 className="text-3xl font-black text-charcoal">회원가입</h1>
-        <p className="mt-3 text-sm text-gray-500">노원멤버스에서 캠페인 참여와 운영을 시작하세요.</p>
+        <p className="mt-3 text-sm text-gray-500">동네 쿠폰을 이용하거나 캠페인 참여와 운영을 시작하세요.</p>
       </div>
 
       {state.formError ? <div className="mb-6"><FormBanner>{state.formError}</FormBanner></div> : null}
@@ -386,7 +386,15 @@ export function SignupForm({
 
         <section>
           <SectionTitle number={1}>회원 유형 선택</SectionTitle>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <RoleCard
+              role="resident"
+              selectedRole={role}
+              icon={<House size={26} />}
+              title="주민 회원"
+              description="동네 가게의 쿠폰과 혜택을 이용해요"
+              onSelect={setRole}
+            />
             <RoleCard
               role="creator"
               selectedRole={role}
@@ -429,7 +437,7 @@ export function SignupForm({
         <hr className="border-gray-100" />
 
         <section className="space-y-5">
-          <SectionTitle number={3}>{role === "business" ? "가게 정보" : "크리에이터 정보"}</SectionTitle>
+          <SectionTitle number={3}>{role === "business" ? "가게 정보" : role === "creator" ? "크리에이터 정보" : "주민 정보"}</SectionTitle>
           {role === "business" ? (
             <>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -460,11 +468,11 @@ export function SignupForm({
                 <NicknameField
                   label="닉네임"
                   name="nickname"
-                  placeholder="노원리뷰어"
+                  placeholder={role === "creator" ? "노원리뷰어" : "노원주민"}
                   value={creatorNickname}
                   onChange={(event) => setCreatorNickname(event.target.value)}
                   status={nicknameStatus}
-                  message={role === "creator" ? nicknameMessage : ""}
+                  message={nicknameMessage}
                   error={fieldErrors.nickname}
                 />
                 <Field label="이름" name="name" placeholder="홍길동" error={fieldErrors.name} defaultValue={state.values?.name} />
@@ -480,6 +488,10 @@ export function SignupForm({
             fieldErrors.agreement ? "border-red-300" : "border-gray-200"
           }`}
         >
+          <label className="flex cursor-pointer items-start gap-3">
+            <input name="age_14_plus" type="checkbox" required className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+            <span className="text-sm font-bold text-charcoal">(필수) 만 14세 이상입니다.</span>
+          </label>
           <label className="flex cursor-pointer items-start gap-3">
             <input name="agreement_terms" type="checkbox" required className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
             <span className="text-sm font-bold text-charcoal">

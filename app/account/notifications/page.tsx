@@ -29,13 +29,12 @@ export default async function NotificationSettingsPage() {
         </div>
 
         <p className="mt-6 break-keep rounded-xl bg-gray-50 p-4 text-sm leading-6 text-gray-600">
-          선정 결과나 제출 기한처럼 진행 중인 일에 대한 안내는 이 설정과 관계없이 계속 보내드립니다.
-          서비스 이용에 꼭 필요한 내용이기 때문입니다.
+          쿠폰 사용 상태, 선정 결과나 제출 기한처럼 진행 중인 서비스에 꼭 필요한 안내는 이 설정과 관계없이 계속 보내드립니다.
         </p>
 
         <MarketingForm
           optIn={Boolean(profile?.marketing_opt_in)}
-          role={profile?.role === "business" ? "business" : "creator"}
+          role={profile?.role === "business" ? "business" : profile?.role === "resident" ? "resident" : "creator"}
         />
 
         <Link href="/account/delete" className="mt-6 block text-center text-xs text-gray-400 underline hover:text-gray-500">

@@ -7,6 +7,7 @@ import { Badge } from "@/app/components/ui";
 import { getCouponBenefitLabel, getCouponDisplayStatus, getPublicCoupon } from "@/lib/coupons";
 import { getCurrentSessionProfile } from "@/lib/auth/guards";
 import { claimCoupon } from "../actions";
+import { ClaimCouponForm } from "./claim-coupon-form";
 
 // 받을 수 없는 상태일 때 버튼에 그대로 노출할 안내 문구.
 const blockedLabels: Record<string, string> = {
@@ -20,7 +21,10 @@ export default async function CouponDetailPage({ params, searchParams }: { param
   const [{ id }, { error }] = await Promise.all([params, searchParams]);
   const coupon = await getPublicCoupon(id);
   if (!coupon) notFound();
-  const { user } = await getCurrentSessionProfile();
+  const { user, supabase } = await getCurrentSessionProfile();
+  const { data: acceptedCurrentTerms } = user
+    ? await supabase.rpc("has_accepted_current_legal_document", { target_document_type: "terms" })
+    : { data: false };
   const status = getCouponDisplayStatus(coupon);
   const statusBadge = getCouponStatusStyle(status);
   const canClaim = status === "claiming";
@@ -59,10 +63,11 @@ export default async function CouponDetailPage({ params, searchParams }: { param
           {error ? <div className="mt-5"><FormBanner>{error}</FormBanner></div> : null}
           {canClaim ? (
             user ? (
-              <form action={claimCoupon} className="mt-6">
-                <input type="hidden" name="coupon_id" value={coupon.id} />
-                <button className="w-full rounded-xl bg-primary py-4 text-sm font-black text-white shadow-sm">쿠폰 1매 받기</button>
-              </form>
+              <ClaimCouponForm
+                couponId={coupon.id}
+                needsTermsAcceptance={!acceptedCurrentTerms}
+                action={claimCoupon}
+              />
             ) : (
               <Link href={`/auth?next=${encodeURIComponent(`/coupons/${coupon.id}`)}`} className="mt-6 block rounded-xl bg-primary py-4 text-center text-sm font-black text-white">로그인하고 쿠폰 받기</Link>
             )

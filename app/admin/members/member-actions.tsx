@@ -18,7 +18,7 @@ export function MemberActions({ member, returnTo, isSelf = false }: { member: Ad
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-1.5">
-      {member.verificationStatus === "pending" ? (
+      {member.role !== "resident" && member.verificationStatus === "pending" ? (
         <>
           <form action={setMemberVerification} className="inline">
             <input type="hidden" name="user_id" value={member.id} />
@@ -34,7 +34,7 @@ export function MemberActions({ member, returnTo, isSelf = false }: { member: Ad
           </form>
         </>
       ) : null}
-      {member.verificationStatus === "rejected" ? (
+      {member.role !== "resident" && member.verificationStatus === "rejected" ? (
         <form action={setMemberVerification} className="inline">
           <input type="hidden" name="user_id" value={member.id} />
           <input type="hidden" name="verification" value="verified" />
@@ -42,7 +42,7 @@ export function MemberActions({ member, returnTo, isSelf = false }: { member: Ad
           <button className={subtleButton}>인증 승인</button>
         </form>
       ) : null}
-      {member.verificationStatus === "verified" ? (
+      {member.role !== "resident" && member.verificationStatus === "verified" ? (
         <form action={setMemberVerification} className="inline">
           <input type="hidden" name="user_id" value={member.id} />
           <input type="hidden" name="verification" value="pending" />
@@ -51,20 +51,21 @@ export function MemberActions({ member, returnTo, isSelf = false }: { member: Ad
         </form>
       ) : null}
 
-      {/* 가게 사장님이 크리에이터로 잘못 가입하는 일이 잦다. 지원 이력이 있으면
-          서버가 막으므로 여기서는 버튼만 보여준다. */}
-      <ConfirmButton
-        label={member.role === "creator" ? "가게로 변경" : "크리에이터로 변경"}
-        confirmLabel="회원 역할을 변경합니다"
-        className={subtleButton}
-      >
-        <form action={setMemberRole} className="inline">
-          <input type="hidden" name="user_id" value={member.id} />
-          <input type="hidden" name="role" value={member.role === "creator" ? "business" : "creator"} />
-          <input type="hidden" name="return_to" value={returnTo} />
-          <button className={primaryButton}>변경 확정</button>
-        </form>
-      </ConfirmButton>
+      {(["resident", "creator", "business"] as const).filter((role) => role !== member.role).map((role) => (
+        <ConfirmButton
+          key={role}
+          label={`${role === "resident" ? "주민" : role === "creator" ? "크리에이터" : "가게"}로 변경`}
+          confirmLabel="회원 역할을 변경합니다. 역할 관련 활동 이력이 있으면 변경할 수 없습니다."
+          className={subtleButton}
+        >
+          <form action={setMemberRole} className="inline">
+            <input type="hidden" name="user_id" value={member.id} />
+            <input type="hidden" name="role" value={role} />
+            <input type="hidden" name="return_to" value={returnTo} />
+            <button className={primaryButton}>변경 확정</button>
+          </form>
+        </ConfirmButton>
+      ))}
 
       {member.isAdmin ? (
         <ConfirmButton label="관리자 해제" confirmLabel="관리자 권한을 해제합니다" className={subtleButton}>
@@ -75,7 +76,7 @@ export function MemberActions({ member, returnTo, isSelf = false }: { member: Ad
             <button className={dangerButton}>해제 확정</button>
           </form>
         </ConfirmButton>
-      ) : (
+      ) : member.role !== "resident" ? (
         <ConfirmButton label="관리자 지정" confirmLabel="관리자 권한을 부여합니다" className={subtleButton}>
           <form action={setMemberAdmin} className="inline">
             <input type="hidden" name="user_id" value={member.id} />
@@ -84,7 +85,7 @@ export function MemberActions({ member, returnTo, isSelf = false }: { member: Ad
             <button className={primaryButton}>지정 확정</button>
           </form>
         </ConfirmButton>
-      )}
+      ) : null}
 
       {member.status === "suspended" ? (
         <form action={setMemberStatus} className="inline">

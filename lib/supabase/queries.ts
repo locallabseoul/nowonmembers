@@ -532,7 +532,7 @@ export type AdminMessageTarget = {
 export type AdminMessageMember = {
   id: string;
   name: string;
-  role: "creator" | "business";
+  role: "creator" | "business" | "resident";
   verification: MessageVerificationTarget;
   marketingOptIn: boolean;
   // 6개월 안에 지원했거나 협업한 크리에이터. 거래관계가 있어 동의 없이도 같은 종류의
@@ -2273,7 +2273,7 @@ const ADMIN_MEMBER_PAGE_SIZE = 20;
 
 export async function getAdminMembers(options: AdminMemberListOptions = {}): Promise<AdminMembersData> {
   const supabase = await createSupabaseServerClient();
-  const roleFilter = ["business", "creator", "admin"].includes(options.role ?? "") ? options.role : "";
+  const roleFilter = ["business", "creator", "resident", "admin"].includes(options.role ?? "") ? options.role : "";
   const verificationFilter = ["pending", "verified", "rejected"].includes(options.verification ?? "") ? options.verification : "";
   const searchQuery = (options.searchQuery ?? "").trim();
 
@@ -2312,7 +2312,7 @@ export async function getAdminMembers(options: AdminMemberListOptions = {}): Pro
         verificationStatus: row.verification_status,
         createdAt: row.created_at,
         businessName: business?.business_name ?? "",
-        hasRoleProfile: row.role === "business" ? Boolean(business) : Boolean(creator)
+        hasRoleProfile: row.role === "resident" ? true : row.role === "business" ? Boolean(business) : Boolean(creator)
       };
     }),
     totalCount,
@@ -2361,7 +2361,7 @@ export async function getAdminMessageAudience(): Promise<AdminMessageMember[]> {
     return {
       id: row.id,
       name: row.nickname || business?.business_name || "(이름 없음)",
-      role: row.role === "business" ? "business" : "creator",
+      role: row.role === "business" ? "business" : row.role === "resident" ? "resident" : "creator",
       verification: row.verification_status as MessageVerificationTarget,
       marketingOptIn: Boolean(row.marketing_opt_in),
       recentCustomer: recentCustomers.has(row.id),

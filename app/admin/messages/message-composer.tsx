@@ -362,7 +362,7 @@ export function MessageComposer({
                       <li key={member.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 py-1.5 text-xs">
                         <span className="font-bold text-charcoal">{member.name}</span>
                         <span className="text-gray-400">{member.maskedPhone}</span>
-                        <span className="text-gray-400">{member.role === "business" ? "가게·브랜드" : "크리에이터"}</span>
+                        <span className="text-gray-400">{member.role === "business" ? "가게·브랜드" : member.role === "resident" ? "주민 회원" : "크리에이터"}</span>
                         {isPromotional && !member.marketingOptIn ? (
                           <span className="rounded-full bg-amber-100 px-2 py-0.5 font-bold text-amber-700">
                             {member.recentCustomer ? "거래관계" : "미동의"}

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BellRing, ChevronDown, LayoutDashboard, LogOut, Settings, ShieldCheck, Ticket } from "lucide-react";
+import { BellRing, ChevronDown, LayoutDashboard, LogOut, RefreshCw, Settings, ShieldCheck, Ticket } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 type AccountMenuProps = {
   displayName: string;
   role?: string | null;
   isAdmin?: boolean;
+  isReadOnly?: boolean;
   accountPath: string;
   profileEditPath: string | null;
   avatarUrl: string;
@@ -16,7 +17,7 @@ type AccountMenuProps = {
 };
 
 function getRoleLabel(role?: string | null, isAdmin?: boolean) {
-  const base = role === "business" ? "가게·브랜드" : role === "creator" ? "크리에이터" : "회원";
+  const base = role === "business" ? "가게·브랜드" : role === "creator" ? "크리에이터" : role === "resident" ? "주민 회원" : "회원";
 
   return isAdmin ? `${base} · 관리자` : base;
 }
@@ -39,7 +40,7 @@ function Avatar({ displayName, avatarUrl, size }: { displayName: string; avatarU
   );
 }
 
-export function AccountMenu({ displayName, role, isAdmin = false, accountPath, profileEditPath, avatarUrl, signOutAction }: AccountMenuProps) {
+export function AccountMenu({ displayName, role, isAdmin = false, isReadOnly = false, accountPath, profileEditPath, avatarUrl, signOutAction }: AccountMenuProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
@@ -110,6 +111,12 @@ export function AccountMenu({ displayName, role, isAdmin = false, accountPath, p
               <Ticket size={17} />
               내 쿠폰함
             </Link>
+            {role === "resident" && !isReadOnly ? (
+              <Link href="/account/upgrade" role="menuitem" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-primary">
+                <RefreshCw size={17} />
+                크리에이터·가게로 전환
+              </Link>
+            ) : null}
             {isAdmin ? (
               <Link href="/admin" role="menuitem" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-primary">
                 <ShieldCheck size={17} />

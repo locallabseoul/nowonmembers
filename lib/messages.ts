@@ -8,7 +8,7 @@ import { OPT_OUT_PATH, PUBLIC_SITE_URL, SERVICE_NAME } from "@/lib/site";
 
 export type MessageKind = "transactional" | "promotional";
 export type MessageChannel = "app" | "sms";
-export type MessageRoleTarget = "all" | "creator" | "business";
+export type MessageRoleTarget = "all" | "creator" | "business" | "resident";
 export type MessageVerificationTarget = "all" | "verified" | "pending" | "rejected";
 
 export const MESSAGE_KINDS: { value: MessageKind; label: string; description: string }[] = [
@@ -27,7 +27,8 @@ export const MESSAGE_KINDS: { value: MessageKind; label: string; description: st
 export const MESSAGE_ROLE_TARGETS: { value: MessageRoleTarget; label: string }[] = [
   { value: "all", label: "전체" },
   { value: "creator", label: "크리에이터" },
-  { value: "business", label: "가게·브랜드" }
+  { value: "business", label: "가게·브랜드" },
+  { value: "resident", label: "주민 회원" }
 ];
 
 export const MESSAGE_VERIFICATION_TARGETS: { value: MessageVerificationTarget; label: string }[] = [
@@ -39,7 +40,7 @@ export const MESSAGE_VERIFICATION_TARGETS: { value: MessageVerificationTarget; l
 
 // 마케팅 수신 동의 문구. 가게는 캠페인을 여는 쪽이라 크리에이터와 받을 내용이 다르다.
 // 가입 화면과 수신 설정 화면이 같은 말을 하도록 여기 모아둔다.
-export const MARKETING_CONSENT_COPY: Record<"creator" | "business", { title: string; description: string }> = {
+export const MARKETING_CONSENT_COPY: Record<"creator" | "business" | "resident", { title: string; description: string }> = {
   creator: {
     title: "새 캠페인이 열리면 문자로 알려드릴게요",
     description: "노원 가게의 새 캠페인과 이벤트 소식을 보내드려요."
@@ -47,6 +48,10 @@ export const MARKETING_CONSENT_COPY: Record<"creator" | "business", { title: str
   business: {
     title: "크리에이터 소식과 혜택을 문자로 알려드릴게요",
     description: "새로 합류한 크리에이터, 포인트 혜택, 캠페인 운영에 도움되는 소식을 보내드려요."
+  },
+  resident: {
+    title: "새 쿠폰과 동네 혜택을 문자로 알려드릴게요",
+    description: "노원 가게의 새 쿠폰, 이벤트와 생활권 혜택 소식을 보내드려요."
   }
 };
 
@@ -85,6 +90,16 @@ export function formatMonthDay(date: string) {
 }
 
 export const MESSAGE_TEMPLATES: MessageTemplate[] = [
+  {
+    id: "new-local-coupon",
+    label: "새 쿠폰·동네 혜택",
+    hint: "주민 회원에게 새 쿠폰이나 지역 혜택을 알립니다",
+    kind: "promotional",
+    role: "resident",
+    title: "새로운 동네 혜택이 열렸어요",
+    body: "노원 지역 가게의 새 쿠폰과 혜택을 확인해보세요.",
+    link: "/coupons"
+  },
   {
     id: "new-campaign",
     label: "새 캠페인 모집",
