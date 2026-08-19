@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/guards";
 import { toKoreanE164Phone } from "@/lib/auth/phone";
+import { getReadOnlyPreview } from "@/lib/auth/read-only-preview";
 
 function getSafeReturnTo(value: FormDataEntryValue | null) {
   const returnTo = String(value ?? "");
@@ -40,6 +41,7 @@ function mapVerificationError(message: string) {
 
 export async function sendEmailVerification(formData: FormData) {
   const returnTo = getSafeReturnTo(formData.get("verification_return_to"));
+  if (await getReadOnlyPreview()) redirect(withParam(returnTo, "error", "대행 또는 미리보기 중에는 인증 정보를 변경할 수 없습니다."));
   const { supabase, user } = await requireUser(returnTo);
   const email = user.email;
 
@@ -62,6 +64,7 @@ export async function sendEmailVerification(formData: FormData) {
 
 export async function sendPhoneVerification(formData: FormData) {
   const returnTo = getSafeReturnTo(formData.get("verification_return_to"));
+  if (await getReadOnlyPreview()) redirect(withParam(returnTo, "error", "대행 또는 미리보기 중에는 인증 정보를 변경할 수 없습니다."));
   const { supabase, user } = await requireUser(returnTo);
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -85,6 +88,7 @@ export async function sendPhoneVerification(formData: FormData) {
 
 export async function verifyPhoneOtp(formData: FormData) {
   const returnTo = getSafeReturnTo(formData.get("verification_return_to"));
+  if (await getReadOnlyPreview()) redirect(withParam(returnTo, "error", "대행 또는 미리보기 중에는 인증 정보를 변경할 수 없습니다."));
   const token = String(formData.get("phone_otp") ?? "").replace(/\D/g, "");
   if (!token) redirect(withParam(returnTo, "error", "인증번호를 입력해주세요."));
 

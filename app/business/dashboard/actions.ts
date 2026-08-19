@@ -2,9 +2,12 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { requireRole } from "@/lib/auth/guards";
 import { BUSINESS_IMAGE_BUCKET, isOwnedBusinessImagePath } from "@/lib/business-images";
 import { logEvent } from "@/lib/events";
+import { BUSINESS_PROFILE_DELEGATION_COOKIE, getBusinessProfileDelegation } from "@/lib/auth/business-profile-delegation";
+import { READ_ONLY_PREVIEW_COOKIE } from "@/lib/auth/read-only-preview";
 
 function splitList(value: FormDataEntryValue | null) {
   return String(value ?? "")
@@ -109,7 +112,8 @@ function getBusinessImagePath(formData: FormData, userId: string) {
 }
 
 export async function saveBusinessProfile(formData: FormData) {
-  const { supabase, user } = await requireRole("business", "/business/dashboard");
+  const delegation = await getBusinessProfileDelegation();
+  const { supabase, user } = await requireRole("business", "/business/dashboard", Boolean(delegation));
   const businessName = requiredText(formData, "business_name", "가게명");
   const managerName = requiredText(formData, "manager_name", "담당자명");
   const managerPhone = normalizePhone(requiredText(formData, "manager_phone", "담당자 전화번호"));
@@ -178,12 +182,15 @@ export async function saveBusinessProfile(formData: FormData) {
     .maybeSingle();
 
   if (existingBusinessError) redirectWithError(formData, existingBusinessError.message);
+  if (delegation && existingBusiness) {
+    redirectWithError(formData, "최초 프로필 작성 대행에서는 기존 프로필을 수정할 수 없습니다.");
+  }
 
   // 인증 상태는 회원 정보를 따르고 공개 여부는 기존 값을 지킨다. 저장할 때마다
   // pending·false로 되돌리면 프로필을 고쳤다는 이유로 인증이 풀린다.
   const { data: memberProfile } = await supabase
     .from("profiles")
-    .select("verification_status")
+    .select("email,verification_status")
     .eq("id", user.id)
     .maybeSingle();
   const uploadedImagePath = getBusinessImagePath(formData, user.id);
@@ -226,7 +233,8 @@ export async function saveBusinessProfile(formData: FormData) {
   }
 
   const { error: profileError } = await supabase.from("profiles").update({
-    email: user.email,
+    // 대행 세션의 auth 사용자는 관리자이므로 관리자 이메일을 대상 회원에게 쓰면 안 된다.
+    email: delegation ? memberProfile?.email : user.email,
     nickname: businessName,
     name: managerName,
     phone: managerPhone,
@@ -235,12 +243,53 @@ export async function saveBusinessProfile(formData: FormData) {
 
   if (profileError) redirectWithError(formData, getProfileDuplicateMessage(profileError) ?? profileError.message);
 
+  if (delegation) {
+    const changedFields = {
+      business_name: businessName,
+      category,
+      short_intro: shortIntro,
+      address,
+      address_detail: addressDetail,
+      district,
+      contact,
+      business_hours: businessHoursSummary,
+      website_url: websiteUrl,
+      social_urls: socialUrls,
+      description: nullableText(formData, "description"),
+      manager_name: managerName,
+      cover_image_updated: Boolean(coverImage)
+    };
+    const [{ error: auditError }, { error: notificationError }] = await Promise.all([
+      supabase.from("admin_delegation_audits").insert({
+        admin_id: delegation.adminId,
+        target_user_id: delegation.targetId,
+        action: "business_profile_create",
+        reason: delegation.reason,
+        changed_fields: changedFields
+      }),
+      supabase.from("notifications").insert({
+        user_id: delegation.targetId,
+        type: "admin_profile_delegation",
+        title: "가게 프로필이 등록되었습니다",
+        message: "요청에 따라 운영자가 가게 프로필 작성을 완료했습니다.",
+        link: "/business/dashboard"
+      })
+    ]);
+    if (auditError) logEvent("business_profile.delegation_audit_failed", { error: auditError.message, targetId: delegation.targetId });
+    if (notificationError) logEvent("business_profile.delegation_notification_failed", { error: notificationError.message, targetId: delegation.targetId });
+
+    const cookieStore = await cookies();
+    cookieStore.delete(BUSINESS_PROFILE_DELEGATION_COOKIE);
+    cookieStore.delete(READ_ONLY_PREVIEW_COOKIE);
+  }
+
   logEvent("business_profile.saved", {
     mode: existingBusiness ? "update" : "create",
     hasCoordinates: latitude !== null && longitude !== null
   });
   revalidatePath("/business/dashboard");
   const next = getSafeNext(formData.get("next"));
+  if (delegation) redirect("/admin/members?message=" + encodeURIComponent("가게 프로필 작성 대행을 완료했습니다."));
   redirect(next || "/business/dashboard");
 }
 
