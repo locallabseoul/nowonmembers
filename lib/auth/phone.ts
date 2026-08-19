@@ -9,6 +9,10 @@ export function normalizeKoreanAuthPhone(value: string | null | undefined) {
   return digits;
 }
 
+export function isKoreanMobilePhoneNumber(value: string | null | undefined) {
+  return /^010\d{8}$/.test(normalizeKoreanAuthPhone(value));
+}
+
 export function toKoreanE164Phone(value: string | null | undefined) {
   const digits = normalizePhoneNumber(value);
   if (digits.length < 10 || digits.length > 11) return null;

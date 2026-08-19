@@ -154,7 +154,7 @@ function PhoneField({
 }) {
   return (
     <label className="block">
-      <FieldLabel required>전화번호</FieldLabel>
+      <FieldLabel required>휴대폰 번호</FieldLabel>
       <input
         name="phone"
         type="tel"
@@ -163,8 +163,10 @@ function PhoneField({
         value={value}
         onChange={(event) => onChange(formatPhone(event.target.value))}
         required
-        minLength={12}
+        minLength={13}
         maxLength={13}
+        pattern="010-[0-9]{4}-[0-9]{4}"
+        title="010으로 시작하는 휴대폰 번호 11자리를 입력해주세요."
         aria-invalid={error ? true : undefined}
         className={fieldControlClassName(error)}
         placeholder="010-0000-0000"
@@ -172,7 +174,7 @@ function PhoneField({
       {error ? (
         <FieldError>{error}</FieldError>
       ) : (
-        <p className="mt-2 text-xs font-medium text-gray-400">숫자만 입력해도 자동으로 하이픈이 입력됩니다.</p>
+        <p className="mt-2 text-xs font-medium text-gray-400">SMS 인증을 받을 수 있는 010 휴대폰 번호를 입력해주세요.</p>
       )}
     </label>
   );
@@ -429,7 +431,7 @@ export function SignupForm({
             <PhoneField value={phone} onChange={setPhone} error={fieldErrors.phone} />
             <Field label="비밀번호" name="password" type="password" placeholder="6자 이상" minLength={6} error={fieldErrors.password} />
           </div>
-          <p className="text-xs font-medium text-gray-400">전화번호로 로그인하고, 가입 완료 전 SMS 인증을 진행합니다.</p>
+          <p className="text-xs font-medium text-gray-400">휴대폰 번호로 로그인하고, 가입 완료 전 SMS 인증을 진행합니다.</p>
           <Field label="이메일" name="email" type="email" placeholder="example@email.com" required={false} error={fieldErrors.email} defaultValue={state.values?.email} />
           <p className="text-xs font-medium text-gray-400">이메일은 계정 안내와 알림을 위한 선택 입력입니다.</p>
         </section>

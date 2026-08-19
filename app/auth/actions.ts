@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { getAccountPath } from "@/lib/auth/guards";
 import { track } from "@vercel/analytics/server";
-import { normalizePhoneNumber, toKoreanE164Phone } from "@/lib/auth/phone";
+import { isKoreanMobilePhoneNumber, normalizePhoneNumber, toKoreanE164Phone } from "@/lib/auth/phone";
 import { isRetryableAuthError } from "@/lib/auth/retryable-error";
 import { isTestPhoneBypassAllowed } from "@/lib/auth/test-phone-bypass";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal";
@@ -202,9 +202,9 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
         ? "비밀번호는 6자 이상이어야 합니다."
         : null,
     phone: !phone
-      ? "전화번호를 입력해주세요."
-      : phone.length < 10 || phone.length > 11 || !authPhone
-        ? "전화번호를 정확히 입력해주세요."
+      ? "휴대폰 번호를 입력해주세요."
+      : !isKoreanMobilePhoneNumber(phone) || !authPhone
+        ? "SMS 수신 가능한 010 휴대폰 번호 11자리를 입력해주세요."
         : null,
     business_registration_number: isBusiness
       ? !businessRegistrationNumber
