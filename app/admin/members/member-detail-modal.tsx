@@ -3,7 +3,7 @@ import { ExternalLink, X } from "lucide-react";
 import { Badge } from "@/app/components/ui";
 import { formatPoints } from "@/lib/points";
 import type { AdminMemberDetail } from "@/lib/supabase/queries";
-import { startReadOnlyPreview } from "./preview-actions";
+import { startBusinessProfileDelegation, startReadOnlyPreview } from "./preview-actions";
 
 function formatDateTime(value: string) {
   if (!value) return "-";
@@ -96,6 +96,25 @@ export function MemberDetailModal({ member, closeHref }: { member: AdminMemberDe
             <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-black text-amber-950 transition-colors hover:bg-amber-500">
               <ExternalLink size={15} /> 회원 화면 읽기 전용으로 보기
             </button>
+          </form>
+        ) : null}
+
+        {member.role === "business" && member.status !== "suspended" && !member.isAdmin && !member.business ? (
+          <form action={startBusinessProfileDelegation} className="space-y-2 border-b border-gray-100 bg-emerald-50 px-5 py-4">
+            <input type="hidden" name="user_id" value={member.id} />
+            <label className="block text-xs font-black text-emerald-900" htmlFor={`delegation-reason-${member.id}`}>가게 프로필 최초 작성 대행</label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                id={`delegation-reason-${member.id}`}
+                name="reason"
+                required
+                maxLength={200}
+                placeholder="예: 전화 요청으로 가입 지원"
+                className="min-w-0 flex-1 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+              />
+              <button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-black text-white hover:bg-emerald-700">작성 대행 시작</button>
+            </div>
+            <p className="text-xs text-emerald-700">프로필 저장만 허용되며 완료하면 대행 모드가 자동 종료됩니다.</p>
           </form>
         ) : null}
 
