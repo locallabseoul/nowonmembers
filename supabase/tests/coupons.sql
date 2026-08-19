@@ -1,6 +1,6 @@
 begin;
 
-select plan(23);
+select plan(25);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
@@ -11,8 +11,8 @@ values
 
 insert into public.business_profiles (id, user_id, business_name, category, verification_status, is_public)
 values
-  ('a0000000-0000-4000-8000-000000000010', 'a0000000-0000-4000-8000-000000000001', '쿠폰 테스트 가게', '테스트', 'verified', true),
-  ('a0000000-0000-4000-8000-000000000011', 'a0000000-0000-4000-8000-000000000004', '다른 테스트 가게', '테스트', 'verified', true);
+  ('a0000000-0000-4000-8000-000000000010', 'a0000000-0000-4000-8000-000000000001', '쿠폰 테스트 가게', '테스트', 'verified', false),
+  ('a0000000-0000-4000-8000-000000000011', 'a0000000-0000-4000-8000-000000000004', '다른 테스트 가게', '테스트', 'verified', false);
 
 insert into public.legal_acceptances (user_id, document_type, document_version, source)
 values (
@@ -52,6 +52,19 @@ values ('a0000000-0000-4000-8000-000000000030', 'a0000000-0000-4000-8000-0000000
 
 select is((select status::text from public.coupons where id = 'a0000000-0000-4000-8000-000000000020'), 'approved', 'legacy coupon stays approved');
 select ok(not (select redemption_code_configured from public.coupons where id = 'a0000000-0000-4000-8000-000000000020'), 'legacy coupon starts without a code');
+
+set local role anon;
+set local "request.jwt.claims" = '{"role":"anon"}';
+select is(
+  (select business_name from public.get_public_coupons() where id = 'a0000000-0000-4000-8000-000000000020'),
+  '쿠폰 테스트 가게',
+  'anonymous visitors receive the safe business fields for an approved coupon'
+);
+select is(
+  (select count(*) from public.business_profiles where id = 'a0000000-0000-4000-8000-000000000010'),
+  0::bigint,
+  'the approved coupon does not expose the private business profile row'
+);
 
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"a0000000-0000-4000-8000-000000000003","role":"authenticated"}';

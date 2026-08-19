@@ -70,6 +70,15 @@ type CouponRow = {
   }>;
 };
 
+type PublicCouponRow = Omit<CouponRow, "admin_memo" | "business_profiles"> & {
+  business_name: string | null;
+  business_category: string | null;
+  business_address: string | null;
+  business_address_detail: string | null;
+  business_contact: string | null;
+  business_cover_image_url: string | null;
+};
+
 const couponSelect = "id,business_id,title,description,cover_image_url,benefit_type,benefit_value,terms,total_quantity,claimed_quantity,start_date,end_date,status,redemption_code_configured,admin_memo,created_at,business_profiles(business_name,category,address,address_detail,contact,cover_image_url)";
 
 function one<T>(relation: Relation<T>): T | null {
@@ -104,6 +113,21 @@ function mapCoupon(row: CouponRow): Coupon {
   };
 }
 
+function mapPublicCoupon(row: PublicCouponRow): Coupon {
+  return mapCoupon({
+    ...row,
+    admin_memo: null,
+    business_profiles: {
+      business_name: row.business_name,
+      category: row.business_category,
+      address: row.business_address,
+      address_detail: row.business_address_detail,
+      contact: row.business_contact,
+      cover_image_url: row.business_cover_image_url
+    }
+  });
+}
+
 export function getCouponDisplayStatus(coupon: Coupon) {
   const today = getKoreaTodayString();
   if (coupon.status !== "approved") return coupon.status;
@@ -133,8 +157,8 @@ export function getCouponBenefitLabel(coupon: Pick<Coupon, "benefitType" | "bene
 
 export async function getPublicCoupons(query = "") {
   const supabase = await createSupabaseServerClient();
-  const { data } = await supabase.from("coupons").select(couponSelect).eq("status", "approved").order("created_at", { ascending: false });
-  const coupons = ((data ?? []) as unknown as CouponRow[]).map(mapCoupon);
+  const { data } = await supabase.rpc("get_public_coupons");
+  const coupons = ((data ?? []) as unknown as PublicCouponRow[]).map(mapPublicCoupon);
   const keyword = query.trim().toLocaleLowerCase("ko-KR");
   if (!keyword) return coupons;
   return coupons.filter((coupon) => [coupon.title, coupon.benefitValue, coupon.businessName].some((value) => value.toLocaleLowerCase("ko-KR").includes(keyword)));
@@ -142,8 +166,8 @@ export async function getPublicCoupons(query = "") {
 
 export async function getPublicCoupon(id: string) {
   const supabase = await createSupabaseServerClient();
-  const { data } = await supabase.from("coupons").select(couponSelect).eq("id", id).eq("status", "approved").maybeSingle();
-  return data ? mapCoupon(data as unknown as CouponRow) : null;
+  const { data } = await supabase.rpc("get_public_coupons", { target_coupon_id: id }).maybeSingle();
+  return data ? mapPublicCoupon(data as unknown as PublicCouponRow) : null;
 }
 
 export async function getMyCouponClaims(userId: string) {
