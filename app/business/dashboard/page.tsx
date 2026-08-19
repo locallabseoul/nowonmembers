@@ -458,6 +458,7 @@ function ApplicantCard({ application }: { application: DashboardApplication }) {
         <span>{formatAppliedAt(application.appliedAt)}</span>
         <span>{application.availableDates ? `가능 일정 ${application.availableDates}` : "가능 일정 미입력"}</span>
         <span>선정 {application.selectedCount}/{application.recruitCount}명</span>
+        {application.hasCollaboration ? <span>방문 예정 {formatDateShort(application.visitDate)}</span> : null}
       </div>
       <p className="mt-3 text-sm leading-6 text-gray-600">{application.message || "지원 메시지가 없습니다."}</p>
       <PastReviewSummary review={application.pastReview} creatorNickname={application.creatorNickname} />
@@ -546,6 +547,7 @@ function SubmissionCard({ item }: { item: DashboardSubmission }) {
         </div>
         <div className="grid gap-2 text-xs text-gray-500 sm:grid-cols-2">
           <span>선정일 {formatDateTimeShort(item.selectedAt)}</span>
+          <span>방문 예정 {formatDateShort(item.visitDate)}</span>
           <span>제출 마감 {formatDateShort(item.submissionDue)}</span>
           <span>게시 채널 {submission?.platform || "미제출"}</span>
           <span>게시일 {formatDateShort(submission?.publishedAt ?? "")}</span>

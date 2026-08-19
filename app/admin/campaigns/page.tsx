@@ -294,6 +294,7 @@ function ApplicantCard({ application }: { application: DashboardApplication }) {
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500">
         <span>{application.proposedContentType || "콘텐츠 유형 미정"}</span>
         <span>{formatAppliedAt(application.appliedAt)}</span>
+        {application.hasCollaboration ? <span>방문 예정 {formatDateShort(application.visitDate)}</span> : null}
       </div>
       {application.availableDates ? <p className="mt-2 text-xs text-gray-500">가능 일정: {application.availableDates}</p> : null}
       <p className="mt-2 text-xs leading-5 text-gray-500">{application.message || "지원 메시지가 없습니다."}</p>
@@ -339,6 +340,7 @@ function SubmissionCard({ item, canManage, returnTo }: { item: DashboardSubmissi
         </div>
         <div className="grid gap-2 text-xs text-gray-500 sm:grid-cols-2">
           <span>선정일 {formatDateTimeShort(item.selectedAt)}</span>
+          <span>방문 예정 {formatDateShort(item.visitDate)}</span>
           <span>제출 마감 {formatDateShort(item.submissionDue)}</span>
           <span>게시 채널 {submission?.platform || "미제출"}</span>
           <span>게시일 {formatDateShort(submission?.publishedAt ?? "")}</span>

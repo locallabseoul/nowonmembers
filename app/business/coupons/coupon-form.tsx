@@ -41,7 +41,7 @@ export function CouponForm({ action, coupon, error }: { action: SaveAction; coup
             <option value="other">기타 혜택</option>
           </select>
         </label>
-        <FormField name="benefit_value" label="혜택 값" required defaultValue={kept("benefit_value", coupon?.benefitValue)} placeholder="정액은 5000, 정률은 10, 증정은 아메리카노 1잔" />
+        <FormField name="benefit_value" label="혜택 값" required defaultValue={kept("benefit_value", coupon?.benefitValue)} placeholder="정액은 5,000원, 정률은 10%, 증정은 아메리카노 1잔" />
         <FormField name="total_quantity" label="총 발행 수량" type="number" min={coupon?.claimedQuantity ?? 1} max={100000} required defaultValue={kept("total_quantity", String(coupon?.totalQuantity ?? 100))} suffix="장" />
         <label>
           <FieldLabel>대표 이미지</FieldLabel>

@@ -122,7 +122,7 @@ type DashboardApplicationRow = {
   applied_at: string | null;
   campaigns?: Relation<ApplicationCampaignRow>;
   creator_profiles?: Relation<ApplicantCreatorRow>;
-  collaborations?: CountRelation;
+  collaborations?: Array<{ visit_date: string | null; status: string }> | null;
 };
 
 type ApplicationSummaryRow = {
@@ -156,6 +156,7 @@ type DashboardSubmissionRow = {
   campaign_id: string;
   creator_id: string;
   status: string;
+  visit_date: string | null;
   submission_due: string | null;
   selected_at: string | null;
   creator_profiles?: Relation<ApplicantCreatorRow>;
@@ -274,6 +275,7 @@ export type DashboardApplication = {
   adminMemo: string;
   appliedAt: string;
   hasCollaboration: boolean;
+  visitDate: string;
 };
 
 export type DashboardSubmission = {
@@ -283,6 +285,7 @@ export type DashboardSubmission = {
   creatorNickname: string;
   creatorChannelSummary: string;
   collaborationStatus: string;
+  visitDate: string;
   submissionDue: string;
   selectedAt: string;
   submission: {
@@ -782,6 +785,8 @@ function mapDashboardApplication(row: DashboardApplicationRow): DashboardApplica
   const creator = asRelation(row.creator_profiles);
   const profile = asRelation(creator?.profiles);
 
+  const collaboration = row.collaborations?.find((item) => item.status !== "cancelled");
+
   return {
     id: row.id,
     creatorUserId: creator?.user_id ?? "",
@@ -801,7 +806,8 @@ function mapDashboardApplication(row: DashboardApplicationRow): DashboardApplica
     status: row.status,
     adminMemo: row.admin_memo ?? "",
     appliedAt: row.applied_at ?? "",
-    hasCollaboration: relationCount(row.collaborations) > 0
+    hasCollaboration: Boolean(collaboration),
+    visitDate: collaboration?.visit_date ?? ""
   };
 }
 
@@ -817,6 +823,7 @@ function mapDashboardSubmission(row: DashboardSubmissionRow): DashboardSubmissio
     creatorNickname: profile?.nickname || profile?.email?.split("@")[0] || "크리에이터",
     creatorChannelSummary: formatCreatorChannelSummary(creator?.creator_channels),
     collaborationStatus: row.status,
+    visitDate: row.visit_date ?? "",
     submissionDue: row.submission_due ?? "",
     selectedAt: row.selected_at ?? "",
     submission: submission
@@ -991,7 +998,7 @@ const dashboardApplicationSelect = `
   status,
   admin_memo,
   applied_at,
-  collaborations(count),
+  collaborations(visit_date,status),
   creator_profiles(
     id,
     user_id,
@@ -1014,6 +1021,7 @@ const dashboardSubmissionSelect = `
   campaign_id,
   creator_id,
   status,
+  visit_date,
   submission_due,
   selected_at,
   creator_profiles(
