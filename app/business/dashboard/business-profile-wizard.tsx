@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent, type KeyboardEvent } from "react";
 import {
   ArrowLeft,
@@ -280,6 +281,16 @@ async function removeBusinessCoverImage(path: string) {
   }
 }
 
+// 서버 액션의 redirect()는 예외로 전달된다. 이걸 실패로 오해하면 저장이 끝난 뒤에
+// 방금 올린 이미지를 지워 깨진 프로필이 남는다. digest에서 목적지를 꺼내 성공으로
+// 처리한다. digest 형식: "NEXT_REDIRECT;push;/경로;307;"
+function getNextRedirectUrl(error: unknown) {
+  const digest = (error as { digest?: unknown } | null)?.digest;
+  if (typeof digest !== "string" || !digest.startsWith("NEXT_REDIRECT")) return null;
+
+  return digest.split(";")[2] || "/business/dashboard";
+}
+
 function profileSubmissionError(stage: "upload" | "save") {
   return stage === "upload"
     ? "대표 이미지 업로드에 실패했습니다. 네트워크 상태를 확인한 뒤 다시 시도해주세요."
@@ -353,6 +364,7 @@ function BusinessProfileCreateWizard({
   initialBusiness,
   imageOwnerId
 }: BusinessProfileWizardProps) {
+  const router = useRouter();
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState(() => createInitialDraft(initialBusiness));
   const [coverImagePreview, setCoverImagePreview] = useState<ImagePreview | null>(null);
@@ -574,6 +586,13 @@ function BusinessProfileCreateWizard({
       await action(submission);
       window.localStorage.removeItem(draftStorageKey);
     } catch (submissionFailure) {
+      // 저장 성공의 리다이렉트도 여기로 온다. 이미지를 지우거나 에러를 띄우면 안 된다.
+      const redirectUrl = getNextRedirectUrl(submissionFailure);
+      if (redirectUrl) {
+        window.localStorage.removeItem(draftStorageKey);
+        router.push(redirectUrl);
+        return;
+      }
       if (uploadedImagePath) await removeBusinessCoverImage(uploadedImagePath);
       const detail = submissionFailure instanceof Error ? submissionFailure.message : "알 수 없는 오류";
       if (stage === "upload") void logBusinessProfileUploadFailure(detail).catch(() => undefined);
@@ -959,6 +978,7 @@ function BusinessProfileEditForm({
   initialBusiness: InitialBusinessProfile;
   imageOwnerId?: string;
 }) {
+  const router = useRouter();
   const [draft, setDraft] = useState(() => createInitialDraft(initialBusiness));
   const [coverImagePreview, setCoverImagePreview] = useState<ImagePreview | null>(null);
   const [socialInput, setSocialInput] = useState("");
@@ -1109,6 +1129,12 @@ function BusinessProfileEditForm({
       if (uploadedImagePath) submission.set("cover_image_path", uploadedImagePath);
       await action(submission);
     } catch (submissionFailure) {
+      // 저장 성공의 리다이렉트도 여기로 온다. 이미지를 지우거나 에러를 띄우면 안 된다.
+      const redirectUrl = getNextRedirectUrl(submissionFailure);
+      if (redirectUrl) {
+        router.push(redirectUrl);
+        return;
+      }
       if (uploadedImagePath) await removeBusinessCoverImage(uploadedImagePath);
       const detail = submissionFailure instanceof Error ? submissionFailure.message : "알 수 없는 오류";
       if (stage === "upload") void logBusinessProfileUploadFailure(detail).catch(() => undefined);
