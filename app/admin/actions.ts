@@ -9,11 +9,49 @@ import { logEvent } from "@/lib/events";
 import { buildSmsText } from "@/lib/messages";
 import { PUBLIC_SITE_URL } from "@/lib/site";
 import { isSmsConfigured, sendSms } from "@/lib/sms";
+import { isKoreanMobilePhoneNumber, normalizePhoneNumber } from "@/lib/auth/phone";
 
 
 async function requireAdmin() {
   const { supabase } = await requireAdminSession();
   return supabase;
+}
+
+export async function addPhoneSignupBypass(formData: FormData) {
+  const { supabase, user } = await requireAdminSession();
+  const phone = normalizePhoneNumber(String(formData.get("phone") ?? ""));
+  const note = String(formData.get("note") ?? "").trim().slice(0, 200) || null;
+
+  if (!isKoreanMobilePhoneNumber(phone)) {
+    redirect(backTo(formData, "/admin/members", { error: "010 휴대폰 번호 11자리를 입력해주세요." }));
+  }
+
+  const { error } = await supabase.from("phone_signup_bypass_allowlist").insert({
+    phone,
+    note,
+    created_by: user.id
+  });
+
+  if (error) {
+    const message = error.code === "23505" ? "이미 등록된 번호입니다." : error.message;
+    redirect(backTo(formData, "/admin/members", { error: message }));
+  }
+
+  logEvent("admin.phone_signup_bypass_added", { phoneLast4: phone.slice(-4) });
+  revalidatePath("/admin/members");
+  redirect(backTo(formData, "/admin/members", { message: "인증 생략 번호를 등록했습니다." }));
+}
+
+export async function removePhoneSignupBypass(formData: FormData) {
+  const supabase = await requireAdmin();
+  const phone = normalizePhoneNumber(String(formData.get("phone") ?? ""));
+  const { error } = await supabase.from("phone_signup_bypass_allowlist").delete().eq("phone", phone);
+
+  if (error) redirect(backTo(formData, "/admin/members", { error: error.message }));
+
+  logEvent("admin.phone_signup_bypass_removed", { phoneLast4: phone.slice(-4) });
+  revalidatePath("/admin/members");
+  redirect(backTo(formData, "/admin/members", { message: "인증 생략 번호를 삭제했습니다." }));
 }
 
 // 같은 액션이 여러 관리자 페이지에서 쓰인다(예: 제출 승인은 캠페인 팝업과 검수

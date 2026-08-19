@@ -6,6 +6,14 @@ import { AlertTriangle, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { FormBanner } from "@/app/components/form-field";
 import { MemberActions } from "./member-actions";
 import { MemberDetailModal } from "./member-detail-modal";
+import { addPhoneSignupBypass, removePhoneSignupBypass } from "../actions";
+
+function formatPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits.length === 11
+    ? `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
+    : value;
+}
 
 const roleTabs = [
   ["", "전체"],
@@ -122,6 +130,10 @@ export default async function AdminMembersPage({ searchParams }: { searchParams:
   const searchQuery = (q ?? "").trim();
   const currentPageInput = Math.max(Number.parseInt(page ?? "1", 10) || 1, 1);
   const session = await getCurrentSessionProfile();
+  const { data: phoneBypassRows } = await session.supabase
+    .from("phone_signup_bypass_allowlist")
+    .select("phone,note,created_at")
+    .order("created_at", { ascending: false });
   const { members, totalCount, totalPages, currentPage } = await getAdminMembers({
     role: roleFilter,
     verification: verificationFilter,
@@ -139,6 +151,29 @@ export default async function AdminMembersPage({ searchParams }: { searchParams:
       </div>
       {error ? <div className="mb-6"><FormBanner>{error}</FormBanner></div> : null}
       {message ? <p className="mb-6 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{message}</p> : null}
+
+      <section className="mb-8 rounded-lg border border-line bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-black text-charcoal">전화 인증 생략 번호</h2>
+        <p className="mt-1 text-sm text-gray-500">SMS 인증이 불가능한 번호를 미리 등록하면 해당 번호로 인증번호 없이 가입할 수 있습니다.</p>
+        <form action={addPhoneSignupBypass} className="mt-4 grid gap-2 sm:grid-cols-[180px_1fr_auto]">
+          <input type="hidden" name="return_to" value={returnTo} />
+          <input name="phone" type="tel" inputMode="numeric" required placeholder="010-0000-0000" pattern="010[- ]?[0-9]{4}[- ]?[0-9]{4}" className="rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-primary" />
+          <input name="note" maxLength={200} placeholder="메모 (선택)" className="rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-primary" />
+          <button className="rounded-lg bg-primary px-4 py-2 text-sm font-black text-white">번호 등록</button>
+        </form>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(phoneBypassRows ?? []).map((row) => (
+            <form key={row.phone} action={removePhoneSignupBypass} className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm">
+              <input type="hidden" name="return_to" value={returnTo} />
+              <input type="hidden" name="phone" value={row.phone} />
+              <span className="font-bold text-charcoal">{formatPhone(row.phone)}</span>
+              {row.note ? <span className="text-xs text-gray-400">{row.note}</span> : null}
+              <button className="text-xs font-black text-red-500" aria-label={`${formatPhone(row.phone)} 삭제`}>삭제</button>
+            </form>
+          ))}
+          {(phoneBypassRows ?? []).length === 0 ? <p className="text-sm text-gray-400">등록된 번호가 없습니다.</p> : null}
+        </div>
+      </section>
 
       <section className="overflow-hidden rounded-lg border border-line bg-white shadow-sm">
         <div className="space-y-4 border-b border-line p-5">
