@@ -36,6 +36,8 @@ type BusinessProfileWizardProps = {
   next?: string;
   mode?: "create" | "edit";
   initialBusiness?: InitialBusinessProfile;
+  // 관리자 대행 작성 시 이미지가 저장될 대상 회원 id. 없으면 로그인한 본인.
+  imageOwnerId?: string;
 };
 
 type BusinessProfileDraft = {
@@ -249,7 +251,9 @@ function imageExtension(file: File) {
   return "jpg";
 }
 
-async function uploadBusinessCoverImage(file: File) {
+// ownerId: 관리자 대행 작성에서는 브라우저 세션이 관리자이므로, 파일이 대상 가게
+// 폴더에 놓이도록 소유자 id를 따로 받는다. 서버가 경로 소유자를 다시 검증한다.
+async function uploadBusinessCoverImage(file: File, ownerId?: string) {
   const supabase = createClient();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) throw new Error("로그인 정보를 확인할 수 없습니다.");
@@ -257,7 +261,7 @@ async function uploadBusinessCoverImage(file: File) {
   const uniquePart = typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const path = `${user.id}/business/${Date.now()}-${uniquePart}.${imageExtension(file)}`;
+  const path = `${ownerId ?? user.id}/business/${Date.now()}-${uniquePart}.${imageExtension(file)}`;
   const { error } = await supabase.storage.from(BUSINESS_IMAGE_BUCKET).upload(path, file, {
     cacheControl: "31536000",
     contentType: file.type,
@@ -330,13 +334,14 @@ export function BusinessProfileWizard({
   message,
   next,
   mode = "create",
-  initialBusiness
+  initialBusiness,
+  imageOwnerId
 }: BusinessProfileWizardProps) {
   if (mode === "edit" && initialBusiness) {
-    return <BusinessProfileEditForm action={action} error={error} message={message} next={next} initialBusiness={initialBusiness} />;
+    return <BusinessProfileEditForm action={action} error={error} message={message} next={next} initialBusiness={initialBusiness} imageOwnerId={imageOwnerId} />;
   }
 
-  return <BusinessProfileCreateWizard action={action} error={error} message={message} next={next} mode={mode} initialBusiness={initialBusiness} />;
+  return <BusinessProfileCreateWizard action={action} error={error} message={message} next={next} mode={mode} initialBusiness={initialBusiness} imageOwnerId={imageOwnerId} />;
 }
 
 function BusinessProfileCreateWizard({
@@ -345,7 +350,8 @@ function BusinessProfileCreateWizard({
   message,
   next,
   mode = "create",
-  initialBusiness
+  initialBusiness,
+  imageOwnerId
 }: BusinessProfileWizardProps) {
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState(() => createInitialDraft(initialBusiness));
@@ -559,7 +565,7 @@ function BusinessProfileCreateWizard({
     setIsSubmitting(true);
 
     try {
-      if (coverImage) uploadedImagePath = await uploadBusinessCoverImage(coverImage);
+      if (coverImage) uploadedImagePath = await uploadBusinessCoverImage(coverImage, imageOwnerId);
 
       stage = "save";
       const submission = new FormData(form);
@@ -943,13 +949,15 @@ function BusinessProfileEditForm({
   error,
   message,
   next,
-  initialBusiness
+  initialBusiness,
+  imageOwnerId
 }: {
   action: (formData: FormData) => void | Promise<void>;
   error?: string;
   message?: string;
   next?: string;
   initialBusiness: InitialBusinessProfile;
+  imageOwnerId?: string;
 }) {
   const [draft, setDraft] = useState(() => createInitialDraft(initialBusiness));
   const [coverImagePreview, setCoverImagePreview] = useState<ImagePreview | null>(null);
@@ -1093,7 +1101,7 @@ function BusinessProfileEditForm({
     setIsSubmitting(true);
 
     try {
-      if (coverImage) uploadedImagePath = await uploadBusinessCoverImage(coverImage);
+      if (coverImage) uploadedImagePath = await uploadBusinessCoverImage(coverImage, imageOwnerId);
 
       stage = "save";
       const submission = new FormData(form);

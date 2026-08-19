@@ -803,7 +803,7 @@ export default async function BusinessDashboardPage({ searchParams }: { searchPa
   if (!business) {
     return (
       <main className="bg-[#F8F9FA]">
-        <BusinessProfileWizard action={saveBusinessProfile} error={error} message={message} next={next} initialBusiness={businessProfileDefaults ?? undefined} />
+        <BusinessProfileWizard action={saveBusinessProfile} error={error} message={message} next={next} initialBusiness={businessProfileDefaults ?? undefined} imageOwnerId={readOnlyPreview?.targetId} />
       </main>
     );
   }
