@@ -257,7 +257,7 @@ export async function saveBusinessProfile(formData: FormData) {
       social_urls: socialUrls,
       description: nullableText(formData, "description"),
       manager_name: managerName,
-      cover_image_updated: Boolean(coverImage)
+      cover_image_updated: Boolean(uploadedImagePath)
     };
     const [{ error: auditError }, { error: notificationError }] = await Promise.all([
       supabase.from("admin_delegation_audits").insert({
