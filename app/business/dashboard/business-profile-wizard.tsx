@@ -21,7 +21,10 @@ import {
 } from "lucide-react";
 import { FieldError, FieldLabel, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
 import { sendEmailVerification, sendPhoneVerification, verifyPhoneOtp } from "@/app/profile-verification-actions";
+import { logBusinessProfileUploadFailure } from "./actions";
+import { BUSINESS_IMAGE_BUCKET } from "@/lib/business-images";
 import { replaceHeicSelection, uploadableImageTypes } from "@/lib/heic";
+import { createClient } from "@/lib/supabase";
 import type { BusinessDashboardData } from "@/lib/supabase/queries";
 
 type InitialBusinessProfile = NonNullable<BusinessDashboardData["business"]>;
@@ -240,6 +243,45 @@ function getImageValidationMessage(file: File) {
   return "";
 }
 
+function imageExtension(file: File) {
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/webp") return "webp";
+  return "jpg";
+}
+
+async function uploadBusinessCoverImage(file: File) {
+  const supabase = createClient();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("로그인 정보를 확인할 수 없습니다.");
+
+  const uniquePart = typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const path = `${user.id}/business/${Date.now()}-${uniquePart}.${imageExtension(file)}`;
+  const { error } = await supabase.storage.from(BUSINESS_IMAGE_BUCKET).upload(path, file, {
+    cacheControl: "31536000",
+    contentType: file.type,
+    upsert: false
+  });
+
+  if (error) throw new Error(error.message);
+  return path;
+}
+
+async function removeBusinessCoverImage(path: string) {
+  try {
+    await createClient().storage.from(BUSINESS_IMAGE_BUCKET).remove([path]);
+  } catch {
+    // 저장이 실패한 뒤 임시 이미지 정리까지 실패해도 사용자 안내를 막지 않는다.
+  }
+}
+
+function profileSubmissionError(stage: "upload" | "save") {
+  return stage === "upload"
+    ? "대표 이미지 업로드에 실패했습니다. 네트워크 상태를 확인한 뒤 다시 시도해주세요."
+    : "프로필 저장 중 오류가 발생했습니다. 입력 내용은 유지되니 잠시 후 다시 시도해주세요.";
+}
+
 function splitSocialInput(value: string) {
   return value
     .split(/\r?\n|,/)
@@ -310,6 +352,8 @@ function BusinessProfileCreateWizard({
   const [coverImagePreview, setCoverImagePreview] = useState<ImagePreview | null>(null);
   const [socialInput, setSocialInput] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [submissionError, setSubmissionError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const isEditMode = mode === "edit";
@@ -492,7 +536,7 @@ function BusinessProfileCreateWizard({
     setStep((current) => Math.max(current - 1, 0));
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     for (let index = 0; index < steps.length; index += 1) {
       const errors = validateStep(index);
       if (Object.keys(errors).length) {
@@ -503,7 +547,34 @@ function BusinessProfileCreateWizard({
         return;
       }
     }
-    window.localStorage.removeItem(draftStorageKey);
+
+    event.preventDefault();
+    if (isSubmitting) return;
+
+    const form = event.currentTarget;
+    const coverImage = coverInputRef.current?.files?.[0] ?? null;
+    let uploadedImagePath = "";
+    let stage: "upload" | "save" = "upload";
+    setSubmissionError("");
+    setIsSubmitting(true);
+
+    try {
+      if (coverImage) uploadedImagePath = await uploadBusinessCoverImage(coverImage);
+
+      stage = "save";
+      const submission = new FormData(form);
+      submission.delete("cover_image");
+      if (uploadedImagePath) submission.set("cover_image_path", uploadedImagePath);
+      await action(submission);
+      window.localStorage.removeItem(draftStorageKey);
+    } catch (submissionFailure) {
+      if (uploadedImagePath) await removeBusinessCoverImage(uploadedImagePath);
+      const detail = submissionFailure instanceof Error ? submissionFailure.message : "알 수 없는 오류";
+      if (stage === "upload") void logBusinessProfileUploadFailure(detail).catch(() => undefined);
+      setSubmissionError(profileSubmissionError(stage));
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -551,7 +622,7 @@ function BusinessProfileCreateWizard({
         })}
       </ol>
 
-      {error ? <div className="mb-5"><FormBanner>{error}</FormBanner></div> : null}
+      {error || submissionError ? <div className="mb-5"><FormBanner>{submissionError || error}</FormBanner></div> : null}
       {message ? <p className="mb-5 rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</p> : null}
 
       <form action={action} onSubmit={handleSubmit} className="space-y-8">
@@ -590,7 +661,7 @@ function BusinessProfileCreateWizard({
                         <span className="mt-2 text-xs text-slate-500">JPG, PNG, WEBP · 최대 10MB</span>
                       </span>
                     )}
-                    <input ref={coverInputRef} name="cover_image" type="file" accept={businessImageAccept} onChange={handleCoverImageChange} className="sr-only" />
+                    <input ref={coverInputRef} type="file" accept={businessImageAccept} onChange={handleCoverImageChange} className="sr-only" />
                   </label>
                 </div>
 
@@ -847,8 +918,8 @@ function BusinessProfileCreateWizard({
             이전
           </button>
           {step === steps.length - 1 ? (
-            <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-10 py-3.5 font-black text-white shadow-md shadow-primary/30 transition-colors hover:bg-primaryHover sm:w-auto">
-              {submitLabel}
+            <button disabled={isSubmitting} className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-10 py-3.5 font-black text-white shadow-md shadow-primary/30 transition-colors hover:bg-primaryHover disabled:cursor-wait disabled:opacity-60 sm:w-auto">
+              {isSubmitting ? "사진 업로드 및 저장 중..." : submitLabel}
               <Check size={16} />
             </button>
           ) : (
@@ -884,6 +955,8 @@ function BusinessProfileEditForm({
   const [coverImagePreview, setCoverImagePreview] = useState<ImagePreview | null>(null);
   const [socialInput, setSocialInput] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [submissionError, setSubmissionError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const businessHoursSummary = useMemo(() => getBusinessHoursSummary(draft), [draft]);
   const displayImageUrl = coverImagePreview?.url ?? initialBusiness.coverImage ?? "";
@@ -993,20 +1066,48 @@ function BusinessProfileEditForm({
   }
 
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLElement | null;
     if (submitter?.dataset.skipProfileValidation === "true") return;
 
     const errors = collectEditErrors();
-    if (!Object.keys(errors).length) return;
+    if (Object.keys(errors).length) {
+      event.preventDefault();
+      setFieldErrors(errors);
+
+      const [firstName] = Object.keys(errors);
+      const control = document.querySelector<HTMLElement>(`[name="${firstName}"]`);
+      control?.focus();
+      control?.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
 
     event.preventDefault();
-    setFieldErrors(errors);
+    if (isSubmitting) return;
 
-    const [firstName] = Object.keys(errors);
-    const control = document.querySelector<HTMLElement>(`[name="${firstName}"]`);
-    control?.focus();
-    control?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const form = event.currentTarget;
+    const coverImage = coverInputRef.current?.files?.[0] ?? null;
+    let uploadedImagePath = "";
+    let stage: "upload" | "save" = "upload";
+    setSubmissionError("");
+    setIsSubmitting(true);
+
+    try {
+      if (coverImage) uploadedImagePath = await uploadBusinessCoverImage(coverImage);
+
+      stage = "save";
+      const submission = new FormData(form);
+      submission.delete("cover_image");
+      if (uploadedImagePath) submission.set("cover_image_path", uploadedImagePath);
+      await action(submission);
+    } catch (submissionFailure) {
+      if (uploadedImagePath) await removeBusinessCoverImage(uploadedImagePath);
+      const detail = submissionFailure instanceof Error ? submissionFailure.message : "알 수 없는 오류";
+      if (stage === "upload") void logBusinessProfileUploadFailure(detail).catch(() => undefined);
+      setSubmissionError(profileSubmissionError(stage));
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -1027,7 +1128,7 @@ function BusinessProfileEditForm({
         </Link>
       </div>
 
-      {error ? <div className="mb-5"><FormBanner>{error}</FormBanner></div> : null}
+      {error || submissionError ? <div className="mb-5"><FormBanner>{submissionError || error}</FormBanner></div> : null}
       {message ? <p className="mb-5 rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</p> : null}
 
       <form action={action} onSubmit={handleSubmit} className="space-y-6">
@@ -1098,7 +1199,7 @@ function BusinessProfileEditForm({
                 <span className="mt-2 text-xs text-slate-500">JPG, PNG, WEBP · 최대 10MB</span>
               </span>
             )}
-            <input ref={coverInputRef} name="cover_image" type="file" accept={businessImageAccept} onChange={handleCoverImageChange} className="sr-only" />
+            <input ref={coverInputRef} type="file" accept={businessImageAccept} onChange={handleCoverImageChange} className="sr-only" />
           </label>
         </FormCard>
 
@@ -1196,8 +1297,8 @@ function BusinessProfileEditForm({
           <Link href="/business/dashboard" className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-6 py-3.5 font-bold text-slate-600 transition-colors hover:border-primary hover:text-primary">
             취소
           </Link>
-          <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-10 py-3.5 font-black text-white shadow-md shadow-primary/30 transition-colors hover:bg-primaryHover">
-            프로필 저장하기
+          <button disabled={isSubmitting} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-10 py-3.5 font-black text-white shadow-md shadow-primary/30 transition-colors hover:bg-primaryHover disabled:cursor-wait disabled:opacity-60">
+            {isSubmitting ? "사진 업로드 및 저장 중..." : "프로필 저장하기"}
             <Check size={16} />
           </button>
         </div>

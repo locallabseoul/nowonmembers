@@ -1,14 +1,10 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/guards";
+import { BUSINESS_IMAGE_BUCKET, isOwnedBusinessImagePath } from "@/lib/business-images";
 import { logEvent } from "@/lib/events";
-
-const BUSINESS_IMAGE_BUCKET = "business-images";
-const MAX_BUSINESS_IMAGE_BYTES = 10 * 1024 * 1024;
-const ALLOWED_BUSINESS_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function splitList(value: FormDataEntryValue | null) {
   return String(value ?? "")
@@ -101,49 +97,15 @@ function normalizeUrl(value: string, label: string) {
   }
 }
 
-function getImageFile(formData: FormData, fieldName: string) {
-  const value = formData.get(fieldName);
-  return value instanceof File && value.size > 0 ? value : null;
-}
+function getBusinessImagePath(formData: FormData, userId: string) {
+  const path = String(formData.get("cover_image_path") ?? "").trim();
+  if (!path) return null;
 
-function validateImageFile(file: File) {
-  if (!ALLOWED_BUSINESS_IMAGE_TYPES.has(file.type)) {
-    return "대표 이미지는 JPG, PNG, WEBP 형식만 업로드할 수 있습니다.";
+  if (!isOwnedBusinessImagePath(userId, path)) {
+    redirectWithError(formData, "업로드한 대표 이미지 경로를 확인할 수 없습니다.");
   }
 
-  if (file.size > MAX_BUSINESS_IMAGE_BYTES) {
-    return "대표 이미지는 10MB 이하 파일만 업로드할 수 있습니다.";
-  }
-
-  return null;
-}
-
-function imageExtension(file: File) {
-  if (file.type === "image/png") return "png";
-  if (file.type === "image/webp") return "webp";
-  return "jpg";
-}
-
-async function uploadBusinessImage({
-  supabase,
-  userId,
-  file
-}: {
-  supabase: Awaited<ReturnType<typeof requireRole>>["supabase"];
-  userId: string;
-  file: File;
-}) {
-  const path = `${userId}/business/${Date.now()}-${randomUUID()}.${imageExtension(file)}`;
-  const { error } = await supabase.storage.from(BUSINESS_IMAGE_BUCKET).upload(path, file, {
-    cacheControl: "31536000",
-    contentType: file.type,
-    upsert: false
-  });
-
-  if (error) throw new Error(error.message);
-
-  const { data } = supabase.storage.from(BUSINESS_IMAGE_BUCKET).getPublicUrl(path);
-  return { path, publicUrl: data.publicUrl };
+  return path;
 }
 
 export async function saveBusinessProfile(formData: FormData) {
@@ -193,12 +155,6 @@ export async function saveBusinessProfile(formData: FormData) {
     redirectWithError(formData, message);
   }
 
-  const coverImage = getImageFile(formData, "cover_image");
-  if (coverImage) {
-    const imageValidationError = validateImageFile(coverImage);
-    if (imageValidationError) redirectWithError(formData, imageValidationError);
-  }
-
   const [{ data: isNicknameAvailable, error: nicknameAvailabilityError }, { data: isPhoneAvailable, error: phoneAvailabilityError }] = await Promise.all([
     supabase.rpc("is_profile_nickname_available", {
       target_nickname: businessName,
@@ -230,20 +186,12 @@ export async function saveBusinessProfile(formData: FormData) {
     .select("verification_status")
     .eq("id", user.id)
     .maybeSingle();
-  if (!coverImage && !existingBusiness?.cover_image_url) redirectWithError(formData, "대표 이미지를 등록해주세요.");
+  const uploadedImagePath = getBusinessImagePath(formData, user.id);
+  if (!uploadedImagePath && !existingBusiness?.cover_image_url) redirectWithError(formData, "대표 이미지를 등록해주세요.");
 
-  const uploadedPaths: string[] = [];
   let coverImageUrl = existingBusiness?.cover_image_url ?? "";
-
-  if (coverImage) {
-    try {
-      const uploadedImage = await uploadBusinessImage({ supabase, userId: user.id, file: coverImage });
-      uploadedPaths.push(uploadedImage.path);
-      coverImageUrl = uploadedImage.publicUrl;
-    } catch (uploadError) {
-      const message = uploadError instanceof Error ? uploadError.message : "이미지 업로드 중 오류가 발생했습니다.";
-      redirectWithError(formData, message);
-    }
+  if (uploadedImagePath) {
+    coverImageUrl = supabase.storage.from(BUSINESS_IMAGE_BUCKET).getPublicUrl(uploadedImagePath).data.publicUrl;
   }
 
   const { error } = await supabase.from("business_profiles").upsert({
@@ -273,7 +221,7 @@ export async function saveBusinessProfile(formData: FormData) {
   }, { onConflict: "user_id" });
 
   if (error) {
-    if (uploadedPaths.length) await supabase.storage.from(BUSINESS_IMAGE_BUCKET).remove(uploadedPaths);
+    if (uploadedImagePath) await supabase.storage.from(BUSINESS_IMAGE_BUCKET).remove([uploadedImagePath]);
     redirectWithError(formData, error.message);
   }
 
@@ -294,6 +242,13 @@ export async function saveBusinessProfile(formData: FormData) {
   revalidatePath("/business/dashboard");
   const next = getSafeNext(formData.get("next"));
   redirect(next || "/business/dashboard");
+}
+
+export async function logBusinessProfileUploadFailure(message: string) {
+  await requireRole("business", "/business/dashboard");
+  logEvent("business_profile.upload_failed", {
+    error: message.slice(0, 300)
+  });
 }
 
 export async function approveRecommendedApplication(formData: FormData) {
