@@ -1,13 +1,9 @@
 import Link from "next/link";
 import { CircleAlert, CircleCheck } from "lucide-react";
+import { isFailureEventName } from "@/lib/event-logging";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const PAGE_SIZE = 100;
-
-// 실패 이벤트는 *_failed 접미사를 쓰기로 한 규약에 기댄다(lib/events.ts 참고).
-function isFailureEvent(event: string) {
-  return event.endsWith("_failed");
-}
 
 const formatOccurredAt = (value: string) =>
   new Intl.DateTimeFormat("ko-KR", {
@@ -40,7 +36,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams: 
     .order("occurred_at", { ascending: false })
     .limit(PAGE_SIZE);
 
-  if (failedOnly) query = query.like("event", "%_failed");
+  if (failedOnly) query = query.or("event.like.*_failed,event.like.*.failed");
   if (event) query = query.like("event", `${event}%`);
 
   const { data, error } = await query;
@@ -83,7 +79,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams: 
         <div className="overflow-hidden rounded-[20px] border border-gray-100 bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
           <ul className="divide-y divide-gray-100">
             {events.map((row) => {
-              const failed = isFailureEvent(row.event);
+              const failed = isFailureEventName(row.event);
               const context = row.context ?? {};
               const errorMessage = typeof context.error === "string" ? context.error : "";
               const extraEntries = Object.entries(context).filter(([key]) => key !== "error");

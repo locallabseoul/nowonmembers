@@ -7,6 +7,7 @@ import { normalizePhoneNumber, toKoreanE164Phone } from "@/lib/auth/phone";
 import { isTestPhoneBypassAllowed } from "@/lib/auth/test-phone-bypass";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal";
 import { collectFieldErrors, fieldError, hasErrors, keepValues, type FormState } from "@/lib/form-errors";
+import { getErrorLogContext } from "@/lib/event-logging";
 import { logEvent } from "@/lib/events";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -288,7 +289,7 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
       const duplicateMessage = getDuplicateSignupMessage(createError);
       const field = duplicateMessage ? getDuplicateSignupField(duplicateMessage, nicknameField) : null;
 
-      logEvent("signup.failed", { role, stage: "test_create", error: duplicateMessage ?? createError.message });
+      logEvent("signup.failed", { role, stage: "test_create", ...getErrorLogContext(createError, duplicateMessage) });
       return field
         ? { ...fieldError(field, duplicateMessage as string), values: kept }
         : { formError: duplicateMessage ?? "테스트 회원가입을 처리하지 못했습니다.", values: kept };
@@ -350,7 +351,7 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
           const message = getDuplicateSignupMessage(profileError);
           const field = message ? getDuplicateSignupField(message, nicknameField) : null;
 
-          logEvent("signup.failed", { role, stage: "profile_upsert", error: message ?? profileError.message });
+          logEvent("signup.failed", { role, stage: "profile_upsert", ...getErrorLogContext(profileError, message) });
           return field
             ? { ...fieldError(field, message as string), values: kept }
             : { formError: message ?? "가입 정보를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.", values: kept };
@@ -370,7 +371,7 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
         ]);
 
         if (termsAcceptance.error || privacyAcceptance.error) {
-          logEvent("signup.failed", { role, stage: "legal_acceptance", error: (termsAcceptance.error ?? privacyAcceptance.error)?.message ?? "" });
+          logEvent("signup.failed", { role, stage: "legal_acceptance", ...getErrorLogContext(termsAcceptance.error ?? privacyAcceptance.error) });
           return { formError: "약관 동의 이력을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.", values: kept };
         }
 
@@ -384,6 +385,7 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
       });
 
       if (resendError) {
+        logEvent("signup.failed", { role, stage: "otp_resend", ...getErrorLogContext(resendError) });
         return { ...fieldError("phone", getAuthOtpErrorMessage(resendError)), values: kept };
       }
 
@@ -392,13 +394,13 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
 
     if (duplicateMessage) {
       const field = getDuplicateSignupField(duplicateMessage, nicknameField);
-      logEvent("signup.failed", { role, stage: "auth_signup", error: duplicateMessage });
+      logEvent("signup.failed", { role, stage: "auth_signup", ...getErrorLogContext(error, duplicateMessage) });
       return field
         ? { ...fieldError(field, duplicateMessage), values: kept }
         : { formError: duplicateMessage, values: kept };
     }
 
-    logEvent("signup.failed", { role, stage: "auth_signup", error: error.message });
+    logEvent("signup.failed", { role, stage: "auth_signup", ...getErrorLogContext(error) });
     return { formError: "회원가입 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.", values: kept };
   }
 
@@ -451,7 +453,7 @@ export async function verifyAuthPhoneOtp(_prevState: FormState, formData: FormDa
   });
 
   if (error) {
-    logEvent("auth.otp_failed", { role, source, type, error: error.message });
+    logEvent("auth.otp_failed", { role, source, type, ...getErrorLogContext(error) });
     return fieldError("token", getOtpVerifyErrorMessage(error));
   }
 
@@ -493,7 +495,7 @@ export async function verifyAuthPhoneOtp(_prevState: FormState, formData: FormDa
 
     if (profileError) {
       const message = getDuplicateSignupMessage(profileError);
-      logEvent("signup.failed", { role, stage: "profile_upsert", error: message ?? profileError.message });
+      logEvent("signup.failed", { role, stage: "profile_upsert", ...getErrorLogContext(profileError, message) });
       return { formError: message ?? "가입 정보를 저장하지 못했습니다. 잠시 후 다시 시도해주세요." };
     }
 
@@ -513,7 +515,7 @@ export async function verifyAuthPhoneOtp(_prevState: FormState, formData: FormDa
     ]);
 
     if (termsAcceptance.error || privacyAcceptance.error) {
-      logEvent("signup.failed", { role, stage: "legal_acceptance", error: (termsAcceptance.error ?? privacyAcceptance.error)?.message ?? "" });
+      logEvent("signup.failed", { role, stage: "legal_acceptance", ...getErrorLogContext(termsAcceptance.error ?? privacyAcceptance.error) });
       return { formError: "약관 동의 이력을 저장하지 못했습니다. 잠시 후 다시 시도해주세요." };
     }
   }
@@ -540,6 +542,7 @@ export async function resendAuthPhoneOtp(_prevState: FormState, formData: FormDa
   });
 
   if (error) {
+    logEvent("auth.otp_resend_failed", { type, ...getErrorLogContext(error) });
     return { formError: getAuthOtpErrorMessage(error) };
   }
 
