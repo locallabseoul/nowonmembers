@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { getAccountPath } from "@/lib/auth/guards";
 import { track } from "@vercel/analytics/server";
 import { isKoreanMobilePhoneNumber, normalizePhoneNumber, toKoreanE164Phone } from "@/lib/auth/phone";
-import { isRetryableAuthError } from "@/lib/auth/retryable-error";
 import { isTestPhoneBypassAllowed } from "@/lib/auth/test-phone-bypass";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal";
 import { collectFieldErrors, fieldError, hasErrors, keepValues, type FormState } from "@/lib/form-errors";
@@ -313,27 +312,14 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
     redirect(profilePathForRole(role));
   }
 
-  const signupPayload = {
+  const { data, error } = await supabase.auth.signUp({
     phone: authPhone,
     password,
     options: {
-      channel: "sms" as const,
+      channel: "sms",
       data: signupMetadata
     }
-  };
-
-  let { data, error } = await supabase.auth.signUp(signupPayload);
-  let retryAttempted = false;
-
-  // AuthRetryableFetchError는 Auth 서버가 가입 성공 여부를 확정하지 못한 상태다.
-  // 한 번만 다시 요청하면, 첫 요청에서 사용자가 생성된 경우 기존의 중복 가입
-  // 복구(로그인 확인 후 OTP 재발송)로 이어지고 미생성인 경우 가입을 완료한다.
-  if (error && isRetryableAuthError(error)) {
-    retryAttempted = true;
-    logEvent("signup.retrying", { role, stage: "auth_signup", ...getErrorLogContext(error) });
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    ({ data, error } = await supabase.auth.signUp(signupPayload));
-  }
+  });
 
   if (error) {
     const duplicateMessage = getDuplicateSignupMessage(error);
@@ -408,17 +394,15 @@ export async function signUp(_prevState: FormState, formData: FormData): Promise
 
     if (duplicateMessage) {
       const field = getDuplicateSignupField(duplicateMessage, nicknameField);
-      logEvent("signup.failed", { role, stage: "auth_signup", retryAttempted, ...getErrorLogContext(error, duplicateMessage) });
+      logEvent("signup.failed", { role, stage: "auth_signup", ...getErrorLogContext(error, duplicateMessage) });
       return field
         ? { ...fieldError(field, duplicateMessage), values: kept }
         : { formError: duplicateMessage, values: kept };
     }
 
-    logEvent("signup.failed", { role, stage: "auth_signup", retryAttempted, ...getErrorLogContext(error) });
+    logEvent("signup.failed", { role, stage: "auth_signup", ...getErrorLogContext(error) });
     return {
-      formError: isRetryableAuthError(error)
-        ? "인증 서버 연결이 일시적으로 불안정합니다. 잠시 후 다시 시도해주세요. 반복되면 관리자에게 문의해주세요."
-        : "회원가입 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+      formError: "인증번호를 보내지 못했습니다. 휴대폰 번호를 확인한 뒤 다시 시도해주세요.",
       values: kept
     };
   }
