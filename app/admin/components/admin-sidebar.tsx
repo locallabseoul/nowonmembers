@@ -2,20 +2,29 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { BellRing, ClipboardCheck, CreditCard, FileCheck, LayoutDashboard, Megaphone, ScrollText, Send, ShieldCheck, Ticket, Users } from "lucide-react";
+import type { AdminMenuUnreadState, AdminUnreadMenuKey } from "@/lib/admin-menu-unread";
+import { markAdminMenuRead } from "./actions";
 
 // operator-sidebar와 같은 모양새. 다만 관리자 페이지는 레이아웃이 사이드바를 한 번만
 // 렌더링하므로, 페이지마다 active를 넘기는 대신 경로로 판단한다.
-const menuItems = [
+const menuItems: Array<{
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  exact: boolean;
+  unreadKey?: AdminUnreadMenuKey;
+}> = [
   { href: "/admin", label: "개요", icon: LayoutDashboard, exact: true },
-  { href: "/admin/campaigns", label: "캠페인 심사", icon: ClipboardCheck, exact: false },
-  { href: "/admin/coupons", label: "쿠폰 심사", icon: Ticket, exact: false },
-  { href: "/admin/submissions", label: "콘텐츠 검수", icon: FileCheck, exact: false },
+  { href: "/admin/campaigns", label: "캠페인 심사", icon: ClipboardCheck, exact: false, unreadKey: "campaigns" },
+  { href: "/admin/coupons", label: "쿠폰 심사", icon: Ticket, exact: false, unreadKey: "coupons" },
+  { href: "/admin/submissions", label: "콘텐츠 검수", icon: FileCheck, exact: false, unreadKey: "submissions" },
   { href: "/admin/members", label: "회원 관리", icon: Users, exact: false },
   { href: "/admin/points", label: "포인트·정산", icon: CreditCard, exact: false },
   { href: "/admin/notices", label: "공지 관리", icon: Megaphone, exact: false },
   { href: "/admin/messages", label: "문자 발송", icon: Send, exact: false },
-  { href: "/admin/notifications", label: "자동 알림", icon: BellRing, exact: false },
+  { href: "/admin/notifications", label: "자동 알림", icon: BellRing, exact: false, unreadKey: "notifications" },
   { href: "/admin/events", label: "이벤트 로그", icon: ScrollText, exact: false }
 ];
 
@@ -27,8 +36,20 @@ function navClassName(isActive: boolean) {
   }`;
 }
 
-export function AdminSidebar() {
+export function AdminSidebar({ unreadState }: { unreadState: AdminMenuUnreadState }) {
   const pathname = usePathname();
+  const activeUnreadKey = useMemo(() => menuItems.find((item) => item.unreadKey && pathname.startsWith(item.href))?.unreadKey as AdminUnreadMenuKey | undefined, [pathname]);
+  const [counts, setCounts] = useState(unreadState.counts);
+
+  useEffect(() => {
+    setCounts(unreadState.counts);
+  }, [unreadState]);
+
+  useEffect(() => {
+    if (!activeUnreadKey || unreadState.counts[activeUnreadKey] <= 0) return;
+    setCounts((current) => ({ ...current, [activeUnreadKey]: 0 }));
+    void markAdminMenuRead(activeUnreadKey, unreadState.observedAt);
+  }, [activeUnreadKey, unreadState.counts, unreadState.observedAt]);
 
   return (
     <aside className="w-full shrink-0 space-y-6 lg:w-64">
@@ -47,11 +68,17 @@ export function AdminSidebar() {
           {menuItems.map((item) => {
             const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
             const Icon = item.icon;
+            const unreadCount = item.unreadKey ? counts[item.unreadKey] : 0;
             return (
               <li key={item.href}>
                 <Link href={item.href} className={navClassName(isActive)}>
                   <Icon size={20} />
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {unreadCount > 0 ? (
+                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black leading-4 text-white" aria-label={`읽지 않은 새 항목 ${unreadCount}개`}>
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  ) : null}
                 </Link>
               </li>
             );
