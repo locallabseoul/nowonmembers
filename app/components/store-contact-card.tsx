@@ -5,6 +5,7 @@ export type StoreContact = {
   name: string;
   address: string;
   contact: string;
+  managerPhone: string;
   businessHours: string;
 };
 
@@ -34,9 +35,10 @@ export function StoreContactCard({
   visitDate?: string;
   submissionDue?: string;
 }) {
-  if (!store.name && !store.contact && !store.address) return null;
+  if (!store.name && !store.contact && !store.managerPhone && !store.address) return null;
 
-  const phone = store.contact ? formatPhone(store.contact) : "";
+  const storePhone = store.contact ? formatPhone(store.contact) : "";
+  const managerPhone = store.managerPhone ? formatPhone(store.managerPhone) : "";
 
   return (
     <section className={`rounded-[20px] border border-primary/20 bg-primaryLight/60 ${compact ? "p-4" : "p-5"}`}>
@@ -63,14 +65,21 @@ export function StoreContactCard({
         ) : null}
       </dl>
 
-      {phone ? (
-        <a
-          href={`tel:${store.contact.replace(/\D/g, "")}`}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 font-black text-white transition-colors hover:bg-primaryHover"
-        >
-          <Phone size={16} />
-          {phone}
-        </a>
+      {storePhone || managerPhone ? (
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {storePhone ? (
+            <a href={`tel:${store.contact.replace(/\D/g, "")}`} className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-black text-white transition-colors hover:bg-primaryHover">
+              <Phone size={16} />
+              <span>매장 {storePhone}</span>
+            </a>
+          ) : null}
+          {managerPhone ? (
+            <a href={`tel:${store.managerPhone.replace(/\D/g, "")}`} className="flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-white px-4 py-3 text-sm font-black text-primary transition-colors hover:bg-primaryLight">
+              <Phone size={16} />
+              <span>담당자 {managerPhone}</span>
+            </a>
+          ) : null}
+        </div>
       ) : (
         <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold leading-5 text-amber-800">
           매장 연락처가 등록되지 않았습니다. 운영자에게 문의해주세요.

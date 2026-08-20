@@ -291,6 +291,13 @@ function ApplicantCard({ application }: { application: DashboardApplication }) {
       </div>
       <p className="text-sm font-black text-charcoal">{application.creatorNickname}</p>
       <p className="mt-1 text-xs font-bold text-gray-400">{application.creatorChannelSummary} · 포트폴리오 {application.portfolioCount}개</p>
+      {application.creatorBlogUrl ? (
+        <a href={application.creatorBlogUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-black text-primary hover:underline">
+          지원자 블로그 보기 <ExternalLink size={12} />
+        </a>
+      ) : (
+        <p className="mt-2 text-xs font-bold text-gray-400">블로그 미등록</p>
+      )}
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500">
         <span>{application.proposedContentType || "콘텐츠 유형 미정"}</span>
         <span>{formatAppliedAt(application.appliedAt)}</span>

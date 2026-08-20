@@ -267,6 +267,7 @@ export type DashboardApplication = {
   selectedCount: number;
   creatorNickname: string;
   creatorChannelSummary: string;
+  creatorBlogUrl: string;
   portfolioCount: number;
   message: string;
   availableDates: string;
@@ -642,6 +643,7 @@ export type CreatorDashboardData = {
       name: string;
       address: string;
       contact: string;
+      managerPhone: string;
       businessHours: string;
     };
   }[];
@@ -663,6 +665,7 @@ export type CollaborationSubmissionDetail = {
     name: string;
     address: string;
     contact: string;
+    managerPhone: string;
     businessHours: string;
   };
   submission: {
@@ -799,6 +802,7 @@ function mapDashboardApplication(row: DashboardApplicationRow): DashboardApplica
     selectedCount: relationCount(campaign?.collaborations),
     creatorNickname: profile?.nickname || profile?.email?.split("@")[0] || "크리에이터",
     creatorChannelSummary: formatCreatorChannelSummary(creator?.creator_channels),
+    creatorBlogUrl: getCreatorBlogUrl(creator?.creator_channels),
     portfolioCount: relationCount(creator?.portfolios),
     message: row.message ?? "",
     availableDates: row.available_dates ?? "",
@@ -847,6 +851,15 @@ function getPrimaryCreatorChannel(channels?: CreatorChannelRow[] | null) {
   if (!channels?.length) return null;
 
   return [...channels].sort((a, b) => (b.follower_count ?? 0) - (a.follower_count ?? 0))[0];
+}
+
+function getCreatorBlogUrl(channels?: CreatorChannelRow[] | null) {
+  if (!channels?.length) return "";
+
+  const blogChannel = channels.find((channel) => channel.platform === "네이버 블로그")
+    ?? channels.find((channel) => channel.channel_url?.includes("blog.naver.com"));
+
+  return blogChannel?.channel_url ?? "";
 }
 
 function getTimestamp(value?: string | null) {
@@ -1003,7 +1016,7 @@ const dashboardApplicationSelect = `
     id,
     user_id,
     profiles(nickname,email),
-    creator_channels(platform,channel_name,follower_count),
+    creator_channels(platform,channel_name,channel_url,follower_count),
     portfolios(count)
   ),
   campaigns(
@@ -2510,6 +2523,8 @@ export async function getAdminMessages(limit = 30): Promise<AdminMessage[]> {
 export async function getCreatorDashboard(): Promise<CreatorDashboardData> {
   const supabase = await createSupabaseServerClient();
   const user = await getCurrentSupabaseUser(supabase);
+  const { getReadOnlyPreview } = await import("@/lib/auth/read-only-preview");
+  const readOnlyPreview = await getReadOnlyPreview();
 
   if (!user) {
     return { creator: null, applications: [], collaborations: [], submissions: [] };
@@ -2526,7 +2541,7 @@ export async function getCreatorDashboard(): Promise<CreatorDashboardData> {
     return { creator: null, applications: [], collaborations: [], submissions: [] };
   }
 
-  const [applicationRows, collaborationRows, submissionRows] = await Promise.all([
+  const [applicationRows, collaborationRows, submissionRows, storePhoneRows] = await Promise.all([
     supabase
       .from("campaign_applications")
       .select("id,campaign_id,status,proposed_content_type,campaigns(title,cover_image_url,region,campaign_type,selection_date,benefit_type,benefit_value,status,recruit_end)")
@@ -2540,8 +2555,16 @@ export async function getCreatorDashboard(): Promise<CreatorDashboardData> {
     supabase
       .from("content_submissions")
       .select("id,review_status,collaborations!inner(creator_id)")
-      .eq("collaborations.creator_id", creator.id)
+      .eq("collaborations.creator_id", creator.id),
+    supabase.rpc("get_my_collaboration_store_phones", {
+      target_creator_user_id: readOnlyPreview?.role === "creator" ? readOnlyPreview.targetId : null
+    })
   ]);
+
+  const storePhones = new Map(
+    ((storePhoneRows.data ?? []) as Array<{ collaboration_id: string; manager_phone: string | null }>)
+      .map((row) => [row.collaboration_id, row.manager_phone ?? ""])
+  );
 
   return {
     creator: {
@@ -2600,6 +2623,7 @@ export async function getCreatorDashboard(): Promise<CreatorDashboardData> {
             .filter(Boolean)
             .join(" "),
           contact: store?.contact ?? "",
+          managerPhone: storePhones.get(collaboration.id) ?? "",
           businessHours: getBusinessHoursText(store?.business_hours as BusinessHoursValue, "summary")
         }
       };
@@ -2613,7 +2637,9 @@ export async function getCreatorDashboard(): Promise<CreatorDashboardData> {
 
 export async function getCollaborationSubmissionDetail(id: string): Promise<CollaborationSubmissionDetail> {
   const supabase = await createSupabaseServerClient();
-  const [{ data, error }, { data: submissionRows }] = await Promise.all([
+  const { getReadOnlyPreview } = await import("@/lib/auth/read-only-preview");
+  const readOnlyPreview = await getReadOnlyPreview();
+  const [{ data, error }, { data: submissionRows }, { data: storePhoneRows }] = await Promise.all([
     supabase
       .from("collaborations")
       .select("id,submission_due,visit_date,status,campaigns(title,cover_image_url,region,region_detail,business_profiles(business_name,address,address_detail,contact,business_hours))")
@@ -2624,7 +2650,11 @@ export async function getCollaborationSubmissionDetail(id: string): Promise<Coll
       .select("id,platform,content_url,published_at,preview_image_url,disclosure_confirmed,review_status,admin_memo")
       .eq("collaboration_id", id)
       .order("created_at", { ascending: false })
-      .limit(1)
+      .limit(1),
+    supabase.rpc("get_my_collaboration_store_phones", {
+      target_collaboration_id: id,
+      target_creator_user_id: readOnlyPreview?.role === "creator" ? readOnlyPreview.targetId : null
+    })
   ]);
 
   if (error || !data) return null;
@@ -2646,6 +2676,7 @@ export async function getCollaborationSubmissionDetail(id: string): Promise<Coll
         .filter(Boolean)
         .join(" "),
       contact: store?.contact ?? "",
+      managerPhone: (storePhoneRows?.[0] as { manager_phone?: string | null } | undefined)?.manager_phone ?? "",
       businessHours: getBusinessHoursText(store?.business_hours as BusinessHoursValue, "summary")
     },
     submission: submission
