@@ -170,6 +170,20 @@ export async function getPublicCoupon(id: string) {
   return data ? mapPublicCoupon(data as unknown as PublicCouponRow) : null;
 }
 
+export async function getActivePublicCouponsByBusinessId(businessId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("coupons")
+    .select("id,business_id,title,description,cover_image_url,benefit_type,benefit_value,terms,total_quantity,claimed_quantity,start_date,end_date,status,redemption_code_configured,created_at,business_profiles(business_name,category,address,address_detail,contact,cover_image_url)")
+    .eq("business_id", businessId)
+    .eq("status", "approved")
+    .order("created_at", { ascending: false });
+
+  return ((data ?? []) as unknown as Omit<CouponRow, "admin_memo">[])
+    .map((coupon) => mapCoupon({ ...coupon, admin_memo: null }))
+    .filter((coupon) => getCouponDisplayStatus(coupon) === "claiming");
+}
+
 export async function getMyCouponClaims(userId: string) {
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase

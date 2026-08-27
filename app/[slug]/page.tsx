@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Clock3, ExternalLink, Globe2, MapPin, Phone } from "lucide-react";
-import { getPublicBusinessProfileBySlug } from "@/lib/supabase/queries";
+import { ChevronRight, Clock3, ExternalLink, Globe2, MapPin, Megaphone, Package, Phone, Ticket } from "lucide-react";
+import { getCampaignDeadlineLabel } from "@/lib/campaign-lifecycle";
+import { getActivePublicCouponsByBusinessId, getCouponBenefitLabel, type Coupon } from "@/lib/coupons";
+import { getPublicBusinessProfileBySlug, getRecruitingCampaignsByBusinessId } from "@/lib/supabase/queries";
+import { formatProductPrice, getPublicProductsByBusinessId, type BusinessProduct } from "@/lib/products";
+import type { Campaign } from "@/lib/types";
 import { normalizeBusinessSlug } from "@/lib/business-slug";
 import { PUBLIC_SITE_URL } from "@/lib/site";
 import { ShareButton } from "./share-button";
@@ -25,6 +29,7 @@ export async function generateMetadata({ params }: MinihomePageProps): Promise<M
     twitter: { card: "summary_large_image", title, description, images }
   };
 }
+
 function externalLabel(url: string) {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -33,78 +38,164 @@ function externalLabel(url: string) {
   }
 }
 
+function CouponLink({ coupon }: { coupon: Coupon }) {
+  return (
+    <Link href={`/coupons/${coupon.id}`} className="group flex min-h-[68px] items-center gap-3 rounded-2xl border border-stone-200 bg-white p-3 shadow-sm transition hover:border-primary/50 hover:shadow-md">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary/10 text-primary">
+        {coupon.coverImage ? <img src={coupon.coverImage} alt="" className="h-full w-full object-cover" /> : <Ticket size={20} />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-black text-charcoal">{coupon.title}</span>
+        <span className="mt-1 block truncate text-xs font-bold text-primary">
+          {getCouponBenefitLabel(coupon)} · 잔여 {coupon.remainingQuantity.toLocaleString("ko-KR")}장
+        </span>
+      </span>
+      <ChevronRight size={18} className="shrink-0 text-stone-300 transition group-hover:text-primary" />
+    </Link>
+  );
+}
+
+function CampaignLink({ campaign }: { campaign: Campaign }) {
+  return (
+    <Link href={`/campaigns/${campaign.id}`} className="group flex min-h-[68px] items-center gap-3 rounded-2xl border border-stone-200 bg-white p-3 shadow-sm transition hover:border-primary/50 hover:shadow-md">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-emerald-50 text-emerald-600">
+        {campaign.coverImage ? <img src={campaign.coverImage} alt="" className="h-full w-full object-cover" /> : <Megaphone size={20} />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-black text-charcoal">{campaign.title}</span>
+        <span className="mt-1 block truncate text-xs font-bold text-stone-500">
+          크리에이터 모집 중 · {getCampaignDeadlineLabel(campaign)}
+        </span>
+      </span>
+      <ChevronRight size={18} className="shrink-0 text-stone-300 transition group-hover:text-primary" />
+    </Link>
+  );
+}
+
+function ProductLink({ product }: { product: BusinessProduct }) {
+  return (
+    <a href={product.linkUrl} target="_blank" rel="noreferrer" className="group flex min-h-[68px] items-center gap-3 rounded-2xl border border-stone-200 bg-white p-3 shadow-sm transition hover:border-primary/50 hover:shadow-md">
+      <img src={product.imageUrl} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-black text-charcoal">{product.name}</span>
+        <span className="mt-1 block truncate text-xs text-stone-500">
+          <strong className="font-black text-primary">{formatProductPrice(product.price)}</strong>
+          <span className="mx-1.5 text-stone-300">·</span>
+          {product.shortDescription}
+        </span>
+      </span>
+      <ExternalLink size={15} className="shrink-0 text-stone-300 transition group-hover:text-primary" />
+    </a>
+  );
+}
+
 export default async function MinihomePage({ params }: MinihomePageProps) {
   const { slug } = await params;
   const business = await getPublicBusinessProfileBySlug(normalizeBusinessSlug(slug));
   if (!business) notFound();
 
+  const [allCoupons, allCampaigns, products] = await Promise.all([
+    getActivePublicCouponsByBusinessId(business.businessId),
+    getRecruitingCampaignsByBusinessId(business.businessId),
+    getPublicProductsByBusinessId(business.businessId)
+  ]);
+  const coupons = allCoupons.slice(0, 3);
+  const campaigns = allCampaigns.slice(0, 3);
   const fullAddress = [business.address, business.addressDetail].filter(Boolean).join(" ");
   const mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(fullAddress)}`;
   const pageUrl = `${PUBLIC_SITE_URL}/${business.slug}`;
   const externalLinks = [business.websiteUrl, ...business.socialUrls].filter(Boolean);
+  const initial = business.businessName.trim().slice(0, 1) || "N";
 
   return (
-    <main className="minihome-shell min-h-dvh bg-[#f4f1eb] text-[#26231f]">
-      <article className="mx-auto min-h-dvh w-full max-w-2xl bg-[#fffdf8] shadow-2xl shadow-stone-300/50">
-        <section className="relative aspect-[4/3] min-h-[320px] overflow-hidden bg-stone-200 sm:aspect-[16/10]">
-          <img src={business.coverImage} alt={`${business.businessName} 대표 이미지`} className="h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-black/10" />
-          <div className="absolute right-5 top-5">
+    <main className="minihome-shell min-h-dvh bg-[#f3f4f1] text-charcoal">
+      <article className="mx-auto min-h-dvh w-full max-w-lg px-5 pb-8 pt-7 sm:pt-10">
+        <header className="relative text-center">
+          <div className="absolute right-0 top-0">
             <ShareButton title={business.businessName} url={pageUrl} />
           </div>
-          <div className="absolute inset-x-0 bottom-0 p-6 text-white sm:p-9">
-            <span className="inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-black backdrop-blur">{business.category}</span>
-            <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">{business.businessName}</h1>
-            {business.shortIntro ? <p className="mt-3 max-w-xl text-sm font-bold leading-6 text-white/90 sm:text-base">{business.shortIntro}</p> : null}
+          <div className="mx-auto flex h-[88px] w-[88px] items-center justify-center overflow-hidden rounded-[28px] border-4 border-white bg-primary/10 text-2xl font-black text-primary shadow-md">
+            {business.coverImage ? <img src={business.coverImage} alt={`${business.businessName} 프로필`} className="h-full w-full object-cover" /> : initial}
           </div>
-        </section>
+          <span className="mt-4 inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black text-stone-500 shadow-sm">{business.category}</span>
+          <h1 className="mt-2 text-2xl font-black tracking-tight">{business.businessName}</h1>
+          {business.shortIntro ? <p className="mx-auto mt-2 max-w-sm text-sm font-bold leading-6 text-stone-600">{business.shortIntro}</p> : null}
+          {business.description ? <p className="mx-auto mt-2 line-clamp-3 max-w-sm whitespace-pre-line text-xs leading-5 text-stone-400">{business.description}</p> : null}
 
-        <div className="space-y-10 px-6 py-9 sm:px-10 sm:py-12">
-          {business.description ? (
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            {business.contact ? (
+              <a href={`tel:${business.contact}`} className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-xs font-black text-stone-600 shadow-sm transition hover:border-primary hover:text-primary">
+                <Phone size={15} /> 전화
+              </a>
+            ) : null}
+            {fullAddress ? (
+              <a href={mapUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-xs font-black text-stone-600 shadow-sm transition hover:border-primary hover:text-primary">
+                <MapPin size={15} /> 길찾기
+              </a>
+            ) : null}
+          </div>
+        </header>
+
+        <div className="mt-8 space-y-7">
+          {coupons.length ? (
             <section>
-              <h2 className="text-lg font-black">가게 이야기</h2>
-              <p className="mt-4 whitespace-pre-wrap text-[15px] leading-7 text-stone-600">{business.description}</p>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="flex items-center gap-2 text-sm font-black"><Ticket size={17} className="text-primary" /> 받을 수 있는 쿠폰</h2>
+                <span className="text-xs font-bold text-stone-400">{allCoupons.length}개</span>
+              </div>
+              <div className="space-y-2">{coupons.map((coupon) => <CouponLink key={coupon.id} coupon={coupon} />)}</div>
+              {allCoupons.length > coupons.length ? (
+                <Link href={`/coupons?q=${encodeURIComponent(business.businessName)}`} className="mt-3 flex items-center justify-center gap-1 text-xs font-black text-stone-400 hover:text-primary">쿠폰 전체 보기 <ChevronRight size={14} /></Link>
+              ) : null}
             </section>
           ) : null}
 
-          <section className="space-y-5 border-y border-stone-200 py-8">
-            {fullAddress ? (
-              <a href={mapUrl} target="_blank" rel="noreferrer" className="flex items-start gap-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><MapPin size={19} /></span>
-                <span className="min-w-0 pt-0.5"><span className="block text-xs font-black text-stone-400">주소</span><span className="mt-1 block text-sm font-bold leading-6">{fullAddress}</span></span>
-                <ExternalLink size={15} className="ml-auto mt-3 shrink-0 text-stone-400" />
-              </a>
-            ) : null}
-            {business.businessHours ? (
-              <div className="flex items-start gap-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Clock3 size={19} /></span>
-                <span className="pt-0.5"><span className="block text-xs font-black text-stone-400">영업시간</span><span className="mt-1 block text-sm font-bold leading-6">{business.businessHours}</span></span>
+          {campaigns.length ? (
+            <section>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="flex items-center gap-2 text-sm font-black"><Megaphone size={17} className="text-emerald-600" /> 모집 중인 캠페인</h2>
+                <span className="text-xs font-bold text-stone-400">{allCampaigns.length}개</span>
               </div>
-            ) : null}
-            {business.contact ? (
-              <a href={`tel:${business.contact}`} className="flex items-start gap-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Phone size={19} /></span>
-                <span className="pt-0.5"><span className="block text-xs font-black text-stone-400">전화</span><span className="mt-1 block text-sm font-bold leading-6">{business.contact}</span></span>
-              </a>
-            ) : null}
-          </section>
+              <div className="space-y-2">{campaigns.map((campaign) => <CampaignLink key={campaign.id} campaign={campaign} />)}</div>
+              {allCampaigns.length > campaigns.length ? (
+                <Link href={`/campaigns?status=recruiting&q=${encodeURIComponent(business.businessName)}`} className="mt-3 flex items-center justify-center gap-1 text-xs font-black text-stone-400 hover:text-primary">캠페인 전체 보기 <ChevronRight size={14} /></Link>
+              ) : null}
+            </section>
+          ) : null}
+
+          {products.length ? (
+            <section>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="flex items-center gap-2 text-sm font-black"><Package size={17} className="text-violet-600" /> 제품</h2>
+                <span className="text-xs font-bold text-stone-400">{products.length}개</span>
+              </div>
+              <div className="space-y-2">{products.map((product) => <ProductLink key={product.id} product={product} />)}</div>
+            </section>
+          ) : null}
 
           {externalLinks.length ? (
             <section>
-              <h2 className="text-lg font-black">온라인 채널</h2>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-black"><Globe2 size={17} className="text-stone-500" /> 링크</h2>
+              <div className="space-y-2">
                 {externalLinks.map((url, index) => (
-                  <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm font-black shadow-sm transition hover:border-primary hover:text-primary">
-                    <Globe2 size={18} /><span className="min-w-0 flex-1 truncate">{externalLabel(url)}</span><ExternalLink size={14} />
+                  <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer" className="group flex min-h-14 items-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-black shadow-sm transition hover:border-primary/50 hover:shadow-md">
+                    <Globe2 size={18} className="shrink-0 text-stone-400" />
+                    <span className="min-w-0 flex-1 truncate">{externalLabel(url)}</span>
+                    <ExternalLink size={15} className="shrink-0 text-stone-300 transition group-hover:text-primary" />
                   </a>
                 ))}
               </div>
             </section>
           ) : null}
+
+          <section className="rounded-2xl border border-stone-200 bg-white p-4 text-xs shadow-sm">
+            {fullAddress ? <div className="flex items-start gap-3"><MapPin size={16} className="mt-0.5 shrink-0 text-primary" /><span className="leading-5 text-stone-600">{fullAddress}</span></div> : null}
+            {business.businessHours ? <div className={`${fullAddress ? "mt-3 border-t border-stone-100 pt-3" : ""} flex items-start gap-3`}><Clock3 size={16} className="mt-0.5 shrink-0 text-primary" /><span className="leading-5 text-stone-600">{business.businessHours}</span></div> : null}
+          </section>
         </div>
 
-        <footer className="border-t border-stone-200 px-6 py-8 text-center">
-          <Link href="/" className="text-xs font-bold text-stone-400 transition hover:text-primary">노원멤버스에서 제공</Link>
+        <footer className="pt-8 text-center">
+          <Link href="/" className="text-[11px] font-bold text-stone-400 transition hover:text-primary">노원멤버스에서 제공</Link>
         </footer>
       </article>
     </main>

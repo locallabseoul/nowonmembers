@@ -21,9 +21,13 @@ export function ShareButton({ title, url }: { title: string; url: string }) {
   }
 
   return (
-    <button onClick={share} className="inline-flex items-center gap-2 rounded-full bg-white/95 px-4 py-2.5 text-sm font-black text-charcoal shadow-lg backdrop-blur">
-      {copied ? <Check size={16} /> : <Share2 size={16} />}
-      {copied ? "링크 복사됨" : "공유"}
+    <button
+      onClick={share}
+      aria-label={copied ? "링크 복사됨" : "미니홈 공유"}
+      title={copied ? "링크 복사됨" : "공유"}
+      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 shadow-sm transition hover:border-primary hover:text-primary"
+    >
+      {copied ? <Check size={17} /> : <Share2 size={17} />}
     </button>
   );
 }

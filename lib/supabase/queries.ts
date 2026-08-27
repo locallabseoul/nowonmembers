@@ -352,6 +352,7 @@ export type BusinessDashboardData = {
 };
 
 export type PublicBusinessProfile = {
+  businessId: string;
   slug: string;
   businessName: string;
   category: string;
@@ -372,7 +373,7 @@ export async function getPublicBusinessProfileBySlug(slug: string): Promise<Publ
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase
     .from("business_profiles")
-    .select("slug,business_name,category,short_intro,description,address,address_detail,district,contact,business_hours,website_url,social_urls,cover_image_url,updated_at")
+    .select("id,slug,business_name,category,short_intro,description,address,address_detail,district,contact,business_hours,website_url,social_urls,cover_image_url,updated_at")
     .eq("slug", slug)
     .eq("is_public", true)
     .eq("verification_status", "verified")
@@ -381,6 +382,7 @@ export async function getPublicBusinessProfileBySlug(slug: string): Promise<Publ
   if (!data?.slug) return null;
 
   return {
+    businessId: data.id,
     slug: data.slug,
     businessName: data.business_name,
     category: data.category,
@@ -1230,6 +1232,21 @@ export async function getPublicCampaigns(): Promise<Campaign[]> {
     .select("*, business_profiles(business_name,category,business_hours,cover_image_url,address,address_detail), campaign_applications(count)")
     .neq("campaign_applications.status", "cancelled")
     .in("status", ["recruiting", "selecting", "in_progress", "submission_review", "completed", "cancelled", "failed"])
+    .order("recruit_end", { ascending: true });
+
+  if (error || !data?.length) return [];
+  return (data as CampaignRow[]).map(mapCampaign);
+}
+
+export async function getRecruitingCampaignsByBusinessId(businessId: string): Promise<Campaign[]> {
+  const supabase = await createSupabaseServerClient();
+  await syncExpiredCampaigns(supabase);
+  const { data, error } = await supabase
+    .from("campaigns")
+    .select("*, business_profiles(business_name,category,business_hours,cover_image_url,address,address_detail), campaign_applications(count)")
+    .neq("campaign_applications.status", "cancelled")
+    .eq("business_id", businessId)
+    .eq("status", "recruiting")
     .order("recruit_end", { ascending: true });
 
   if (error || !data?.length) return [];
