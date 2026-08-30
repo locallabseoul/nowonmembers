@@ -8,6 +8,7 @@ import { getBusinessDashboard } from "@/lib/supabase/queries";
 import { updateBusinessMinihomeVisibility } from "../dashboard/actions";
 import { MinihomeManager } from "./minihome-manager";
 import { MinihomeLinkManager } from "./minihome-link-manager";
+import { MinihomeContentGuide } from "./minihome-content-guide";
 
 export const metadata: Metadata = { title: "미니홈 관리" };
 
@@ -31,10 +32,11 @@ export default async function BusinessMinihomePage({
         <div className="min-w-0 flex-grow space-y-6">
           <div>
             <h1 className="text-2xl font-bold text-charcoal sm:text-3xl">미니홈 관리</h1>
-            <p className="mt-2 text-sm text-gray-500">가게 미니홈의 공개 상태와 공유 링크를 관리하세요.</p>
+            <p className="mt-2 text-sm text-gray-500">미니홈에 표시할 가게 정보와 콘텐츠, 공개 상태를 관리하세요.</p>
           </div>
           {params.error ? <FormBanner>{params.error}</FormBanner> : null}
           {params.message ? <p className="rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{params.message}</p> : null}
+          <MinihomeContentGuide />
           <MinihomeManager business={business} visibilityAction={updateBusinessMinihomeVisibility} />
           <MinihomeLinkManager links={links} />
         </div>
