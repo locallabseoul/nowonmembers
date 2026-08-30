@@ -6,6 +6,7 @@ import { getCampaignDeadlineLabel } from "@/lib/campaign-lifecycle";
 import { getActivePublicCouponsByBusinessId, getCouponBenefitLabel, type Coupon } from "@/lib/coupons";
 import { getPublicBusinessProfileBySlug, getRecruitingCampaignsByBusinessId } from "@/lib/supabase/queries";
 import { formatProductPrice, getPublicProductsByBusinessId, type BusinessProduct } from "@/lib/products";
+import { getPublicMinihomeLinks } from "@/lib/minihome-links";
 import type { Campaign } from "@/lib/types";
 import { normalizeBusinessSlug } from "@/lib/business-slug";
 import { PUBLIC_SITE_URL } from "@/lib/site";
@@ -94,17 +95,24 @@ export default async function MinihomePage({ params }: MinihomePageProps) {
   const business = await getPublicBusinessProfileBySlug(normalizeBusinessSlug(slug));
   if (!business) notFound();
 
-  const [allCoupons, allCampaigns, products] = await Promise.all([
+  const [allCoupons, allCampaigns, products, customLinks] = await Promise.all([
     getActivePublicCouponsByBusinessId(business.businessId),
     getRecruitingCampaignsByBusinessId(business.businessId),
-    getPublicProductsByBusinessId(business.businessId)
+    getPublicProductsByBusinessId(business.businessId),
+    getPublicMinihomeLinks(business.businessId)
   ]);
   const coupons = allCoupons.slice(0, 3);
   const campaigns = allCampaigns.slice(0, 3);
   const fullAddress = [business.address, business.addressDetail].filter(Boolean).join(" ");
   const mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(fullAddress)}`;
   const pageUrl = `${PUBLIC_SITE_URL}/${business.slug}`;
-  const externalLinks = [business.websiteUrl, ...business.socialUrls].filter(Boolean);
+  const customLinkUrls = new Set(customLinks.map((link) => link.url));
+  const externalLinks = [
+    ...customLinks.map((link) => ({ id: link.id, label: link.title, url: link.url, detail: externalLabel(link.url) })),
+    ...[business.websiteUrl, ...business.socialUrls]
+      .filter((url) => url && !customLinkUrls.has(url))
+      .map((url, index) => ({ id: `profile-${index}-${url}`, label: externalLabel(url), url, detail: "" }))
+  ];
   const initial = business.businessName.trim().slice(0, 1) || "N";
 
   return (
@@ -177,10 +185,13 @@ export default async function MinihomePage({ params }: MinihomePageProps) {
             <section>
               <h2 className="mb-3 flex items-center gap-2 text-sm font-black"><Globe2 size={17} className="text-stone-500" /> 링크</h2>
               <div className="space-y-2">
-                {externalLinks.map((url, index) => (
-                  <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer" className="group flex min-h-14 items-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-black shadow-sm transition hover:border-primary/50 hover:shadow-md">
+                {externalLinks.map((link) => (
+                  <a key={link.id} href={link.url} target="_blank" rel="noreferrer" className="group flex min-h-14 items-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-black shadow-sm transition hover:border-primary/50 hover:shadow-md">
                     <Globe2 size={18} className="shrink-0 text-stone-400" />
-                    <span className="min-w-0 flex-1 truncate">{externalLabel(url)}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{link.label}</span>
+                      {link.detail ? <span className="mt-0.5 block truncate text-[10px] font-bold text-stone-400">{link.detail}</span> : null}
+                    </span>
                     <ExternalLink size={15} className="shrink-0 text-stone-300 transition group-hover:text-primary" />
                   </a>
                 ))}

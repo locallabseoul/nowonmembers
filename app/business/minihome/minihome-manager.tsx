@@ -141,12 +141,13 @@ export function MinihomeManager({ business, visibilityAction }: MinihomeManagerP
             <p className="mt-2 font-black text-charcoal">{business.businessName || "가게명"}</p>
             <p className="mt-1 line-clamp-2 text-[11px] font-bold leading-5 text-gray-500">{business.shortIntro || "한 줄 소개가 표시됩니다."}</p>
             <div className="mt-5 space-y-2">
+              <div className="h-12 rounded-xl border border-gray-100 bg-white px-3 py-2 text-left"><span className="text-[9px] font-black text-sky-600">LINK</span><div className="mt-1 h-1.5 w-4/5 rounded-full bg-gray-100" /></div>
               <div className="h-12 rounded-xl border border-gray-100 bg-white px-3 py-2 text-left"><span className="text-[9px] font-black text-violet-600">PRODUCT</span><div className="mt-1 h-1.5 w-4/5 rounded-full bg-gray-100" /></div>
               <div className="h-12 rounded-xl border border-gray-100 bg-white px-3 py-2 text-left"><span className="text-[9px] font-black text-primary">COUPON</span><div className="mt-1 h-1.5 w-3/4 rounded-full bg-gray-100" /></div>
               <div className="h-12 rounded-xl border border-gray-100 bg-white px-3 py-2 text-left"><span className="text-[9px] font-black text-emerald-600">CAMPAIGN</span><div className="mt-1 h-1.5 w-2/3 rounded-full bg-gray-100" /></div>
             </div>
           </div>
-          <p className="mt-4 text-xs leading-5 text-gray-400">공개 제품, 승인된 쿠폰, 모집 중인 캠페인은 자동으로 표시됩니다.</p>
+          <p className="mt-4 text-xs leading-5 text-gray-400">등록한 외부 링크와 공개 제품, 승인된 쿠폰, 모집 중인 캠페인이 표시됩니다.</p>
         </section>
       </div>
     </div>
