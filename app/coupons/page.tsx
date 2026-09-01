@@ -3,14 +3,16 @@ import Link from "next/link";
 import { Plus, Search, Ticket } from "lucide-react";
 import { CouponCard } from "@/app/components/coupon-card";
 import { FormBanner } from "@/app/components/form-field";
-import { getPublicCoupons } from "@/lib/coupons";
+import { getCouponDisplayStatus, getPublicCoupons } from "@/lib/coupons";
 import { getCurrentSessionProfile } from "@/lib/auth/guards";
+import { preparePublicCouponBook } from "@/lib/public-list-order";
 
 export const metadata: Metadata = { title: "쿠폰북", description: "노원 가게와 브랜드의 혜택을 쿠폰으로 만나보세요." };
 
 export default async function CouponsPage({ searchParams }: { searchParams: Promise<{ q?: string; error?: string }> }) {
   const { q = "", error } = await searchParams;
-  const [coupons, { profile }] = await Promise.all([getPublicCoupons(q), getCurrentSessionProfile()]);
+  const [publicCoupons, { profile }] = await Promise.all([getPublicCoupons(q), getCurrentSessionProfile()]);
+  const coupons = preparePublicCouponBook(publicCoupons, getCouponDisplayStatus);
   const isBusiness = profile?.role === "business";
 
   return (

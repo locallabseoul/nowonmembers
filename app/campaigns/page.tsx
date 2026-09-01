@@ -4,6 +4,7 @@ import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-l
 import { getPublicCampaigns } from "@/lib/supabase/queries";
 import type { Campaign } from "@/lib/types";
 import { FormBanner } from "@/app/components/form-field";
+import { sortPublicCampaigns, type PublicCampaignSort } from "@/lib/public-list-order";
 
 type CampaignFilter = {
   status?: string;
@@ -28,7 +29,7 @@ function campaignTypeGroup(campaign: Campaign) {
 function filterCampaigns(campaigns: Campaign[], filter: CampaignFilter) {
   const query = filter.q?.trim().toLowerCase();
 
-  return campaigns
+  const filtered = campaigns
     .filter((campaign) => {
       if (filter.status && campaignStatusGroup(campaign) !== filter.status) return false;
       if (filter.type && campaignTypeGroup(campaign) !== filter.type) return false;
@@ -38,12 +39,13 @@ function filterCampaigns(campaigns: Campaign[], filter: CampaignFilter) {
         .join(" ")
         .toLowerCase()
         .includes(query);
-    })
-    .sort((a, b) => {
-      if (filter.sort === "newest") return b.id.localeCompare(a.id);
-      if (filter.sort === "popular") return b.appliedCount - a.appliedCount;
-      return (a.recruitEnd || "9999-12-31").localeCompare(b.recruitEnd || "9999-12-31");
     });
+
+  const sort = (["deadline", "popular", "newest"] as const).includes(filter.sort as PublicCampaignSort)
+    ? filter.sort as PublicCampaignSort
+    : "deadline";
+
+  return sortPublicCampaigns(filtered, sort);
 }
 
 function channelLabel(campaign: Campaign) {
