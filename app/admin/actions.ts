@@ -484,7 +484,10 @@ export async function publishLocalStory(formData: FormData) {
   }
 
   const title = `${campaign.title} 로컬 스토리`;
-  const { error } = await supabase.from("local_stories").insert({
+  // 한 제출물은 하나의 로컬 스토리만 만들 수 있다. DB의 submission_id 유일성
+  // 제약과 함께 처리해 더블 클릭이나 나중의 재발행도 멱등하게 만든다.
+  const { error } = await supabase.from("local_stories").upsert({
+    submission_id: submission.id,
     title,
     summary: "노원 가게와 지역 크리에이터가 함께 만든 콘텐츠 협업 기록입니다.",
     body: `${campaign.description ?? ""}\n\n콘텐츠 URL: ${submission.content_url}`,
@@ -494,6 +497,9 @@ export async function publishLocalStory(formData: FormData) {
     campaign_id: collaboration.campaign_id,
     category: campaign.category ?? "로컬 스토리",
     published_at: new Date().toISOString()
+  }, {
+    onConflict: "submission_id",
+    ignoreDuplicates: true
   });
 
   if (error) redirect(backTo(formData, "/admin/submissions", { error: error.message }));
