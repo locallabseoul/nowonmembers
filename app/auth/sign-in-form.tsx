@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { emptyFormState } from "@/lib/form-errors";
 import { FormBanner, FormField } from "@/app/components/form-field";
@@ -32,6 +33,11 @@ export function SignInForm({ next }: { next: string }) {
         required
         error={state.fieldErrors?.password}
       />
+      <div className="text-right">
+        <Link href="/auth/reset-password" className="text-sm font-bold text-primary hover:underline">
+          비밀번호를 잊으셨나요?
+        </Link>
+      </div>
       <button
         disabled={isPending}
         className="w-full rounded-xl bg-primary px-5 py-3 font-black text-white shadow-sm transition-colors hover:bg-primaryHover disabled:cursor-wait disabled:opacity-60"
