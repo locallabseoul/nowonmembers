@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/guards";
-import { isEditorialStoryKind, parseStoryContentBlocksJson, storyBlocksToPlainText, type StoryContentBlock } from "@/lib/story-content";
+import { isEditorialStoryKind, parseStoryContentBlocks, parseStoryContentBlocksJson, storyBlocksToPlainText, type StoryContentBlock } from "@/lib/story-content";
 
 const STORY_IMAGE_BUCKET = "story-images";
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -165,6 +165,64 @@ export async function updateEditorialStory(formData: FormData) {
 
   revalidateStoryPaths(id);
   redirect(adminStoriesUrl({ updated: "1" }));
+}
+
+function storyImageStoragePath(value: string) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    const marker = `/storage/v1/object/public/${STORY_IMAGE_BUCKET}/`;
+    const markerIndex = url.pathname.indexOf(marker);
+    if (markerIndex === -1) return null;
+    const path = decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
+    if (!path || path.split("/").some((segment) => segment === "..")) return null;
+    return path;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteEditorialStory(formData: FormData) {
+  const id = String(formData.get("story_id") ?? "").trim();
+  const { supabase } = await requireAdmin();
+  const { data: story, error: storyError } = await supabase
+    .from("local_stories")
+    .select("id,story_kind,cover_image_url,content_blocks")
+    .eq("id", id)
+    .in("story_kind", ["news", "interview"])
+    .maybeSingle();
+
+  if (storyError || !story) {
+    redirect(adminStoriesUrl({ error: "삭제할 스토리를 찾을 수 없습니다." }));
+  }
+
+  const imageUrls = [
+    story.cover_image_url,
+    ...parseStoryContentBlocks(story.content_blocks)
+      .filter((block): block is Extract<StoryContentBlock, { type: "image" }> => block.type === "image")
+      .map((block) => block.url)
+  ];
+  const imagePaths = [...new Set(imageUrls.flatMap((url) => {
+    const path = storyImageStoragePath(String(url ?? ""));
+    return path ? [path] : [];
+  }))];
+
+  const { error: deleteError } = await supabase
+    .from("local_stories")
+    .delete()
+    .eq("id", story.id)
+    .in("story_kind", ["news", "interview"]);
+
+  if (deleteError) redirect(adminStoriesUrl({ error: "스토리를 삭제하지 못했습니다." }));
+
+  let warning = "";
+  if (imagePaths.length) {
+    const { error: storageError } = await supabase.storage.from(STORY_IMAGE_BUCKET).remove(imagePaths);
+    if (storageError) warning = "스토리는 삭제했지만 일부 이미지 파일을 정리하지 못했습니다.";
+  }
+
+  revalidateStoryPaths(story.id);
+  redirect(adminStoriesUrl({ deleted: "1", ...(warning ? { warning } : {}) }));
 }
 
 function revalidateStoryPaths(id?: string) {

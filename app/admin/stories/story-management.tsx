@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Pencil, Plus, X } from "lucide-react";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
+import { ConfirmButton } from "@/app/components/confirm-button";
 import { Badge } from "@/app/components/ui";
 import { replaceHeicSelection } from "@/lib/heic";
 import { storyKindLabel, type StoryContentBlock } from "@/lib/story-content";
@@ -32,12 +33,14 @@ export function StoryManagement({
   stories,
   businesses,
   createAction,
-  updateAction
+  updateAction,
+  deleteAction
 }: {
   stories: AdminEditorialStory[];
   businesses: BusinessOption[];
   createAction: StoryAction;
   updateAction: StoryAction;
+  deleteAction: StoryAction;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [editing, setEditing] = useState<AdminEditorialStory | null>(null);
@@ -92,6 +95,12 @@ export function StoryManagement({
             <div className="flex shrink-0 gap-3">
               <button type="button" onClick={() => openEdit(story)} className="inline-flex items-center gap-1.5 text-xs font-black text-charcoal hover:text-primary"><Pencil size={14} />수정</button>
               {story.status === "published" ? <Link href={`/stories/${story.id}`} className="text-xs font-black text-primary hover:underline">사용자 화면</Link> : null}
+              <ConfirmButton label="삭제" confirmLabel={`${story.title} 스토리를 영구 삭제합니다.`} className="inline-flex items-center gap-1.5 text-xs font-black text-red-600 hover:text-red-700">
+                <form action={deleteAction}>
+                  <input type="hidden" name="story_id" value={story.id} />
+                  <button className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-black text-white hover:bg-red-700"><Trash2 size={13} />영구 삭제</button>
+                </form>
+              </ConfirmButton>
             </div>
           </article>
         )) : <p className="p-10 text-center text-sm font-bold text-gray-400">작성된 새소식과 인터뷰가 없습니다.</p>}

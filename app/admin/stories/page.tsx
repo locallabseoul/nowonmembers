@@ -1,14 +1,14 @@
 import { FormBanner } from "@/app/components/form-field";
 import { getAdminEditorialStories, getAdminStoryBusinesses } from "@/lib/supabase/queries";
-import { createEditorialStory, updateEditorialStory } from "./actions";
+import { createEditorialStory, deleteEditorialStory, updateEditorialStory } from "./actions";
 import { StoryManagement } from "./story-management";
 
 export default async function AdminStoriesPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string; created?: string; updated?: string }>;
+  searchParams: Promise<{ error?: string; created?: string; updated?: string; deleted?: string; warning?: string }>;
 }) {
-  const [{ error, created, updated }, stories, businesses] = await Promise.all([
+  const [{ error, created, updated, deleted, warning }, stories, businesses] = await Promise.all([
     searchParams,
     getAdminEditorialStories(),
     getAdminStoryBusinesses()
@@ -23,11 +23,14 @@ export default async function AdminStoriesPage({
       {error ? <div className="mb-6"><FormBanner>{error}</FormBanner></div> : null}
       {created ? <p className="mb-6 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">스토리가 등록되었습니다.</p> : null}
       {updated ? <p className="mb-6 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">스토리가 수정되었습니다.</p> : null}
+      {deleted ? <p className="mb-6 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-700">스토리가 영구 삭제되었습니다.</p> : null}
+      {warning ? <p className="mb-6 rounded-lg bg-amber-50 p-3 text-sm font-bold text-amber-700">{warning}</p> : null}
       <StoryManagement
         stories={stories}
         businesses={businesses}
         createAction={createEditorialStory}
         updateAction={updateEditorialStory}
+        deleteAction={deleteEditorialStory}
       />
     </main>
   );
