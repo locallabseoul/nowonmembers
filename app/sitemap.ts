@@ -26,7 +26,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         .select("id,updated_at")
         .in("status", ["recruiting", "selecting", "in_progress", "submission_review", "completed"]),
       supabase.from("coupons").select("id,updated_at").eq("status", "approved"),
-      supabase.from("local_stories").select("id,published_at").not("published_at", "is", null),
+      supabase.from("local_stories").select("id,published_at").eq("status", "published").not("published_at", "is", null),
       supabase
         .from("business_profiles")
         .select("slug,updated_at")

@@ -5,6 +5,7 @@ import { getCurrentSessionProfile } from "@/lib/auth/guards";
 import { getPublishedNotice } from "@/lib/supabase/queries";
 import { NoticeBody } from "../notice-body";
 import { NoticeReadMarker } from "../notice-read-marker";
+import { StoryContent } from "@/app/stories/story-content";
 
 export const metadata: Metadata = {
   title: "공지사항",
@@ -39,7 +40,7 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
         <h1 className="mt-3 text-3xl font-black leading-tight text-charcoal">{notice.title}</h1>
         <p className="mt-3 text-sm font-bold text-gray-400">{formatDate(notice.publishedAt || notice.createdAt)}</p>
         <div className="mt-8">
-          <NoticeBody body={notice.body} />
+          {notice.contentBlocks.length ? <StoryContent blocks={notice.contentBlocks} /> : <NoticeBody body={notice.body} />}
         </div>
         <div className="mt-10 border-t border-gray-100 pt-6">
           <Link href="/notices" className="text-sm font-black text-primary hover:underline">공지 전체보기</Link>

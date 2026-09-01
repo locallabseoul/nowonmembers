@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { Pencil, Plus, X } from "lucide-react";
 import { Badge } from "@/app/components/ui";
 import type { Notice } from "@/lib/types";
+import type { StoryContentBlock } from "@/lib/story-content";
+import { NotionStoryEditor } from "./stories/notion-story-editor";
 
 type NoticeAction = (formData: FormData) => void | Promise<void>;
 
@@ -43,11 +45,13 @@ export function NoticeManagementSection({
   const [editingNotice, setEditingNotice] = useState<Notice | null>(null);
   const [status, setStatus] = useState<Notice["status"]>("draft");
   const [isPinned, setIsPinned] = useState(false);
+  const [contentBlocks, setContentBlocks] = useState<StoryContentBlock[]>([]);
 
   function openCreateModal() {
     setEditingNotice(null);
     setStatus("draft");
     setIsPinned(false);
+    setContentBlocks([{ id: "notice-start", type: "paragraph", text: "" }]);
     setIsOpen(true);
   }
 
@@ -55,6 +59,7 @@ export function NoticeManagementSection({
     setEditingNotice(notice);
     setStatus(notice.status);
     setIsPinned(notice.isPinned);
+    setContentBlocks(notice.contentBlocks.length ? notice.contentBlocks : [{ id: `notice-${notice.id}`, type: "paragraph", text: notice.body }]);
     setIsOpen(true);
   }
 
@@ -130,7 +135,7 @@ export function NoticeManagementSection({
       {isOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="notice-compose-title">
           <button type="button" className="absolute inset-0 bg-charcoal/50" onClick={closeModal} aria-label="공지 편집 닫기" />
-          <div className="relative flex max-h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] sm:max-w-3xl sm:rounded-lg">
+          <div className="relative flex max-h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] sm:max-w-4xl sm:rounded-lg">
             <div className="flex items-center justify-between border-b border-line px-5 py-4 sm:px-7">
               <div>
                 <h2 id="notice-compose-title" className="text-xl font-black text-charcoal">{editingNotice ? "공지 수정" : "공지 작성"}</h2>
@@ -152,6 +157,7 @@ export function NoticeManagementSection({
               className="flex min-h-0 flex-1 flex-col"
             >
               {editingNotice ? <input type="hidden" name="notice_id" value={editingNotice.id} /> : null}
+              <input type="hidden" name="content_blocks" value={JSON.stringify(contentBlocks)} />
               <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-6 sm:px-7">
                 <label className="block">
                   <span className="mb-2 block text-sm font-black text-charcoal">제목</span>
@@ -164,16 +170,7 @@ export function NoticeManagementSection({
                     placeholder="공지 제목을 입력하세요."
                   />
                 </label>
-                <label className="block">
-                  <span className="mb-2 block text-sm font-black text-charcoal">본문</span>
-                  <textarea
-                    name="body"
-                    required
-                    defaultValue={editingNotice?.body ?? ""}
-                    className="min-h-64 w-full resize-y rounded-lg border border-line px-4 py-3 text-sm leading-7 focus-ring"
-                    placeholder="공지 내용을 입력하세요."
-                  />
-                </label>
+                <div><span className="mb-2 block text-sm font-black text-charcoal">본문</span><NotionStoryEditor value={contentBlocks} onChange={setContentBlocks} imageBucket="notice-images" imageFolder="notices" minHeight={340} /></div>
                 <label className="block sm:max-w-52">
                   <span className="mb-2 block text-sm font-black text-charcoal">공개 상태</span>
                   <select

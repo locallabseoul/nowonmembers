@@ -1,3 +1,5 @@
+import type { StoryContentBlock, StoryKind, StoryStatus } from "@/lib/story-content";
+
 export type UserRole = "business" | "creator" | "resident" | "admin";
 export type VerificationStatus = "pending" | "verified" | "rejected";
 export type CampaignStatus =
@@ -144,8 +146,17 @@ export type LocalStory = {
   campaignId: string;
   category: string;
   publishedAt: string;
+  updatedAt: string;
+  storyKind: StoryKind;
+  status: StoryStatus;
+  contentBlocks: StoryContentBlock[];
+  authorName: string;
   businessName?: string;
   creatorNickname?: string;
+};
+
+export type AdminEditorialStory = LocalStory & {
+  createdAt: string;
 };
 
 // 헤더 종 아이콘에는 운영자 공지와 개인 알림이 함께 뜬다. 화면에서 구분할 수 있도록
@@ -179,5 +190,6 @@ export type Notice = {
   publishedAt: string;
   createdAt: string;
   updatedAt: string;
+  contentBlocks: StoryContentBlock[];
   isRead?: boolean;
 };

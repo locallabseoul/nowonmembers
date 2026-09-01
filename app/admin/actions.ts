@@ -10,6 +10,7 @@ import { buildSmsText } from "@/lib/messages";
 import { PUBLIC_SITE_URL } from "@/lib/site";
 import { isSmsConfigured, sendSms } from "@/lib/sms";
 import { isKoreanMobilePhoneNumber, normalizePhoneNumber } from "@/lib/auth/phone";
+import { parseStoryContentBlocksJson, storyBlocksToPlainText } from "@/lib/story-content";
 
 
 async function requireAdmin() {
@@ -200,7 +201,8 @@ export async function requestCampaignRevision(formData: FormData) {
 export async function createNotice(formData: FormData) {
   const supabase = await requireAdmin();
   const title = String(formData.get("title") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
+  const contentBlocks = parseStoryContentBlocksJson(String(formData.get("content_blocks") ?? "[]"));
+  const body = storyBlocksToPlainText(contentBlocks).trim();
   const rawStatus = String(formData.get("status") ?? "draft");
   const status = rawStatus === "published" ? "published" : "draft";
   const isPinned = formData.get("is_pinned") === "on";
@@ -225,6 +227,7 @@ export async function createNotice(formData: FormData) {
   const { error } = await supabase.from("notices").insert({
     title,
     body,
+    content_blocks: contentBlocks,
     status,
     is_pinned: isPinned,
     published_at: status === "published" ? new Date().toISOString() : null
@@ -242,7 +245,8 @@ export async function updateNotice(formData: FormData) {
   const supabase = await requireAdmin();
   const id = String(formData.get("notice_id") ?? "");
   const title = String(formData.get("title") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
+  const contentBlocks = parseStoryContentBlocksJson(String(formData.get("content_blocks") ?? "[]"));
+  const body = storyBlocksToPlainText(contentBlocks).trim();
   const rawStatus = String(formData.get("status") ?? "draft");
   const status = rawStatus === "published" ? "published" : "draft";
   const isPinned = formData.get("is_pinned") === "on";
@@ -280,6 +284,7 @@ export async function updateNotice(formData: FormData) {
     .update({
       title,
       body,
+      content_blocks: contentBlocks,
       status,
       is_pinned: isPinned,
       published_at: status === "published" ? notice.published_at ?? new Date().toISOString() : null,
@@ -488,6 +493,8 @@ export async function publishLocalStory(formData: FormData) {
   // 제약과 함께 처리해 더블 클릭이나 나중의 재발행도 멱등하게 만든다.
   const { error } = await supabase.from("local_stories").upsert({
     submission_id: submission.id,
+    story_kind: "submission",
+    status: "published",
     title,
     summary: "노원 가게와 지역 크리에이터가 함께 만든 콘텐츠 협업 기록입니다.",
     body: `${campaign.description ?? ""}\n\n콘텐츠 URL: ${submission.content_url}`,
@@ -505,6 +512,8 @@ export async function publishLocalStory(formData: FormData) {
   if (error) redirect(backTo(formData, "/admin/submissions", { error: error.message }));
   revalidatePath("/admin", "layout");
   revalidatePath("/stories");
+  revalidatePath("/");
+  revalidatePath("/sitemap.xml");
 }
 
 export async function releaseCampaignReservation(formData: FormData) {

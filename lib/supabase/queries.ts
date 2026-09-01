@@ -2,6 +2,8 @@ import { normalizeKoreanAuthPhone } from "@/lib/auth/phone";
 import { getKoreaTodayString, isCampaignSelectionOverdue } from "@/lib/campaign-lifecycle";
 import type { MessageChannel, MessageKind, MessageRoleTarget, MessageTemplateCampaign, MessageVerificationTarget } from "@/lib/messages";
 import type { AppNotification, Campaign, HeaderFeedItem, LocalStory, Notice } from "@/lib/types";
+import type { AdminEditorialStory } from "@/lib/types";
+import { parseStoryContentBlocks, type StoryKind, type StoryStatus } from "@/lib/story-content";
 import { createSupabaseServerClient } from "./server";
 
 type CampaignRow = {
@@ -67,6 +69,12 @@ type StoryRow = {
   campaign_id: string | null;
   category: string | null;
   published_at: string | null;
+  story_kind: StoryKind | null;
+  status: StoryStatus | null;
+  content_blocks: unknown;
+  author_name: string | null;
+  created_at: string | null;
+  updated_at: string | null;
   business_profiles?: { business_name: string | null } | { business_name: string | null }[] | null;
   creator_profiles?: { profiles: { nickname: string | null } | { nickname: string | null }[] | null } | { profiles: { nickname: string | null } | { nickname: string | null }[] | null }[] | null;
 };
@@ -80,6 +88,7 @@ type NoticeRow = {
   published_at: string | null;
   created_at: string | null;
   updated_at: string | null;
+  content_blocks: unknown;
 };
 
 type CountRelation = { count: number }[] | null | undefined;
@@ -1169,6 +1178,11 @@ function mapStory(row: StoryRow): LocalStory {
     campaignId: row.campaign_id ?? "",
     category: row.category ?? "로컬 스토리",
     publishedAt: row.published_at ?? "",
+    updatedAt: row.updated_at ?? "",
+    storyKind: row.story_kind ?? "submission",
+    status: row.status ?? (row.published_at ? "published" : "draft"),
+    contentBlocks: parseStoryContentBlocks(row.content_blocks),
+    authorName: row.author_name ?? "노원멤버스 편집부",
     businessName: asRelation(row.business_profiles)?.business_name ?? undefined,
     creatorNickname: asRelation(asRelation(row.creator_profiles)?.profiles)?.nickname ?? undefined
   };
@@ -1191,7 +1205,8 @@ function mapNotice(row: NoticeRow): Notice {
     isPinned: row.is_pinned,
     publishedAt: row.published_at ?? "",
     createdAt: row.created_at ?? "",
-    updatedAt: row.updated_at ?? ""
+    updatedAt: row.updated_at ?? "",
+    contentBlocks: parseStoryContentBlocks(row.content_blocks)
   };
 }
 
@@ -1293,6 +1308,7 @@ export async function getPublicStories(): Promise<LocalStory[]> {
   const { data, error } = await supabase
     .from("local_stories")
     .select("*, business_profiles(business_name), creator_profiles(profiles(nickname))")
+    .eq("status", "published")
     .not("published_at", "is", null)
     .order("published_at", { ascending: false });
 
@@ -1306,10 +1322,34 @@ export async function getPublicStory(id: string): Promise<LocalStory | undefined
     .from("local_stories")
     .select("*, business_profiles(business_name), creator_profiles(profiles(nickname))")
     .eq("id", id)
+    .eq("status", "published")
+    .not("published_at", "is", null)
     .maybeSingle();
 
   if (error || !data) return undefined;
   return mapStory(data as StoryRow);
+}
+
+export async function getAdminEditorialStories(): Promise<AdminEditorialStory[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("local_stories")
+    .select("*, business_profiles(business_name)")
+    .in("story_kind", ["news", "interview"])
+    .order("updated_at", { ascending: false });
+
+  if (error || !data?.length) return [];
+  return (data as StoryRow[]).map((row) => ({ ...mapStory(row), createdAt: row.created_at ?? "" }));
+}
+
+export async function getAdminStoryBusinesses(): Promise<Array<{ id: string; name: string }>> {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("business_profiles")
+    .select("id,business_name")
+    .order("business_name", { ascending: true });
+
+  return (data ?? []).map((business) => ({ id: business.id, name: business.business_name ?? "이름 없는 매장" }));
 }
 
 export async function getPublishedNotices(): Promise<Notice[]> {

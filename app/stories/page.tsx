@@ -1,36 +1,26 @@
-import Link from "next/link";
-import { SectionHeader } from "../components/ui";
 import { getPublicStories } from "@/lib/supabase/queries";
+import { StoryShelf } from "./story-shelf";
 
 export default async function StoriesPage() {
   const stories = await getPublicStories();
+  const sections = [
+    { kind: "news" as const, title: "새소식", description: "노원의 새로운 소식과 놓치기 아쉬운 이야기를 전합니다." },
+    { kind: "interview" as const, title: "인터뷰", description: "동네를 만들어가는 가게와 사람들의 목소리를 담았습니다." },
+    { kind: "submission" as const, title: "노원스토리", description: "크리에이터와 가게가 함께 만든 생생한 콘텐츠입니다." }
+  ];
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <SectionHeader title="노원스토리" description="크리에이터와 가게가 함께 만든 로컬 스토리를 확인하세요." />
-      {stories.length === 0 ? (
-        <div className="rounded-[20px] border border-dashed border-gray-200 bg-white p-12 text-center">
-          <p className="font-bold text-charcoal">첫 번째 노원스토리를 준비하고 있어요</p>
-          <p className="mt-2 text-sm text-gray-500">캠페인이 완료되면 크리에이터가 만든 콘텐츠가 이곳에 소개됩니다.</p>
-          <Link href="/campaigns" className="mt-6 inline-block rounded-xl bg-primary px-5 py-2.5 text-sm font-black text-white transition-colors hover:bg-primaryHover">
-            진행 중인 캠페인 보기
-          </Link>
+    <main className="bg-slate-50/60 pb-20">
+      <header className="border-b border-slate-100 bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+          <p className="text-sm font-black text-primary">NOWON STORIES</p>
+          <h1 className="mt-2 text-4xl font-black tracking-tight text-charcoal">노원스토리</h1>
+          <p className="mt-4 max-w-2xl text-base leading-7 text-slate-500">우리 동네의 새소식부터 가게 인터뷰, 크리에이터가 직접 만든 콘텐츠까지 한곳에서 만나보세요.</p>
         </div>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {stories.map((story) => (
-            <Link key={story.id} href={`/stories/${story.id}`} className="overflow-hidden rounded-lg border border-line bg-white shadow-sm hover:shadow-soft">
-              <img src={story.coverImage} alt="" className="h-56 w-full object-cover" />
-              <div className="p-5">
-                <div className="mb-3 text-xs font-black text-primary">{story.category}</div>
-                <h2 className="text-xl font-black text-charcoal">{story.title}</h2>
-                <p className="mt-3 text-sm leading-6 text-gray-500">{story.summary}</p>
-                <p className="mt-5 text-xs font-bold text-gray-400">{story.businessName ?? "노원멤버스 파트너"} · {story.creatorNickname ?? "노원 크리에이터"}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
+      </header>
+      <div className="mx-auto max-w-7xl space-y-16 px-4 py-12 sm:px-6 lg:px-8">
+        {sections.map((section) => <StoryShelf key={section.kind} title={section.title} description={section.description} stories={stories.filter((story) => story.storyKind === section.kind)} />)}
+      </div>
     </main>
   );
 }

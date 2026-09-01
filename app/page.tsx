@@ -6,6 +6,7 @@ import { getCurrentSessionProfile } from "@/lib/auth/guards";
 import { getCampaignDeadlineLabel, getCampaignLifecycle } from "@/lib/campaign-lifecycle";
 import { getPublicCampaigns, getPublicHomeStats, getPublicStories } from "@/lib/supabase/queries";
 import type { Campaign, LocalStory } from "@/lib/types";
+import { storyKindLabel } from "@/lib/story-content";
 
 const numberFormatter = new Intl.NumberFormat("ko-KR");
 
@@ -108,7 +109,7 @@ function ContentTypeCard({
 }
 
 function ContentTile({ story }: { story: LocalStory }) {
-  const creatorName = story.creatorNickname ?? "노원 크리에이터";
+  const creatorName = story.storyKind === "submission" ? story.creatorNickname ?? "노원 크리에이터" : story.authorName;
 
   return (
     <Link href={`/stories/${story.id}`} className="group relative h-72 cursor-pointer overflow-hidden rounded-2xl md:h-80">
@@ -116,7 +117,7 @@ function ContentTile({ story }: { story: LocalStory }) {
       <div className="content-card-overlay absolute inset-0" />
       <div className="absolute bottom-4 left-4 right-4">
         <div className="mb-2 flex items-center gap-1.5">
-          <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs text-white backdrop-blur-sm">{story.category}</span>
+          <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs text-white backdrop-blur-sm">{storyKindLabel(story.storyKind)}</span>
         </div>
         <p className="line-clamp-2 text-sm font-bold text-white">{story.title}</p>
         <div className="mt-2 flex items-center gap-2">
@@ -466,11 +467,11 @@ export default async function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-10 flex flex-col justify-between gap-6 md:flex-row md:items-end">
             <div>
-              <h2 className="mb-2 text-3xl font-black text-charcoal">노원에서 만들어진 콘텐츠</h2>
-              <p className="text-slate-500">크리에이터들이 직접 만든 생생한 리뷰를 확인해보세요.</p>
+              <h2 className="mb-2 text-3xl font-black text-charcoal">노원스토리</h2>
+              <p className="text-slate-500">동네 새소식과 인터뷰, 크리에이터 콘텐츠를 만나보세요.</p>
             </div>
             <Link href="/stories" className="inline-flex items-center gap-1.5 text-sm font-bold text-primary transition-colors hover:text-primaryHover">
-              전체 콘텐츠 보기 <span aria-hidden>-&gt;</span>
+              전체 스토리 보기 <span aria-hidden>-&gt;</span>
             </Link>
           </div>
 
