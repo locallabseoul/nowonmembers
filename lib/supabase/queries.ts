@@ -300,6 +300,7 @@ export type DashboardSubmission = {
     adminMemo: string;
     submittedAt: string;
     updatedAt: string;
+    localStoryId: string;
   } | null;
 };
 
@@ -546,6 +547,7 @@ export type AdminRecentSubmission = {
   publishedAt: string;
   reviewStatus: string;
   platform: string;
+  localStoryId: string;
 };
 
 export type AdminMember = {
@@ -892,7 +894,8 @@ function mapDashboardSubmission(row: DashboardSubmissionRow): DashboardSubmissio
         reviewStatus: submission.review_status ?? "",
         adminMemo: submission.admin_memo ?? "",
         submittedAt: submission.created_at ?? "",
-        updatedAt: submission.updated_at ?? ""
+        updatedAt: submission.updated_at ?? "",
+        localStoryId: ""
       }
       : null
   };
@@ -1221,7 +1224,25 @@ async function getSelectedCampaignSubmissions(
     .neq("status", "cancelled")
     .order("selected_at", { ascending: false });
 
-  return ((data ?? []) as DashboardSubmissionRow[]).map(mapDashboardSubmission);
+  const submissions = ((data ?? []) as DashboardSubmissionRow[]).map(mapDashboardSubmission);
+  const submissionIds = submissions.flatMap((item) => item.submission ? [item.submission.id] : []);
+  if (!submissionIds.length) return submissions;
+
+  const { data: storyRows } = await supabase
+    .from("local_stories")
+    .select("id,submission_id")
+    .in("submission_id", submissionIds);
+  const storyIdBySubmission = new Map((storyRows ?? []).map((story) => [story.submission_id, story.id]));
+
+  return submissions.map((item) => item.submission
+    ? {
+      ...item,
+      submission: {
+        ...item.submission,
+        localStoryId: storyIdBySubmission.get(item.submission.id) ?? ""
+      }
+    }
+    : item);
 }
 
 export async function getPublicCampaigns(): Promise<Campaign[]> {
@@ -2066,13 +2087,20 @@ export async function getAdminRecentSubmissions(): Promise<AdminRecentSubmission
     .order("created_at", { ascending: false })
     .limit(10);
 
+  const submissionIds = (data ?? []).map((submission) => submission.id);
+  const { data: storyRows } = submissionIds.length
+    ? await supabase.from("local_stories").select("id,submission_id").in("submission_id", submissionIds)
+    : { data: [] };
+  const storyIdBySubmission = new Map((storyRows ?? []).map((story) => [story.submission_id, story.id]));
+
   return (data ?? []).map((submission) => ({
     id: submission.id,
     contentUrl: submission.content_url,
     previewImageUrl: submission.preview_image_url ?? "",
     publishedAt: submission.published_at ?? "",
     reviewStatus: submission.review_status,
-    platform: submission.platform
+    platform: submission.platform,
+    localStoryId: storyIdBySubmission.get(submission.id) ?? ""
   }));
 }
 

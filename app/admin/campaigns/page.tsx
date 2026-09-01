@@ -378,7 +378,15 @@ function SubmissionCard({ item, canManage, returnTo }: { item: DashboardSubmissi
             </form>
           </div>
         ) : null}
-        {canManage && submission?.reviewStatus === "approved" ? (
+        {canManage && submission?.reviewStatus === "approved" && submission.localStoryId ? (
+          <Link
+            href={`/stories/${submission.localStoryId}`}
+            className="inline-flex rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-200"
+          >
+            발행 완료
+          </Link>
+        ) : null}
+        {canManage && submission?.reviewStatus === "approved" && !submission.localStoryId ? (
           <form action={publishLocalStory}>
             <input type="hidden" name="submission_id" value={submission.id} />
             <input type="hidden" name="return_to" value={returnTo} />

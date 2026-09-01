@@ -70,7 +70,15 @@ export default async function AdminSubmissionsPage({ searchParams }: { searchPar
                     </form>
                   </div>
                 ) : null}
-                {submission.reviewStatus === "approved" ? (
+                {submission.reviewStatus === "approved" && submission.localStoryId ? (
+                  <a
+                    href={`/stories/${submission.localStoryId}`}
+                    className="mt-3 inline-flex rounded-lg bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-200"
+                  >
+                    발행 완료
+                  </a>
+                ) : null}
+                {submission.reviewStatus === "approved" && !submission.localStoryId ? (
                   <form action={publishLocalStory} className="mt-3">
                     <input type="hidden" name="submission_id" value={submission.id} />
                     <button className="rounded-lg bg-white px-3 py-2 text-xs font-black text-primary ring-1 ring-primary/20">로컬 스토리 발행</button>
