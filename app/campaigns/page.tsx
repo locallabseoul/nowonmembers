@@ -58,14 +58,23 @@ function CampaignListCard({ campaign }: { campaign: Campaign }) {
   const channel = channelLabel(campaign);
   const lifecycle = getCampaignLifecycle(campaign);
   const deadline = getCampaignDeadlineLabel(campaign);
+  const isClosed = campaign.status === "completed" || campaign.status === "cancelled" || campaign.status === "failed";
 
   return (
     <Link
       href={`/campaigns/${campaign.id}`}
-      className="group overflow-hidden rounded-[20px] border border-gray-100 bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-1"
+      className={`group overflow-hidden rounded-[20px] border bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-300 ${
+        isClosed ? "border-gray-200" : "border-gray-100 hover:-translate-y-1"
+      }`}
     >
       <div className="relative h-48 w-full overflow-hidden bg-gray-100">
-        <img src={campaign.coverImage} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+        <img
+          src={campaign.coverImage}
+          alt=""
+          className={`h-full w-full object-cover transition-transform duration-500 ${
+            isClosed ? "grayscale brightness-75" : "group-hover:scale-105"
+          }`}
+        />
 
         <div className="absolute left-4 top-4 flex flex-wrap gap-2">
           <span className="inline-flex items-center gap-1 rounded-md bg-white/90 px-2.5 py-1 text-xs font-black text-charcoal shadow-sm backdrop-blur-sm">
@@ -82,12 +91,12 @@ function CampaignListCard({ campaign }: { campaign: Campaign }) {
         </div>
       </div>
 
-      <div className="p-6">
+      <div className={`p-6 ${isClosed ? "opacity-75" : ""}`}>
         <div className="mb-2 flex items-center gap-1.5 text-sm text-gray-500">
           <MapPin size={15} />
           {campaign.region}{campaign.businessName ? ` (${campaign.businessName})` : ""}
         </div>
-        <h3 className="mb-1 line-clamp-1 text-lg font-black text-charcoal transition-colors group-hover:text-primary">
+        <h3 className={`mb-1 line-clamp-1 text-lg font-black text-charcoal transition-colors ${isClosed ? "" : "group-hover:text-primary"}`}>
           {campaign.title}
         </h3>
         <p className="mb-4 line-clamp-2 text-sm leading-6 text-gray-500">{campaign.description}</p>
