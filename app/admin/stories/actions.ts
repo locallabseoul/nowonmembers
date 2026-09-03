@@ -110,7 +110,7 @@ export async function createEditorialStory(formData: FormData) {
   try {
     prepared = await prepareStoryInput(formData);
   } catch (error) {
-    redirect(adminStoriesUrl({ error: error instanceof Error ? error.message : "스토리를 저장하지 못했습니다." }));
+    return { ok: false as const, error: error instanceof Error ? error.message : "스토리를 저장하지 못했습니다." };
   }
 
   const now = new Date().toISOString();
@@ -122,11 +122,11 @@ export async function createEditorialStory(formData: FormData) {
 
   if (error) {
     if (prepared.uploadedPaths.length) await prepared.supabase.storage.from(STORY_IMAGE_BUCKET).remove(prepared.uploadedPaths);
-    redirect(adminStoriesUrl({ error: error.message }));
+    return { ok: false as const, error: error.message };
   }
 
   revalidateStoryPaths();
-  redirect(adminStoriesUrl({ created: "1" }));
+  return { ok: true as const };
 }
 
 export async function updateEditorialStory(formData: FormData) {
@@ -139,13 +139,13 @@ export async function updateEditorialStory(formData: FormData) {
     .in("story_kind", ["news", "interview"])
     .maybeSingle();
 
-  if (existingError || !existing) redirect(adminStoriesUrl({ error: "수정할 스토리를 찾을 수 없습니다." }));
+  if (existingError || !existing) return { ok: false as const, error: "수정할 스토리를 찾을 수 없습니다." };
 
   let prepared: Awaited<ReturnType<typeof prepareStoryInput>>;
   try {
     prepared = await prepareStoryInput(formData, existing.cover_image_url ?? "");
   } catch (error) {
-    redirect(adminStoriesUrl({ error: error instanceof Error ? error.message : "스토리를 저장하지 못했습니다." }));
+    return { ok: false as const, error: error instanceof Error ? error.message : "스토리를 저장하지 못했습니다." };
   }
 
   const now = new Date().toISOString();
@@ -157,11 +157,11 @@ export async function updateEditorialStory(formData: FormData) {
 
   if (error) {
     if (prepared.uploadedPaths.length) await prepared.supabase.storage.from(STORY_IMAGE_BUCKET).remove(prepared.uploadedPaths);
-    redirect(adminStoriesUrl({ error: error.message }));
+    return { ok: false as const, error: error.message };
   }
 
   revalidateStoryPaths(id);
-  redirect(adminStoriesUrl({ updated: "1" }));
+  return { ok: true as const };
 }
 
 function storyImageStoragePath(value: string) {

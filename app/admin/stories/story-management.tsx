@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { ConfirmButton } from "@/app/components/confirm-button";
@@ -12,7 +13,9 @@ import { createClient } from "@/lib/supabase";
 import type { AdminEditorialStory } from "@/lib/types";
 import { NotionStoryEditor } from "./notion-story-editor";
 
-type StoryAction = (formData: FormData) => void | Promise<void>;
+type StoryActionResult = { ok: true } | { ok: false; error: string };
+type StoryAction = (formData: FormData) => Promise<StoryActionResult>;
+type DeleteAction = (formData: FormData) => void | Promise<void>;
 type BusinessOption = { id: string; name: string };
 
 function makeId() {
@@ -42,8 +45,9 @@ export function StoryManagement({
   businesses: BusinessOption[];
   createAction: StoryAction;
   updateAction: StoryAction;
-  deleteAction: StoryAction;
+  deleteAction: DeleteAction;
 }) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [editing, setEditing] = useState<AdminEditorialStory | null>(null);
   const [blocks, setBlocks] = useState<StoryContentBlock[]>([]);
@@ -117,7 +121,12 @@ export function StoryManagement({
         formData.set("cover_image_path", path);
       }
 
-      await (editing ? updateAction : createAction)(formData);
+      const result = await (editing ? updateAction : createAction)(formData);
+      if (!result.ok) throw new Error(result.error);
+
+      setIsOpen(false);
+      router.push(`/admin/stories?${editing ? "updated" : "created"}=1`);
+      router.refresh();
     } catch (error) {
       setImageError(error instanceof Error ? error.message : "스토리를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.");
       setIsSubmitting(false);
@@ -162,7 +171,7 @@ export function StoryManagement({
               <div><h2 id="story-editor-title" className="text-xl font-black text-charcoal">{editing ? "스토리 수정" : "스토리 작성"}</h2><p className="mt-1 text-sm text-gray-500">문서를 작성하듯 새소식이나 인터뷰를 완성하세요.</p></div>
               <button type="button" onClick={() => setIsOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100" aria-label="닫기"><X size={21} /></button>
             </div>
-            <form key={editing?.id ?? "create"} action={editing ? updateAction : createAction} onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+            <form key={editing?.id ?? "create"} onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
               {editing ? <input type="hidden" name="story_id" value={editing.id} /> : null}
               <input type="hidden" name="content_blocks" value={JSON.stringify(blocks)} />
               <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-7">
