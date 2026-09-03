@@ -5,14 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/guards";
 import { isEditorialStoryKind, parseStoryContentBlocks, parseStoryContentBlocksJson, storyBlocksToPlainText, type StoryContentBlock } from "@/lib/story-content";
-
-const STORY_IMAGE_BUCKET = "story-images";
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-const IMAGE_EXTENSIONS: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp"
-};
+import { isOwnedStoryImagePath, MAX_STORY_IMAGE_BYTES, STORY_IMAGE_BUCKET, STORY_IMAGE_EXTENSIONS } from "@/lib/story-images";
 
 function adminStoriesUrl(params: Record<string, string> = {}) {
   const search = new URLSearchParams(params).toString();
@@ -20,8 +13,8 @@ function adminStoriesUrl(params: Record<string, string> = {}) {
 }
 
 function validateImage(file: File) {
-  if (!IMAGE_EXTENSIONS[file.type]) return "이미지는 JPG, PNG, WEBP 형식만 사용할 수 있습니다.";
-  if (file.size > MAX_IMAGE_BYTES) return "이미지는 한 장당 8MB 이하만 업로드할 수 있습니다.";
+  if (!STORY_IMAGE_EXTENSIONS[file.type]) return "이미지는 JPG, PNG, WEBP 형식만 사용할 수 있습니다.";
+  if (file.size > MAX_STORY_IMAGE_BYTES) return "이미지는 한 장당 8MB 이하만 업로드할 수 있습니다.";
   return "";
 }
 
@@ -34,7 +27,7 @@ async function uploadStoryImage(
   const validationError = validateImage(file);
   if (validationError) throw new Error(validationError);
 
-  const path = `${userId}/stories/${randomUUID()}.${IMAGE_EXTENSIONS[file.type]}`;
+  const path = `${userId}/stories/${randomUUID()}.${STORY_IMAGE_EXTENSIONS[file.type]}`;
   const { error } = await supabase.storage.from(STORY_IMAGE_BUCKET).upload(path, file, {
     contentType: file.type,
     cacheControl: "31536000"
@@ -61,10 +54,14 @@ async function prepareStoryInput(formData: FormData, existingCoverImage = "") {
   const uploadedPaths: string[] = [];
 
   try {
-    const coverFile = formData.get("cover_image");
+    const coverImagePath = String(formData.get("cover_image_path") ?? "").trim();
     let coverImageUrl = existingCoverImage;
-    if (coverFile instanceof File && coverFile.size > 0) {
-      coverImageUrl = await uploadStoryImage(supabase, user.id, coverFile, uploadedPaths);
+    if (coverImagePath) {
+      if (!isOwnedStoryImagePath(user.id, coverImagePath)) {
+        throw new Error("표지 이미지 경로를 확인할 수 없습니다. 이미지를 다시 선택해주세요.");
+      }
+      uploadedPaths.push(coverImagePath);
+      coverImageUrl = supabase.storage.from(STORY_IMAGE_BUCKET).getPublicUrl(coverImagePath).data.publicUrl;
     }
     if (!coverImageUrl) throw new Error("표지 이미지를 등록해주세요.");
 
