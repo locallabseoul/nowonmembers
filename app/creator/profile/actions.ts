@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
 import { logEvent } from "@/lib/events";
+import { normalizeCreatorChannelUrl } from "@/lib/creator-channel-url";
 
 const CREATOR_IMAGE_BUCKET = "creator-images";
 const MAX_CREATOR_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -265,7 +266,7 @@ export async function saveCreatorProfile(formData: FormData) {
   let portfolioUrl: string | null = null;
 
   try {
-    channelUrl = normalizeUrl(channelUrlRaw, "대표 채널 URL") ?? "";
+    channelUrl = normalizeCreatorChannelUrl(channelPlatform, channelUrlRaw);
     portfolioUrl = normalizeUrl(portfolioUrlRaw, "포트폴리오 URL");
   } catch (urlError) {
     const message = urlError instanceof Error ? urlError.message : "URL 형식을 확인해주세요.";

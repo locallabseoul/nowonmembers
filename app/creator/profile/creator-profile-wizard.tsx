@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { FieldError, FieldLabel, FormBanner, FormField, fieldControlClassName } from "@/app/components/form-field";
 import { sendEmailVerification, sendPhoneVerification, verifyPhoneOtp } from "@/app/profile-verification-actions";
+import { getCreatorChannelUrlError } from "@/lib/creator-channel-url";
 import { saveCreatorProfile } from "./actions";
 
 export type CreatorProfileInitialData = {
@@ -263,9 +264,7 @@ function CreatorProfileCreateWizard({
       content_types: draft.content_types.length ? "" : "콘텐츠 유형을 1개 이상 선택해주세요.",
       channel_url: !draft.channel_url.trim()
         ? "대표 채널 URL을 입력해주세요."
-        : !isValidUrl(draft.channel_url.trim())
-          ? "대표 채널 URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다."
-          : "",
+        : getCreatorChannelUrlError(draft.channel_platform, draft.channel_url),
       portfolio_url:
         draft.portfolio_url.trim() && !isValidUrl(draft.portfolio_url.trim())
           ? "포트폴리오 URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다."
@@ -509,9 +508,9 @@ function CreatorProfileCreateWizard({
                 label="대표 채널 URL"
                 value={draft.channel_url}
                 onChange={(value) => updateDraftField("channel_url", value)}
-                placeholder="https://blog.naver.com/..."
+                placeholder={draft.channel_platform === "인스타그램" ? "@nowon_creator 또는 인스타그램 URL" : "https://blog.naver.com/..."}
                 icon={<Link2 size={17} />}
-                type="url"
+                type="text"
                 requiredMark
               error={fieldErrors.channel_url}
             />
@@ -690,9 +689,7 @@ function CreatorProfileEditForm({
       content_types: draft.content_types.length ? "" : "콘텐츠 유형을 1개 이상 선택해주세요.",
       channel_url: !draft.channel_url.trim()
         ? "대표 채널 URL을 입력해주세요."
-        : !isValidUrl(draft.channel_url.trim())
-          ? "대표 채널 URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다."
-          : "",
+        : getCreatorChannelUrlError(draft.channel_platform, draft.channel_url),
       portfolio_url:
         draft.portfolio_url.trim() && !isValidUrl(draft.portfolio_url.trim())
           ? "포트폴리오 URL은 http:// 또는 https://로 시작하는 올바른 URL이어야 합니다."
@@ -845,7 +842,7 @@ function CreatorProfileEditForm({
             <TextField name="channel_name" label="채널명" value={draft.channel_name} onChange={(value) => updateDraftField("channel_name", value)} placeholder="@nowon_creator"
               error={fieldErrors.channel_name}
             />
-            <TextField name="channel_url" label="대표 채널 URL" value={draft.channel_url} onChange={(value) => updateDraftField("channel_url", value)} placeholder="https://blog.naver.com/..." icon={<Link2 size={17} />} type="url" requiredMark
+            <TextField name="channel_url" label="대표 채널 URL" value={draft.channel_url} onChange={(value) => updateDraftField("channel_url", value)} placeholder={draft.channel_platform === "인스타그램" ? "@nowon_creator 또는 인스타그램 URL" : "https://blog.naver.com/..."} icon={<Link2 size={17} />} type="text" requiredMark
               error={fieldErrors.channel_url}
             />
             <div className="grid grid-cols-2 gap-3">
