@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { BellRing, BookOpen, ClipboardCheck, CreditCard, FileCheck, LayoutDashboard, Megaphone, ScrollText, Send, ShieldCheck, Ticket, Users } from "lucide-react";
+import { BellRing, BookOpen, ClipboardCheck, CreditCard, FileCheck, LayoutDashboard, Megaphone, ScrollText, Send, ShieldCheck, Siren, Ticket, Users } from "lucide-react";
 import type { AdminMenuUnreadState, AdminUnreadMenuKey } from "@/lib/admin-menu-unread";
 import { markAdminMenuRead } from "./actions";
 
@@ -17,6 +17,7 @@ const menuItems: Array<{
   unreadKey?: AdminUnreadMenuKey;
 }> = [
   { href: "/admin", label: "개요", icon: LayoutDashboard, exact: true },
+  { href: "/admin/alerts", label: "운영 알림", icon: Siren, exact: false },
   { href: "/admin/campaigns", label: "캠페인 심사", icon: ClipboardCheck, exact: false, unreadKey: "campaigns" },
   { href: "/admin/coupons", label: "쿠폰 심사", icon: Ticket, exact: false, unreadKey: "coupons" },
   { href: "/admin/submissions", label: "콘텐츠 검수", icon: FileCheck, exact: false, unreadKey: "submissions" },

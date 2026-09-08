@@ -54,3 +54,19 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3003
 ```
 
 토스페이먼츠 웹훅 URL은 `/api/payments/toss/webhook`으로 등록합니다. 결제 승인과 포인트 적립은 주문번호 기준으로 멱등 처리됩니다.
+
+## 관리자 운영 알림과 Discord
+
+선정 지연, 콘텐츠 미제출, 검수 지연, 최근 실패 이벤트는 `admin_alerts`에 별도로
+쌓입니다. 회원 대상 앱 알림·문자와 섞이지 않으며 관리자 콘솔의 `/admin/alerts`에서
+확인하거나 완료 처리할 수 있습니다.
+
+Discord 관리자 채널의 Webhook URL과 Cron 인증값을 배포 서버에 등록합니다.
+
+```bash
+DISCORD_ADMIN_WEBHOOK_URL=https://discord.com/api/webhooks/...
+CRON_SECRET=충분히-긴-임의-문자열
+```
+
+Vercel Cron은 `vercel.json`에 따라 매시간 `/api/cron/admin-alerts`를 호출합니다.
+수동 점검은 관리자 콘솔의 **운영 알림 → 지금 점검**에서 실행할 수 있습니다.
