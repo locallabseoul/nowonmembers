@@ -153,6 +153,8 @@ export async function runAdminAlertCycle() {
           .update({
             discord_sent_at: new Date().toISOString(),
             discord_notified_count: alert.alert_type === "app_failure" ? Number(alert.metadata.count ?? 1) : alert.discord_notified_count,
+            status: alert.severity === "info" ? "resolved" : "open",
+            resolved_at: alert.severity === "info" ? new Date().toISOString() : null,
             updated_at: new Date().toISOString()
           })
           .eq("id", alert.id)
