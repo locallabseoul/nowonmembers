@@ -171,21 +171,30 @@ export async function getPublicCoupon(id: string) {
 }
 
 export async function getActivePublicCouponsByBusinessId(businessId: string) {
-  const supabase = await createSupabaseServerClient();
-  const { data } = await supabase
-    .from("coupons")
-    .select("id,business_id,title,description,cover_image_url,benefit_type,benefit_value,terms,total_quantity,claimed_quantity,start_date,end_date,status,redemption_code_configured,created_at,business_profiles(business_name,category,address,address_detail,contact,cover_image_url)")
-    .eq("business_id", businessId)
-    .eq("status", "approved")
-    .order("created_at", { ascending: false });
-
-  return ((data ?? []) as unknown as Omit<CouponRow, "admin_memo">[])
-    .map((coupon) => mapCoupon({ ...coupon, admin_memo: null }))
-    .filter((coupon) => getCouponDisplayStatus(coupon) === "claiming");
+  const coupons = await getPublicCoupons();
+  return coupons.filter((coupon) => coupon.businessId === businessId && getCouponDisplayStatus(coupon) === "claiming");
 }
 
-export async function getMyCouponClaims(userId: string) {
+export async function getMyCouponClaims(userId: string): Promise<CouponClaim[]> {
   const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  if (user.id === userId) {
+    const { data, error } = await supabase.rpc("get_my_coupon_claims");
+    if (error) throw error;
+    return (data ?? []).map((row: {
+      id: string; status: CouponClaimStatus; failed_redemption_attempts: number;
+      redemption_locked_until: string | null; claimed_at: string;
+      redeemed_at: string | null; cancelled_at: string | null; coupon: PublicCouponRow;
+    }) => ({
+      id: row.id, status: row.status,
+      failedRedemptionAttempts: Number(row.failed_redemption_attempts ?? 0),
+      redemptionLockedUntil: row.redemption_locked_until ?? "",
+      claimedAt: row.claimed_at, redeemedAt: row.redeemed_at ?? "",
+      cancelledAt: row.cancelled_at ?? "", coupon: mapPublicCoupon(row.coupon)
+    } satisfies CouponClaim));
+  }
+  // Existing admin read-only preview remains subject to the management RLS.
   const { data } = await supabase
     .from("coupon_claims")
     .select(`id,status,failed_redemption_attempts,redemption_locked_until,claimed_at,redeemed_at,cancelled_at,coupons(${couponSelect})`)

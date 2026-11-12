@@ -1,0 +1,60 @@
+project_id = "nowonmembers-app-dev"
+
+[api]
+enabled = true
+port = 55321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 55322
+shadow_port = 55320
+major_version = 17
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:55321"
+additional_redirect_urls = []
+enable_signup = false
+enable_anonymous_sign_ins = false
+
+[auth.sms]
+# CLI maps this to the phone provider switch. Global signup remains disabled.
+enable_signup = true
+enable_confirmations = false
+
+[auth.sms.test_otp]
+821000000001 = "123456"
+821000000002 = "123456"
+
+[auth.sms.twilio]
+# CLI requires a provider for password-based phone login. These are deliberately
+# invalid local placeholders, not real provider credentials. Never send SMS.
+enabled = true
+account_sid = "AC00000000000000000000000000000000"
+message_service_sid = "MG00000000000000000000000000000000"
+auth_token = "local-only-not-a-real-token"
+
+[storage]
+enabled = true
+file_size_limit = "20MiB"
+
+[studio]
+enabled = false
+port = 55323
+
+[inbucket]
+enabled = false
+port = 55324
+
+[analytics]
+enabled = false
+port = 55327
+
+[edge_runtime]
+enabled = false

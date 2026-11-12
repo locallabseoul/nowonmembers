@@ -25,7 +25,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         .from("campaigns")
         .select("id,updated_at")
         .in("status", ["recruiting", "selecting", "in_progress", "submission_review", "completed"]),
-      supabase.from("coupons").select("id,updated_at").eq("status", "approved"),
+      supabase.rpc("get_public_coupons"),
       supabase.from("local_stories").select("id,published_at").eq("status", "published").not("published_at", "is", null),
       supabase
         .from("business_profiles")
@@ -47,9 +47,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly",
       priority: 0.6
     }));
-    const coupons: MetadataRoute.Sitemap = (couponRows.data ?? []).map((coupon) => ({
+    const coupons: MetadataRoute.Sitemap = (couponRows.data ?? []).map((coupon: { id: string }) => ({
       url: `${BASE_URL}/coupons/${coupon.id}`,
-      lastModified: coupon.updated_at ?? undefined,
       changeFrequency: "daily",
       priority: 0.8
     }));

@@ -1,0 +1,66 @@
+begin;
+select no_plan();
+insert into auth.users(id,instance_id,aud,role,email,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
+values
+ ('c7100000-0000-4000-8000-000000000001','00000000-0000-0000-0000-000000000000','authenticated','authenticated','saved-owner@example.com','{"provider":"email"}','{"role":"business","nickname":"단골 가게"}',now(),now()),
+ ('c7100000-0000-4000-8000-000000000002','00000000-0000-0000-0000-000000000000','authenticated','authenticated','saved-member@example.com','{"provider":"email"}','{"role":"resident","nickname":"단골 회원"}',now(),now()),
+ ('c7100000-0000-4000-8000-000000000003','00000000-0000-0000-0000-000000000000','authenticated','authenticated','saved-other@example.com','{"provider":"email"}','{"role":"resident","nickname":"다른 회원"}',now(),now());
+insert into public.business_profiles(id,user_id,business_name,category,is_public,district)
+values('c7200000-0000-4000-8000-000000000001','c7100000-0000-4000-8000-000000000001','저장 검증 가게','카페',true,'공릉동');
+select ok(not has_table_privilege('anon','public.resident_favorite_businesses','select'),'guest cannot read favorite table');
+select ok(not has_function_privilege('anon','public.get_resident_saved_places()','execute'),'guest cannot read personal RPC');
+select ok(not has_function_privilege('anon','public.set_resident_interested_districts(text[])','execute'),'guest cannot save districts');
+select ok(not has_function_privilege('anon','public.set_resident_favorite_business(uuid,boolean)','execute'),'guest cannot save favorites');
+select ok(not has_table_privilege('authenticated','public.resident_favorite_businesses','insert'),'members cannot forge raw favorite rows');
+select ok(not has_table_privilege('authenticated','public.resident_interested_districts','update'),'members cannot change raw district ownership');
+set local role authenticated;
+set local "request.jwt.claims"='{"sub":"c7100000-0000-4000-8000-000000000002","role":"authenticated"}';
+select is(public.get_resident_saved_places(),' {"districts":[],"favorites":[]}'::jsonb,'new member starts empty');
+select lives_ok($$select public.set_resident_interested_districts(array['공릉동','월계동','공릉동'])$$,'multiple districts accepted');
+select is((select count(*) from public.resident_interested_districts),2::bigint,'districts deduplicated');
+select throws_ok($$select public.set_resident_interested_districts(array['공릉동','다른 지역'])$$,'관심 동네는 노원의 5개 동네 중에서 선택해주세요.','unsupported district rejected');
+select throws_ok($$select public.set_resident_interested_districts(array[null]::text[])$$,'관심 동네는 노원의 5개 동네 중에서 선택해주세요.','null district rejected');
+select is((select count(*) from public.resident_interested_districts),2::bigint,'invalid update preserves existing districts');
+select lives_ok($$select public.set_resident_favorite_business('c7200000-0000-4000-8000-000000000001',true)$$,'public shop can be saved');
+select lives_ok($$select public.set_resident_favorite_business('c7200000-0000-4000-8000-000000000001',true)$$,'save is idempotent');
+select is((select count(*) from public.resident_favorite_businesses),1::bigint,'no duplicate favorite');
+select is(public.get_resident_saved_places()->'favorites'->0->>'business_name','저장 검증 가게','safe name available');
+select ok(not (public.get_resident_saved_places()->'favorites'->0 ? 'user_id'),'owner identity omitted');
+select throws_ok($$select public.set_resident_favorite_business('c7200000-0000-4000-8000-000000000099',true)$$,'현재 공개된 가게만 단골로 저장할 수 있어요.','unknown shop rejected');
+set local "request.jwt.claims"='{"sub":"c7100000-0000-4000-8000-000000000003","role":"authenticated"}';
+select is((select count(*) from public.resident_favorite_businesses),0::bigint,'other member cannot read favorites');
+select is((select count(*) from public.resident_interested_districts),0::bigint,'other member cannot read districts');
+select is(jsonb_array_length(public.get_resident_saved_places()->'favorites'),0,'RPC bound to caller');
+select public.set_resident_favorite_business('c7200000-0000-4000-8000-000000000001',false);
+set local "request.jwt.claims"='{"sub":"c7100000-0000-4000-8000-000000000002","role":"authenticated"}';
+select is((select count(*) from public.resident_favorite_businesses),1::bigint,'another caller cannot remove favorite');
+reset role;
+set local "request.jwt.claims"='{}';
+update public.business_profiles set is_public=false where id='c7200000-0000-4000-8000-000000000001';
+set local role authenticated;
+set local "request.jwt.claims"='{"sub":"c7100000-0000-4000-8000-000000000002","role":"authenticated"}';
+select is(public.get_resident_saved_places()->'favorites'->0->>'is_available','false','hidden shop marked unavailable');
+select is(public.get_resident_saved_places()->'favorites'->0->>'business_name',null::text,'hidden name not exposed');
+select is(public.get_resident_saved_places()->'favorites'->0->>'district',null::text,'hidden district not exposed');
+select throws_ok($$select public.set_resident_favorite_business('c7200000-0000-4000-8000-000000000001',true)$$,'현재 공개된 가게만 단골로 저장할 수 있어요.','cannot newly save private shop');
+select lives_ok($$select public.set_resident_favorite_business('c7200000-0000-4000-8000-000000000001',false)$$,'hidden favorite remains removable');
+select is(jsonb_array_length(public.get_resident_saved_places()->'favorites'),0,'hidden favorite removed');
+select public.set_resident_interested_districts(array[]::text[]);
+select is(jsonb_array_length(public.get_resident_saved_places()->'districts'),0,'all districts can be cleared');
+reset role;
+set local "request.jwt.claims"='{}';
+update public.business_profiles set is_public=true where id='c7200000-0000-4000-8000-000000000001';
+update public.profiles set status='suspended' where id='c7100000-0000-4000-8000-000000000001';
+set local role authenticated;
+set local "request.jwt.claims"='{"sub":"c7100000-0000-4000-8000-000000000002","role":"authenticated"}';
+select throws_ok($$select public.set_resident_favorite_business('c7200000-0000-4000-8000-000000000001',true)$$,'현재 공개된 가게만 단골로 저장할 수 있어요.','suspended owner shop cannot be saved');
+reset role;
+set local "request.jwt.claims"='{}';
+update public.profiles set status='suspended' where id='c7100000-0000-4000-8000-000000000002';
+set local role authenticated;
+set local "request.jwt.claims"='{"sub":"c7100000-0000-4000-8000-000000000002","role":"authenticated"}';
+select throws_ok($$select public.get_resident_saved_places()$$,'활성 회원으로 로그인해주세요.','suspended member cannot read RPC');
+select throws_ok($$select public.set_resident_interested_districts(array['공릉동'])$$,'활성 회원으로 로그인해주세요.','suspended member cannot change districts');
+select throws_ok($$select public.set_resident_favorite_business('c7200000-0000-4000-8000-000000000001',false)$$,'활성 회원으로 로그인해주세요.','suspended member cannot mutate favorite');
+select * from finish();
+rollback;

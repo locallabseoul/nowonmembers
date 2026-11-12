@@ -1,0 +1,36 @@
+import fs from 'node:fs';
+const tabs = await (await fetch('http://127.0.0.1:9338/json')).json();
+const tab = tabs.find(t => t.url.endsWith('/resident-app-design/prototype.html'));
+if (!tab) throw new Error('Prototype tab missing');
+const ws = new WebSocket(tab.webSocketDebuggerUrl);
+await new Promise((resolve,reject)=>{ws.onopen=resolve;ws.onerror=reject});
+let id=0;const pending=new Map();ws.onmessage=e=>{const r=JSON.parse(e.data);if(pending.has(r.id)){pending.get(r.id)(r);pending.delete(r.id)}};
+async function call(method,params={}){const n=++id;const p=new Promise(resolve=>pending.set(n,resolve));ws.send(JSON.stringify({id:n,method,params}));const r=await p;if(r.error)throw new Error(JSON.stringify(r.error));return r.result}
+const checks = await call('Runtime.evaluate',{returnByValue:true,expression:`(()=>{
+const checks=[];const check=(v,n)=>{if(!v)throw Error(n);checks.push(n)};
+document.querySelector('#reset').click();
+document.querySelector('[data-view="home"]').click();
+document.querySelector('[data-screen="home"] [data-go="store"]').click();
+check(!document.querySelector('[data-screen="store"]').classList.contains('hidden'),'Home to store');
+document.querySelector('#claim').click();check(document.querySelector('#login-dialog').open,'Login gate');
+document.querySelector('#login-confirm').click();check(document.querySelector('#coupon-status').textContent==='사용 가능','Claim resumes after login');
+document.querySelector('#redeem').click();document.querySelector('#code').value='000000';document.querySelector('#code-confirm').click();check(document.querySelector('#code-error').textContent.length>0,'Invalid code feedback');
+document.querySelector('#code').value='123456';document.querySelector('#code-confirm').click();check(document.querySelector('#coupon-status').textContent==='사용 완료'&&document.querySelector('#redeem').disabled,'Redeem completed once');
+document.querySelector('[data-save="store"]').click();check(document.querySelector('#store-count').textContent==='1','Store save reflected');
+document.querySelector('[data-save="course"]').click();check(document.querySelector('#course-count').textContent==='1','Course save reflected');
+document.querySelector('[data-save="store"]').click();check(document.querySelector('#store-count').textContent==='0','Store unsave reflected');
+document.querySelector('#reset').click();check(document.querySelector('#coupon-status').textContent.includes('받기 전'),'Reset clears state');
+return checks;
+})()`});
+if(checks.exceptionDetails)throw Error(JSON.stringify(checks.exceptionDetails));
+console.log(JSON.stringify({checks:checks.result.value}));
+await call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+await call('Runtime.evaluate',{expression:`go('home'); document.querySelector('#toast').classList.add('hidden');`});
+const layout=await call('Runtime.evaluate',{returnByValue:true,expression:`({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,phoneWidth:document.querySelector('[data-screen="home"] .phone').getBoundingClientRect().width})`});
+if(layout.result.value.scrollWidth>layout.result.value.width)throw Error('Mobile horizontal overflow');
+console.log(JSON.stringify({mobile:layout.result.value}));
+await call('Emulation.setDeviceMetricsOverride',{width:1280,height:1030,deviceScaleFactor:1,mobile:false});
+await call('Runtime.evaluate',{expression:`go('all'); document.querySelector('#toast').classList.add('hidden');`});
+const shot=await call('Page.captureScreenshot',{format:'png'});
+fs.writeFileSync(new URL('./first-screens.png',import.meta.url),Buffer.from(shot.data,'base64'));
+await call('Browser.close');ws.close();

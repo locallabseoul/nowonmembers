@@ -13,6 +13,7 @@ import { cancelCouponClaim, redeemMyCouponClaim } from "./actions";
 function claimViewStatus(claim: CouponClaim) {
   if (claim.status === "redeemed") return "redeemed";
   if (claim.status === "cancelled") return "cancelled";
+  if (claim.coupon.status !== "approved") return "unavailable";
   if (getKoreaTodayString() > claim.coupon.endDate) return "expired";
   return "available";
 }
@@ -21,6 +22,7 @@ const statusInfo = {
   available: { label: "사용 가능", tone: "green" as const, icon: Clock3 },
   redeemed: { label: "사용 완료", tone: "blue" as const, icon: CheckCircle2 },
   cancelled: { label: "발급 취소", tone: "gray" as const, icon: XCircle },
+  unavailable: { label: "제공 중단", tone: "gray" as const, icon: XCircle },
   expired: { label: "기간 만료", tone: "gray" as const, icon: CalendarDays }
 };
 
@@ -67,7 +69,7 @@ export default async function MyCouponsPage({ searchParams }: { searchParams: Pr
                           <h2 className="mt-3 text-lg font-black text-charcoal">{claim.coupon.title}</h2>
                           <p className="mt-1 text-sm font-bold text-primary">{getCouponBenefitLabel(claim.coupon)} · {claim.coupon.businessName}</p>
                         </div>
-                        <Link href={`/coupons/${claim.coupon.id}`} className="text-sm font-bold text-gray-400 hover:text-primary">상세 보기</Link>
+                        {claim.coupon.status === "approved" ? <Link href={`/coupons/${claim.coupon.id}`} className="text-sm font-bold text-gray-400 hover:text-primary">상세 보기</Link> : null}
                       </div>
                       <p className="mt-4 text-xs text-gray-500">사용 기간 {claim.coupon.startDate} ~ {claim.coupon.endDate}</p>
                       {viewStatus === "available" && !claim.coupon.redemptionCodeConfigured ? (
