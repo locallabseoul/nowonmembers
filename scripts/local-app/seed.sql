@@ -29,3 +29,18 @@ insert into public.coupon_redemption_secrets(coupon_id,code_hash)
 values('d3000000-0000-4000-8000-000000000001',extensions.crypt('654321',extensions.gen_salt('bf',10)))
 on conflict(coupon_id) do nothing;
 update public.coupons set redemption_code_configured=true where id='d3000000-0000-4000-8000-000000000001';
+
+-- Walking-course prototype fixtures; fictional places, development only.
+insert into public.walking_courses(id,title,summary,district,status,featured,travel_minutes)
+values('d4000000-0000-4000-8000-000000000001','걷고, 읽고, 커피 한 잔. (테스트)','멀리 가지 않아도 충분한 오후. 산책·책·커피를 연결한 가상 코스입니다. 실제 운영 코스가 아닙니다.','공릉동','published',true,15)
+on conflict(id) do nothing;
+insert into public.walking_course_stops(course_id,position,title,description,address,stay_minutes,latitude,longitude,business_id) values
+('d4000000-0000-4000-8000-000000000001',1,'동네 산책길 (테스트)','가볍게 걷기 · 가상 장소','공릉동 예시 위치',35,37.628,127.075,null),
+('d4000000-0000-4000-8000-000000000001',2,'작은문장 서점 (테스트)','마음에 드는 책 찾기 · 가상 장소','공릉동 예시 위치',30,37.627,127.074,null),
+('d4000000-0000-4000-8000-000000000001',3,'초록쉼 커피 (테스트)','커피와 함께 쉬어가기 · 가상 가게','',40,null,null,'d2000000-0000-4000-8000-000000000001')
+on conflict(course_id,position) do nothing;
+
+-- Dedicated local administrator for reviewing the course editor.
+insert into auth.users(id,instance_id,aud,role,phone,encrypted_password,phone_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at,confirmation_token,recovery_token,email_change_token_new,email_change)
+values('d1000000-0000-4000-8000-000000000005','00000000-0000-0000-0000-000000000000','authenticated','authenticated','821000000005',extensions.crypt('LocalAdmin2026!',extensions.gen_salt('bf')),now(),'{"provider":"phone","providers":["phone"]}','{"role":"creator","nickname":"테스트 코스 관리자"}',now(),now(),'','','','') on conflict(id) do nothing;
+update public.profiles set is_admin=true,status='active' where id='d1000000-0000-4000-8000-000000000005';

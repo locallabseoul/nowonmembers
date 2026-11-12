@@ -1,0 +1,66 @@
+begin;
+select no_plan();
+insert into auth.users(id,instance_id,aud,role,email,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
+select ('c9100000-0000-4000-8000-00000000000'||n)::uuid,'00000000-0000-0000-0000-000000000000','authenticated','authenticated','course'||n||'@example.com','{"provider":"email"}',jsonb_build_object('role',case when n=4 then 'business' else 'resident' end,'nickname','코스검증'||n),now(),now() from generate_series(1,4)n;
+update public.profiles set is_admin=true where id='c9100000-0000-4000-8000-000000000001';
+insert into public.business_profiles(id,user_id,business_name,category,is_public,district,latitude,longitude)
+values('c9200000-0000-4000-8000-000000000001','c9100000-0000-4000-8000-000000000004','비공개검증가게','카페',true,'공릉동',37.6,127.0);
+create temp table fixture(payload jsonb);
+insert into fixture values(jsonb_build_object('title','순서 검증 코스','summary','코스소개','district','공릉동','status','published','featured',true,'travel_minutes',15,'stops',jsonb_build_array(
+ jsonb_build_object('title','산책길','stay_minutes',35,'latitude',37.6,'longitude',127.0),
+ jsonb_build_object('title','서점','stay_minutes',30),
+ jsonb_build_object('title','가게','stay_minutes',40,'business_id','c9200000-0000-4000-8000-000000000001'))));
+grant select,update on fixture to authenticated;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','c9100000-0000-4000-8000-000000000002',true);
+select throws_ok($$select public.admin_save_walking_course((select payload from fixture))$$,'P0001','관리자만 코스를 변경할 수 있어요.','member cannot edit');
+select set_config('request.jwt.claim.sub','c9100000-0000-4000-8000-000000000001',true);
+select lives_ok($$update fixture set payload=payload||jsonb_build_object('id',public.admin_save_walking_course(payload))$$,'admin creates course');
+reset role;
+update fixture set payload=payload||jsonb_build_object('updated_at',(select updated_at from public.walking_courses where id=(payload->>'id')::uuid));
+create temp table target as select (payload->>'id')::uuid id from fixture;
+grant select on target to anon,authenticated;
+set local role anon;
+select is(jsonb_array_length(public.get_resident_courses((select id from target))),1,'public course visible');
+select is(public.get_resident_courses((select id from target))->0->'stops'->0->>'title','산책길','ordered first stop');
+select is(public.get_resident_courses((select id from target))->0->'stops'->2->>'title','비공개검증가게','linked live shop title');
+select is(jsonb_array_length(public.get_resident_courses((select id from target),array['월계동'])),0,'district restriction');
+select is(jsonb_array_length(public.get_resident_courses((select id from target),array[]::text[])),0,'empty interests means no course');
+select throws_ok('select * from public.walking_courses','42501',null,'anonymous raw table denied');
+select throws_ok('select public.get_resident_saved_courses()','42501',null,'anonymous private RPC denied');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','c9100000-0000-4000-8000-000000000002',true);
+select lives_ok($$select public.set_resident_saved_course((select id from target),true)$$,'member saves');
+select lives_ok($$select public.set_resident_saved_course((select id from target),true)$$,'repeat save idempotent');
+select is(jsonb_array_length(public.get_resident_saved_courses()),1,'one saved row');
+select is((select count(*)::int from public.walking_courses),0,'member raw drafts hidden');
+select throws_ok($$insert into public.resident_saved_courses(user_id,course_id) values('c9100000-0000-4000-8000-000000000003',(select id from target))$$,'42501',null,'direct forged write denied');
+select set_config('request.jwt.claim.sub','c9100000-0000-4000-8000-000000000003',true);
+select is(jsonb_array_length(public.get_resident_saved_courses()),0,'other member private list isolated');
+reset role;
+update public.business_profiles set is_public=false where id='c9200000-0000-4000-8000-000000000001';
+set local role anon;
+select is(public.get_resident_courses((select id from target))->0->'stops'->2->>'title','현재 공개되지 않은 가게','hidden shop redacted');
+select is(public.get_resident_courses((select id from target))->0->'stops'->2->>'latitude',null::text,'hidden coordinates redacted');
+select is(public.get_resident_courses((select id from target))->0->'stops'->2->>'business_id',null::text,'hidden shop link redacted');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','c9100000-0000-4000-8000-000000000001',true);
+select throws_ok($$select public.admin_save_walking_course((select payload from fixture))$$,'P0001','비공개 가게가 연결되어 있어 공개할 수 없습니다.','cannot publish hidden shop');
+select lives_ok($$select public.admin_save_walking_course((select payload||'{"status":"archived"}'::jsonb from fixture))$$,'admin archives');
+select throws_ok($$select public.admin_save_walking_course((select payload||'{"status":"draft"}'::jsonb from fixture))$$,'P0001','다른 변경이 있습니다. 새로고침 후 다시 수정해주세요.','stale admin edit rejected');
+set local role anon;
+select is(jsonb_array_length(public.get_resident_courses((select id from target))),0,'archived course hidden');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','c9100000-0000-4000-8000-000000000002',true);
+select is(public.get_resident_saved_courses()->0->>'title',null::text,'saved archived title hidden');
+select lives_ok($$select public.set_resident_saved_course((select id from target),false)$$,'hidden saved course removable');
+select throws_ok($$select public.set_resident_saved_course((select id from target),true)$$,'P0001','현재 공개된 코스만 저장할 수 있어요.','cannot save archived');
+reset role;
+select set_config('request.jwt.claim.sub','',true);
+update public.profiles set status='suspended' where id='c9100000-0000-4000-8000-000000000002';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','c9100000-0000-4000-8000-000000000002',true);
+select throws_ok('select public.get_resident_saved_courses()','P0001','활성 회원으로 로그인해주세요.','suspended read denied');
+select throws_ok($$select public.set_resident_saved_course((select id from target),false)$$,'P0001','활성 회원으로 로그인해주세요.','suspended write denied');
+select * from finish();
+rollback;
