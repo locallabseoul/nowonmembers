@@ -81,3 +81,13 @@ insert into public.coupon_redemption_secrets(coupon_id,code_hash) values
 ('d3000000-0000-4000-8000-000000000004',extensions.crypt('654321',extensions.gen_salt('bf',10)))
 on conflict(coupon_id) do nothing;
 update public.coupons set redemption_code_configured=true where id in ('d3000000-0000-4000-8000-000000000003','d3000000-0000-4000-8000-000000000004');
+
+-- S07 wallet preview for the synthetic local resident only. Preserve existing claims.
+with added as (
+ insert into public.coupon_claims(id,coupon_id,user_id,status,claimed_at)
+ values
+ ('d5000000-0000-4000-8000-000000000001','d3000000-0000-4000-8000-000000000002','d1000000-0000-4000-8000-000000000001','issued',now()),
+ ('d5000000-0000-4000-8000-000000000002','d3000000-0000-4000-8000-000000000004','d1000000-0000-4000-8000-000000000001','issued',now()-interval '20 days')
+ on conflict do nothing returning coupon_id
+)
+update public.coupons c set claimed_quantity=c.claimed_quantity+1 from added where c.id=added.coupon_id;
