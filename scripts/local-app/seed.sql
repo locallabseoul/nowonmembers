@@ -70,3 +70,14 @@ insert into public.walking_courses(id,title,summary,district,status,featured,tra
 insert into public.walking_course_stops(course_id,position,title,description,address,stay_minutes,latitude,longitude,business_id) values
 ('d4000000-0000-4000-8000-000000000002',1,'하루빵집','우유식빵 고르기','',20,null,null,'d2000000-0000-4000-8000-000000000004'),
 ('d4000000-0000-4000-8000-000000000002',2,'숲길 벤치','빵과 함께 쉬어가기','공릉동 숲길',60,37.624,127.076,null) on conflict(course_id,position) do nothing;
+
+-- S06 board: unavailable examples, excluded from the home available-benefits list.
+insert into public.coupons(id,business_id,title,description,benefit_type,benefit_value,terms,total_quantity,claimed_quantity,start_date,end_date,status,redemption_code_configured,created_at) values
+('d3000000-0000-4000-8000-000000000003','d2000000-0000-4000-8000-000000000005','곱빼기 무료','칼국수 주문 시 · 1인 1회','other','곱빼기 무료','칼국수 주문 시 · 1인 1회',100,100,(now() at time zone 'Asia/Seoul')::date-1,(now() at time zone 'Asia/Seoul')::date+30,'approved',false,'2026-11-12 12:55:00+09'),
+('d3000000-0000-4000-8000-000000000004','d2000000-0000-4000-8000-000000000006','미니 꽃다발 2,000원 할인','미니 꽃다발 구매 시 · 1인 1회','fixed_amount','2000','미니 꽃다발 구매 시 · 1인 1회',100,0,(now() at time zone 'Asia/Seoul')::date-30,(now() at time zone 'Asia/Seoul')::date-1,'approved',false,'2026-11-12 12:54:00+09')
+on conflict(id) do nothing;
+insert into public.coupon_redemption_secrets(coupon_id,code_hash) values
+('d3000000-0000-4000-8000-000000000003',extensions.crypt('654321',extensions.gen_salt('bf',10))),
+('d3000000-0000-4000-8000-000000000004',extensions.crypt('654321',extensions.gen_salt('bf',10)))
+on conflict(coupon_id) do nothing;
+update public.coupons set redemption_code_configured=true where id in ('d3000000-0000-4000-8000-000000000003','d3000000-0000-4000-8000-000000000004');
