@@ -91,3 +91,10 @@ with added as (
  on conflict do nothing returning coupon_id
 )
 update public.coupons c set claimed_quantity=c.claimed_quantity+1 from added where c.id=added.coupon_id;
+
+-- S08 My page preview: only the synthetic resident's demo preferences.
+insert into public.resident_interested_districts(user_id,district) values ('d1000000-0000-4000-8000-000000000001','공릉동') on conflict do nothing;
+insert into public.resident_favorite_businesses(user_id,business_id,created_at) values
+('d1000000-0000-4000-8000-000000000001','d2000000-0000-4000-8000-000000000001','2026-11-13 08:00:00+09'),
+('d1000000-0000-4000-8000-000000000001','d2000000-0000-4000-8000-000000000003','2026-11-13 07:59:00+09') on conflict do nothing;
+insert into public.resident_saved_courses(user_id,course_id) values ('d1000000-0000-4000-8000-000000000001','d4000000-0000-4000-8000-000000000001') on conflict do nothing;
