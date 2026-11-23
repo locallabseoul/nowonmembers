@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, useRef } from "react";
 
 declare global {
   interface Window {
@@ -20,6 +20,10 @@ declare global {
           }
         ) => unknown;
         Marker: new (options: { position: unknown; map: unknown }) => unknown;
+        Event: {
+          addListener: (target: unknown, name: string, callback: (event: { coord: { lat(): number; lng(): number } }) => void) => unknown;
+          removeListener: (listener: unknown) => void;
+        };
         Position?: {
           TOP_RIGHT?: unknown;
         };
@@ -33,6 +37,7 @@ type CampaignMapProps = {
   longitude: number;
   address: string;
   clientId?: string;
+  onPick?: (latitude: number, longitude: number) => void;
 };
 
 let naverMapsScriptPromise: Promise<void> | null = null;
@@ -41,28 +46,28 @@ function loadNaverMaps(clientId: string) {
   if (window.naver?.maps) return Promise.resolve();
   if (naverMapsScriptPromise) return naverMapsScriptPromise;
 
-  naverMapsScriptPromise = new Promise((resolve, reject) => {
-    const existingScript = document.querySelector<HTMLScriptElement>("script[data-naver-maps-sdk='true']");
-    if (existingScript) {
-      existingScript.addEventListener("load", () => resolve(), { once: true });
-      existingScript.addEventListener("error", () => reject(new Error("네이버 지도 SDK를 불러오지 못했습니다.")), { once: true });
-      return;
+  naverMapsScriptPromise = new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>("script[data-naver-maps-sdk='true']");
+    const script = existing ?? document.createElement('script');
+    function cleanup() { clearTimeout(timer); script.removeEventListener('load', loaded); script.removeEventListener('error', failed); }
+    function loaded() { cleanup(); if (window.naver?.maps) resolve(); else { script.remove(); reject(new Error('지도 인증을 확인해주세요. 주소 검색 또는 좌표 입력은 계속 사용할 수 있습니다.')); } }
+    function failed() { cleanup(); script.remove(); reject(new Error('지도를 불러오지 못했습니다. 주소 검색 또는 좌표 입력을 이용해주세요.')); }
+    const timer = setTimeout(failed, 15000);
+    script.addEventListener('load', loaded, { once: true });
+    script.addEventListener('error', failed, { once: true });
+    if (!existing) {
+      script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(clientId)}`;
+      script.async = true; script.defer = true; script.dataset.naverMapsSdk = 'true';
+      document.head.appendChild(script);
     }
-
-    const script = document.createElement("script");
-    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(clientId)}`;
-    script.async = true;
-    script.defer = true;
-    script.dataset.naverMapsSdk = "true";
-    script.addEventListener("load", () => resolve(), { once: true });
-    script.addEventListener("error", () => reject(new Error("네이버 지도 SDK를 불러오지 못했습니다.")), { once: true });
-    document.head.appendChild(script);
-  });
+  }).catch(error => { naverMapsScriptPromise = null; throw error; });
 
   return naverMapsScriptPromise;
 }
 
-export function CampaignMap({ latitude, longitude, address, clientId }: CampaignMapProps) {
+export function CampaignMap({ latitude, longitude, address, clientId, onPick }: CampaignMapProps) {
+  const pickRef = useRef(onPick);
+  pickRef.current = onPick;
   const mapId = useId().replace(/:/g, "");
   const [message, setMessage] = useState(clientId ? "지도를 불러오는 중입니다." : "네이버 지도 API 키 설정이 필요합니다.");
 
@@ -70,6 +75,7 @@ export function CampaignMap({ latitude, longitude, address, clientId }: Campaign
     if (!clientId) return;
 
     let cancelled = false;
+    let listener: unknown;
 
     loadNaverMaps(clientId)
       .then(() => {
@@ -94,6 +100,9 @@ export function CampaignMap({ latitude, longitude, address, clientId }: Campaign
           map
         });
 
+        if (pickRef.current) listener = window.naver.maps.Event.addListener(map, 'click', (event) => {
+          pickRef.current?.(event.coord.lat(), event.coord.lng());
+        });
         setMessage("");
       })
       .catch((error: unknown) => {
@@ -103,6 +112,7 @@ export function CampaignMap({ latitude, longitude, address, clientId }: Campaign
 
     return () => {
       cancelled = true;
+      if (listener) window.naver?.maps?.Event.removeListener(listener);
     };
   }, [address, clientId, latitude, longitude, mapId]);
 

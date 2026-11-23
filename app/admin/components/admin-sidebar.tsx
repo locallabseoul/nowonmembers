@@ -22,6 +22,7 @@ const menuItems: Array<{
   { href: "/admin/coupons", label: "쿠폰 심사", icon: Ticket, exact: false, unreadKey: "coupons" },
   { href: "/admin/submissions", label: "콘텐츠 검수", icon: FileCheck, exact: false, unreadKey: "submissions" },
   { href: "/admin/stories", label: "스토리 관리", icon: BookOpen, exact: false },
+  { href: "/admin/courses", label: "산책코스 관리", icon: BookOpen, exact: false },
   { href: "/admin/members", label: "회원 관리", icon: Users, exact: false },
   { href: "/admin/points", label: "포인트·정산", icon: CreditCard, exact: false },
   { href: "/admin/notices", label: "공지 관리", icon: Megaphone, exact: false },
