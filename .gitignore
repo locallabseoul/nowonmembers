@@ -23,3 +23,6 @@ docs/goals-2026h2.md
 
 # 개발 서버를 띄울 때만 쓰는 설정이라 사람마다 다르다.
 .claude/launch.json
+
+# Isolated course-editor QA build
+.next-course-qa/

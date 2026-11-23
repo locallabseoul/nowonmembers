@@ -17,7 +17,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
  {saved==='1'&&<p role="status" className="text-green-700">코스를 저장했습니다.</p>}
  {error||shopError||ownerError?<p role="alert">코스 관리 정보를 불러오지 못했습니다. 데이터 연결 및 마이그레이션 적용 상태를 확인해주세요.</p>:<>
  <nav className="flex flex-wrap gap-3"><Link className="rounded-lg border p-2" href="/admin/courses">새 코스</Link>{courses.map(c=><Link className="rounded-lg border p-2" key={c.id} href={`/admin/courses?id=${c.id}`}>{c.title} · {c.status==='published'?'공개':c.status==='archived'?'종료':'초안'}{c.featured?' · 추천':''}</Link>)}</nav>
- {id&&!course?<p>해당 코스를 찾을 수 없습니다.</p>:<CourseEditor key={course?.updated_at??'new'} course={course} shops={shopOptions}/>}
+ {id&&!course?<p>해당 코스를 찾을 수 없습니다.</p>:<CourseEditor key={course?.updated_at??'new'} course={course} shops={shopOptions} mapClientId={process.env.NAVER_MAPS_CLIENT_ID ?? process.env.NAVER_CLOUD_MAPS_CLIENT_ID}/>}
  </>}
  </main>;
 }

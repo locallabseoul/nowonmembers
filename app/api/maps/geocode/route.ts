@@ -71,12 +71,12 @@ async function fetchNaverGeocode(query: string, keyId: string, key: string) {
 }
 
 export async function GET(request: NextRequest) {
-  // 주소 검색은 가게 프로필과 캠페인 생성 위저드에서만 쓴다. 열어두면 네이버
+  // 주소 검색은 활성 가게 계정과 코스 편집 관리자만 사용한다. 열어두면 네이버
   // Geocoding 호출 비용을 누구나 발생시킬 수 있다.
   const { profile } = await getCurrentSessionProfile();
-  if (profile?.role !== "business") {
+  if (profile?.status !== "active" || (profile?.role !== "business" && !profile?.is_admin)) {
     return NextResponse.json(
-      { error: "가게 계정으로 로그인해야 주소를 검색할 수 있습니다.", addresses: [] },
+      { error: "가게 또는 관리자 계정으로 로그인해야 주소를 검색할 수 있습니다.", addresses: [] },
       { status: 403 }
     );
   }
